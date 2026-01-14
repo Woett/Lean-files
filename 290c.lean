@@ -49,20 +49,6 @@ lemma bsmallerthansixa (a : ℕ) (ha : a > 0) : b_val a ≤ 6 * a := by
   cases n : k_val a <;> simp_all +decide [ pow_succ' ] ; linarith
 
 /-
-For all primes $p$ and all rationals $x_1, x_2, \ldots, x_m$, we have $\nu_p(x_1 + x_2 + \cdots + x_m) \ge \min(\nu_p(x_1), \nu_p(x_2), \ldots \nu_p(x_m)).$
--/
-lemma eqminmoregeneral (p : ℕ) [Fact p.Prime] (x : ℚ) (xs : List ℚ) (hsum : (x :: xs).sum ≠ 0) :
-  padicValRat p (x :: xs).sum ≥ (xs.map (padicValRat p)).foldr min (padicValRat p x) := by
-    induction' xs with y ys ih generalizing x;
-    · norm_num;
-    · by_cases h' : x + ys.sum = 0 <;> simp_all +decide;
-      · grind;
-      · by_cases hy : y = 0 <;> simp_all +decide [add_comm, add_left_comm];
-        have h_min : padicValRat p (y + (x + ys.sum)) ≥ min (padicValRat p y) (padicValRat p (x + ys.sum)) := by
-          exact padicValRat.min_le_padicValRat_add hsum;
-        grind
-
-/-
 For all primes $p$ and all rationals $x$ and $y$, if $\nu_p(x) \neq \nu_p(y)$, then $\nu_p(x+y) = \min(\nu_p(x), \nu_p(y)).$
 -/
 lemma eqmin (p : ℕ) [Fact p.Prime] (x y : ℚ) (hx : x ≠ 0) (hy : y ≠ 0) (hxy : x + y ≠ 0) (h : padicValRat p x ≠ padicValRat p y) :
@@ -190,19 +176,6 @@ lemma latleasttwo (a : ℕ) : l_val a ≥ 2 := by
   exact Nat.le_log_of_pow_le ( by decide ) ( by linarith )
 
 /-
-We have $3^k < 2^l$.
--/
-lemma twotothellargerthanthreetothek (a : ℕ) : 3^(k_val a) < 2^(l_val a) := by
-  -- By definition of $k$ and $l$, we have $3^k < 2^l$.
-  have hkl : 3 ^ (Nat.log 3 a + 1) < 2 ^ (Nat.log 2 (2 * 3 ^ (Nat.log 3 a + 1))) := by
-    have hk : 3 ^ (Nat.log 3 a + 1) < 2 * 3 ^ (Nat.log 3 a + 1) := by
-      norm_num
-    have hl : 2 ^ (Nat.log 2 (2 * 3 ^ (Nat.log 3 a + 1))) ≤ 2 * 3 ^ (Nat.log 3 a + 1) := by
-      exact Nat.pow_log_le_self 2 ( by positivity )
-    have := Nat.lt_pow_succ_log_self ( by decide : 1 < 2 ) ( 2 * 3 ^ ( Nat.log 3 a + 1 ) ) ; simp_all +decide [ pow_succ' ] ;
-  exact hkl
-
-/-
 We have $2^l \le b-1$.
 -/
 lemma twotothelsmallerthanb (a : ℕ) : 2^(l_val a) ≤ b_val a - 1 := by
@@ -217,26 +190,7 @@ lemma twotothelsmallerthanb (a : ℕ) : 2^(l_val a) ≤ b_val a - 1 := by
   unfold k_val at this; aesop
 
 /-
-The integer $2^l$ is the only positive integer smaller than or equal to $b$ which is divisible by $2^l$. That is, for all $i \le b$ with $i \neq 2^l$ we have $\nu_2(i) \le l-1$.
--/
-lemma twotothelisunique (a : ℕ) (i : ℕ) (hi_pos : 1 ≤ i) (hi_le : i ≤ b_val a) (hi_ne : i ≠ 2^(l_val a)) :
-  padicValNat 2 i ≤ l_val a - 1 := by
-    -- Assume that $\nu_2(i) \ge l$. Then $i$ is divisible by $2^l$.
-    by_contra h_contra
-    have hi_div : 2 ^ l_val a ∣ i := by
-      exact dvd_trans ( pow_dvd_pow _ ( Nat.le_of_pred_lt ( not_le.mp h_contra ) ) ) ( Nat.ordProj_dvd _ _ );
-    -- Since $i \neq 2^l$, we have $i \ge 2 \cdot 2^l$.
-    have hi_ge : i ≥ 2 * 2 ^ l_val a := by
-      obtain ⟨ k, hk ⟩ := hi_div;
-      rcases k with ( _ | _ | k ) <;> simp_all +decide [ mul_comm ];
-    -- By Lemma \ref{twotothellargerthanthreetothek} we then have $$i \ge 2 \cdot 2^l > 2 \cdot 3^k = b.$$
-    have hi_gt_b : i > b_val a := by
-      have hi_gt_b : 2 * 2 ^ l_val a > 2 * 3 ^ (k_val a) := by
-        exact mul_lt_mul_of_pos_left ( twotothellargerthanthreetothek a ) zero_lt_two;
-      exact hi_ge.trans_lt' hi_gt_b;
-    grind
 
-/-
 The integer $3^k$ is the only positive integer smaller than $b$ which is divisible by $3^k$. That is, for all $i < b$ with $i \neq 3^k$ we have $\nu_3(i) \le k-1$.
 -/
 lemma threetothekisunique (a : ℕ) (i : ℕ) (hi_pos : 1 ≤ i) (hi_lt : i < b_val a) (hi_ne : i ≠ 3^(k_val a)) :
@@ -250,14 +204,7 @@ lemma threetothekisunique (a : ℕ) (i : ℕ) (hi_pos : 1 ≤ i) (hi_lt : i < b_
     exact Nat.le_sub_one_of_lt ( Nat.lt_of_not_ge fun h => h_k_val <| dvd_trans ( pow_dvd_pow _ h ) <| Nat.ordProj_dvd _ _ )
 
 /-
-For all primes $p$ and all rationals $x_1, x_2, \ldots, x_m$, we have $\nu_p(x_1 + x_2 + \cdots + x_m) \ge \min(\nu_p(x_1), \nu_p(x_2), \ldots \nu_p(x_m)).$
--/
-lemma padicValRat_list_sum_ge_min (p : ℕ) [Fact p.Prime] (x : ℚ) (xs : List ℚ) (hsum : (x :: xs).sum ≠ 0) :
-  padicValRat p (x :: xs).sum ≥ (xs.map (padicValRat p)).foldr min (padicValRat p x) := by
-    -- Apply the lemma `eqminmoregeneral` to the list `x :: xs`.
-    apply eqminmoregeneral p x xs hsum
 
-/-
 For all primes $p$ and all rationals $x_1, x_2, \ldots, x_m$, we have $\nu_p(x_1 + x_2 + \cdots + x_m) \ge \min(\nu_p(x_1), \nu_p(x_2), \ldots \nu_p(x_m)).$
 -/
 lemma padicValRat_finset_sum_ge_min {α : Type*} (s : Finset α) (f : α → ℚ) (p : ℕ) [Fact p.Prime] (h : s.Nonempty) (hsum : (∑ i ∈ s, f i) ≠ 0) :
@@ -513,19 +460,7 @@ lemma pequaltothreevaluationofvab (a : ℕ) (ha : a > 0) :
     grind
 
 /-
-We have $\nu_3\left(\frac{1}{3^k} + \frac{1}{2 \cdot 3^k}\right) = -(k-1)$.
--/
-lemma valuation_aux (k : ℕ) (hk : k ≥ 1) : padicValRat 3 (1 / 3^k + 1 / (2 * 3^k)) = -(k - 1 : ℤ) := by
-  -- Combine the fractions: $\frac{1}{3^k} + \frac{1}{2 \cdot 3^k} = \frac{2 + 1}{2 \cdot 3^k} = \frac{3}{2 \cdot 3^k} = \frac{1}{2 \cdot 3^{k-1}}$.
-  have h_combined : (1 : ℚ) / 3 ^ k + 1 / (2 * 3 ^ k) = 1 / (2 * 3 ^ (k - 1)) := by
-    cases k <;> norm_num [ pow_succ' ] at * ; ring;
-  erw [ h_combined, padicValRat.div ] <;> norm_num;
-  rw [ padicValRat.mul ] <;> norm_num;
-  norm_num [ padicValRat ];
-  norm_num [ padicValInt ];
-  rw [ padicValNat.eq_zero_of_not_dvd ] <;> norm_num ; omega
 
-/-
 We have $\nu_3(v_{a,b}) \le k-1$.
 -/
 lemma pequaltothreevaluationofvab_final (a : ℕ) (ha : a > 0) :
