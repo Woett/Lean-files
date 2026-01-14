@@ -1,5 +1,5 @@
 /-
-We have formalized the proof that for every positive integer $a$, there exists a positive integer $b$ with $a < b \le 6a$ such that $v_{a,b} < v_{a,b-1}$, where $v_{a,b}$ is the denominator of the harmonic sum from $a$ to $b$. The proof follows the provided outline, utilizing p-adic valuations to establish the divisibility properties of the denominators. All lemmas and the main theorem have been formally proven in Lean.
+For positive integers $a$ and $b$, let $u_{a,b}$ and $v_{a,b}$ be the coprime positive integers with $\frac{u_{a,b}}{v_{a,b}} = \sum_{i=a}^b \frac{1}{b}$. That is, $v_{a,b}$ is the denominator of the partial harmonic sum from $a$ to $b$. Below you can find a Lean formalization of a proof that for every positive integer $a$, there exists a positive integer $b$ with $a < b \le 6a$ such that $v_{a,b} < v_{a,b-1}$. This provides a solution to Erdős problem #290; https://www.erdosproblems.com/290. The mathematical content was written by me, which I fed into Aristotle from Harmonic to get it formalized. Boris Alexeev then used the output from Aristotle to completely finish the Lean proof, cleaning it all up in the process. I owe him a huge thanks :)
 -/
 
 import Mathlib
