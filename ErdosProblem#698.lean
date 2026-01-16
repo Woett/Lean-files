@@ -1,9 +1,9 @@
 /-
 For integers $2 ≤ i < j ≤ n/2$ we aim to show that the greatest common divisor of $\binom{n}{i}$ and $\binom{n}{j}$ is strictly greater than $\frac{2^i\sqrt{n}}{4i\sqrt{i-1}}$, solving Erdos problem #698 (see https://www.erdosproblems.com/698). The proof of this lower bound (with a slightly worse constant) was found by Bergman;
 
-Bergman, George M., On common divisors of multinomial coefficients. Bull. Aust. Math. Soc. (2011), 138--157
+Bergman, George M., On common divisors of multinomial coefficients. Bull. Aust. Math. Soc. (2011), 138--157.
 
-I (Wouter van Doorn) rewrote his proof a little bit, and then gave it to Aristotle from Harmonic, which then formalized it in Lean, after which only minor changes were required to make sure it fully compiles.
+I (Wouter van Doorn) rewrote his proof a little bit, and gave it to Aristotle from Harmonic. Aristotle then formalized it in Lean, after which only minor changes were required to make sure it fully compiled.
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
