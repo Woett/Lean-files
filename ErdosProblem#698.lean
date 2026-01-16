@@ -1,16 +1,33 @@
 /-
 For integers $2 ≤ i < j ≤ n/2$ we aim to show that the greatest common divisor of $\binom{n}{i}$ and $\binom{n}{j}$ is strictly greater than $\frac{2^i\sqrt{n}}{4i\sqrt{i-1}}$, solving Erdos problem #698 (see https://www.erdosproblems.com/698). The proof of this lower bound (with a slightly worse constant) was found by Bergman;
 
-Bergman, George M., On common divisors of multinomial coefficients. Bull. Aust. Math. Soc. (2011), 138--157.
+Bergman, George M., On common divisors of multinomial coefficients. Bull. Aust. Math. Soc. (2011), 138--157
 
-I (Wouter van Doorn) rewrote his proof a little bit, and gave it to Aristotle from Harmonic. Aristotle then formalized it in Lean, after which only minor changes were required to make sure it fully compiled.
+I (Wouter van Doorn) rewrote his proof a little bit, and then gave it to Aristotle from Harmonic, which then formalized it in Lean, after which only minor changes were required to make sure it fully compiles.
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
 -/
 
 import Mathlib
+
+set_option linter.mathlibStandardSet false
+
+open scoped BigOperators
+open scoped Real
+open scoped Nat
+open scoped Classical
+open scoped Pointwise
+
 set_option maxHeartbeats 0
+set_option maxRecDepth 4000
+set_option synthInstance.maxHeartbeats 20000
+set_option synthInstance.maxSize 128
+
+set_option relaxedAutoImplicit false
+set_option autoImplicit false
+
+noncomputable section
 
 /-
 Let $Q_h = \binom{n}{i} \binom{i}{h} \binom{n-i}{j-i+h}$. Then $Q_h \cdot h! (i-h)! (j-i+h)! (n-j-h)! = n!$.
@@ -67,13 +84,21 @@ theorem L_sq_dvd_linear_comb (n i j : ℕ) (h2 : 2 ≤ i) (hij : i ≤ j) (hjn :
 /-
 $Q_0 = \binom{n}{j} \binom{j}{i}$.
 -/
-theorem Q0_eq (n i j : ℕ) (hij : i ≤ j) (_hjn : j ≤ n) :
+theorem Q0_eq (n i j : ℕ) (hij : i ≤ j) (hjn : j ≤ n) :
     Q n i j 0 = Nat.choose n j * Nat.choose j i := by
       -- By definition of $Q$, we have $Q n i j 0 = n.choose i * i.choose 0 * (n - i).choose (j - i)$.
       have hQ_def : Q n i j 0 = n.choose i * i.choose 0 * (n - i).choose (j - i) := by
-        exact Nat.add_zero ((n.choose i * i.choose 0).mul ((n - i).choose (j - i + 0)));
-      rw [ hQ_def, Nat.choose_mul ] <;> norm_num [ hij, _hjn ];
-      · rw [ ← Nat.choose_mul ]; omega;
+        exact rfl;
+      rw [ hQ_def, Nat.choose_mul ] <;> norm_num [ hij, hjn ];
+      · rw [ ← Nat.choose_mul ] <;> omega;
+      · grind
+
+/-
+$Q_1 = \binom{n}{j} \binom{j}{i-1} (n-j)$.
+-/
+theorem Q1_eq (n i j : ℕ) (hij : i ≤ j) (hjn : j ≤ n) (hi : 1 ≤ i) (hjn1 : 1 ≤ n - j) :
+    Q n i j 1 = Nat.choose n j * Nat.choose j (i - 1) * (n - j) := by
+      have h := Q_eq n i j 1 hij hjn ( by linarith ) ( by omega ) ; aesop;
 
 /-
 $Q_2 = \binom{n}{j} \binom{j}{i-2} \binom{n-j}{2}$.
@@ -89,7 +114,7 @@ theorem binom_identity_1 (i j : ℕ) (h2 : 2 ≤ i) (hij : i ≤ j) :
     (i - 1 : ℤ) * Nat.choose j (i - 1) = (Nat.choose j (i - 2) : ℤ) * (j - i + 2) := by
       induction' h2 with i h2 ih <;> norm_num [ Nat.choose ] at *;
       rcases i with ( _ | _ | i ) <;> norm_num at *;
-      nlinarith! [ Nat.add_one_mul_choose_eq j ( i + 1 ), Nat.choose_succ_succ j ( i + 1 ), ih ( by linarith ) ]
+      nlinarith! [ Nat.succ_mul_choose_eq j ( i + 1 ), Nat.choose_succ_succ j ( i + 1 ), ih ( by linarith ) ]
 
 /-
 $i(i-1)\binom{j}{i} = \binom{j}{i-2}(j-i+2)(j-i+1)$.
@@ -137,7 +162,8 @@ theorem linear_comb_eq (n i j : ℕ) (h2 : 2 ≤ i) (hij : i < j) (hjn : j ≤ n
           rw [ Nat.choose_succ_right_eq ];
           rw [ Nat.choose_mul ];
           · simp +decide [ Nat.succ_sub ( by linarith : i ≤ j ), Nat.succ_sub ( by linarith : i ≤ n ), mul_assoc ];
-            exact Or.inl ( by nlinarith only [ Nat.add_one_mul_choose_eq ( n - i ) ( j - i ), Nat.choose_succ_succ ( n - i ) ( j - i ), Nat.sub_add_cancel ( show i ≤ n from by linarith ), Nat.sub_add_cancel ( show j ≤ n from by linarith ), Nat.sub_add_cancel ( show j ≥ i from by linarith ) ] );
+            exact Or.inl ( by nlinarith only [ Nat.succ_mul_choose_eq ( n - i ) ( j - i ), Nat.choose_succ_succ ( n - i ) ( j - i ), Nat.sub_add_cancel ( show i ≤ n from by linarith ), Nat.sub_add_cancel ( show j ≤ n from by linarith ), Nat.sub_add_cancel ( show j ≥ i from by linarith ) ] );
+          · linarith;
           · linarith;
       -- Apply the binomial identities to simplify the expression.
       have h_binom_id : (i - 1 : ℤ) * Nat.choose j (i - 1) = Nat.choose j (i - 2) * (j - i + 2) ∧ (i : ℤ) * (i - 1) * Nat.choose j i = Nat.choose j (i - 2) * (j - i + 2) * (j - i + 1) ∧ 2 * (Nat.choose (n - j) 2 : ℤ) = (n - j : ℤ) * (n - j - 1) := by
@@ -181,7 +207,7 @@ theorem binom_le_binom_div_pow_two (n j i : ℕ) (h2 : 2 ≤ i) (hij : i ≤ j) 
       rw [ le_div_iff₀ ] <;> norm_cast <;> try positivity;
       -- By `product_le_pow_two` with $m=i-2$, we have $j^{\underline{i-2}} \le (1/2)^{i-2} n^{\underline{i-2}}$.
       have h_prod_le_pow_two : (∏ k ∈ Finset.range (i - 2), (j - k : ℝ)) ≤ (1 / 2) ^ (i - 2) * (∏ k ∈ Finset.range (i - 2), (n - k : ℝ)) := by
-        exact product_le_pow_two n j (i - 2) hjn;
+        exact product_le_pow_two n j (i - 2) hjn
       -- Recognize that $\prod_{k=0}^{i-3} (j-k) = \frac{j!}{(j-(i-2))!}$ and $\prod_{k=0}^{i-3} (n-k) = \frac{n!}{(n-(i-2))!}$.
       have h_prod_eq_factorial : (∏ k ∈ Finset.range (i - 2), (j - k : ℝ)) = (Nat.descFactorial j (i - 2) : ℝ) ∧ (∏ k ∈ Finset.range (i - 2), (n - k : ℝ)) = (Nat.descFactorial n (i - 2) : ℝ) := by
         norm_num [ Nat.descFactorial_eq_prod_range ];
