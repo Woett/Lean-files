@@ -3,7 +3,7 @@ For integers $2 ≤ i < j ≤ n/2$ we aim to show that the greatest common divis
 
 Bergman, George M., On common divisors of multinomial coefficients. Bull. Aust. Math. Soc. (2011), 138--157
 
-I (Wouter van Doorn) rewrote his proof a little bit, and then gave it to Aristotle from Harmonic, which then formalized it in Lean, after which only minor changes were required to make sure it fully compiles.
+I (Wouter van Doorn) rewrote his proof a little bit, and gave it to Aristotle from Harmonic,. Aristotle then formalized it in Lean, after which only minor changes were required to make sure it fully compiles.
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
@@ -11,23 +11,7 @@ Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
 
 import Mathlib
 
-set_option linter.mathlibStandardSet false
-
-open scoped BigOperators
-open scoped Real
-open scoped Nat
-open scoped Classical
-open scoped Pointwise
-
 set_option maxHeartbeats 0
-set_option maxRecDepth 4000
-set_option synthInstance.maxHeartbeats 20000
-set_option synthInstance.maxSize 128
-
-set_option relaxedAutoImplicit false
-set_option autoImplicit false
-
-noncomputable section
 
 /-
 Let $Q_h = \binom{n}{i} \binom{i}{h} \binom{n-i}{j-i+h}$. Then $Q_h \cdot h! (i-h)! (j-i+h)! (n-j-h)! = n!$.
