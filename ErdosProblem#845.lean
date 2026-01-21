@@ -1,14 +1,16 @@
 /-
-There exists an absolute constant $C$ such that every positive integer can be written as a sum of distinct $3$-smooth integers for which the ratio between the largest and smallest is smaller than $C$. This solves Erdős problem #845 (https://www.erdosproblems.com/845), and was proven by Anneroos Everts and me.
+For an odd integer $p > 1$, let $A_p$ be the sequence of integers of the form $2^x p^y$, with $x$ and $y$ non-negative integers. In joint work with Anneroos Everts, we proved that for every odd integer $p > 1$ there exists a constant $C_p$ such that every positive integer $n$ can be written as a sum $n = b_1 + .. + b_r$ with $b_i \in A_p$ for all $i$, and $b_1 < .. < b_r < C_p b_1$. This answers Erdős Problem 845 (https://www.erdosproblems.com/845) in the negative.
 
 Wouter van Doorn and Anneroos R. F. Everts, Smooth sums with small spacings. arXiv:2511.04585 (2025).
 
-With the help of Aristotle, Boris Alexeev formalized most of the results in the above paper into Lean as can be found here:
+In January 2026 Borix Alexeev successfully fed the above paper into Aristotle from Harmonic to get it formalized in Lean, and the result can be found here: 
 
 https://github.com/plby/lean-proofs/blob/main/ErdosProblems/Erdos845.md
 
-Anneroos and I moreover proved that one can take $C = 6$. The proof of this bound had however not been formalized yet, and this file is here to fill that final remaining gap. This could not have been done without the help of Aristotle, ChatGPT, Google, Gemini and Claude, so I thank and welcome our AI overlords.
+Anneroos and I moreover proved that one can take $C_p = 6$ when $p = 3$. The proof of this bound had however not been formalized yet, and this file is here to fill that final remaining gap. I first rewrote and simplified the above paper tailored to the $p = 3$-case, and then had a long back and forth with Aristotle, which ended up being successful. The entire process could obviously not have been done without the help of Aristotle, but ChatGPT, Google, Gemini and Claude definitely deserve a lot of praise as well (and so does my own patience), so I thank and welcome our AI overlords.
 
+Lean version: leanprover/lean4:v4.24.0
+Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
 -/
 
 import Mathlib
@@ -1464,3 +1466,4 @@ theorem main_result_proven (n : ℕ) (h : 0 < n) :
           · rw [← I_sol_mem_iff n h]; exact hi
 
 #print axioms main_result_proven
+
