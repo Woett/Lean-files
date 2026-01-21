@@ -9,7 +9,7 @@ And Tao's comment can be found here:
 
 https://www.erdosproblems.com/forum/thread/347#post-1471
 
-Using Aristotle, Bartosz Naskrecki obtained a Lean formalization of the proof that can be found here:
+Using Aristotle, Bartosz Naskrecki then helped Enrique obtain a Lean formalization of the proof that can be found here:
 
 https://github.com/ebarschkis/ErdosProblem/blob/main/Problem347/Formalization.lean
 
@@ -2016,5 +2016,6 @@ theorem answer_is_yes : ∃ A : ℕ → ℕ, Monotone A ∧ (Filter.Tendsto (fun
   refine ⟨A_is_nondecreasing, A_ratio_limit, ?_⟩
   intro S hS
   exact main_theorem S hS
+
 
   #print axioms answer_is_yes
