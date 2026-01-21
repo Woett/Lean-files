@@ -24,6 +24,7 @@ import Mathlib
 set_option linter.deprecated false
 set_option linter.mathlibStandardSet false
 set_option linter.unusedVariables false
+set_option linter.unusedSimpArgs false
 
 open scoped BigOperators
 open scoped Real
@@ -2019,3 +2020,4 @@ theorem answer_is_yes : ∃ A : ℕ → ℕ, Monotone A ∧ (Filter.Tendsto (fun
 
 
   #print axioms answer_is_yes
+
