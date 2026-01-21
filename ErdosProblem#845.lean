@@ -13,18 +13,7 @@ Anneroos and I moreover proved that one can take $C = 6$. The proof of this boun
 
 import Mathlib
 
-set_option linter.mathlibStandardSet false
-open scoped BigOperators
-open scoped Real
-open scoped Nat
 open scoped Classical
-open scoped Pointwise
-set_option maxHeartbeats 0
-set_option maxRecDepth 4000
-set_option synthInstance.maxHeartbeats 20000
-set_option synthInstance.maxSize 128
-set_option relaxedAutoImplicit false
-set_option autoImplicit false
 set_option linter.unusedVariables false
 noncomputable section
 
@@ -1473,6 +1462,5 @@ theorem main_result_proven (n : ℕ) (h : 0 < n) :
               rw [← I_sol_mem_iff n h] at hj
               apply I.min'_le _ hj
           · rw [← I_sol_mem_iff n h]; exact hi
-
 
 #print axioms main_result_proven
