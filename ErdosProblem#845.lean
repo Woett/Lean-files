@@ -1,103 +1,31 @@
 /-
-This file was edited by Aristotle.
+There exists an absolute constant $C$ such that every positive integer can be written as a sum of distinct $3$-smooth integers for which the ratio between the largest and smallest is smaller than $C$. This solves Erdős problem #845 (https://www.erdosproblems.com/845), and was proven by Anneroos Everts and me.
 
-Lean version: leanprover/lean4:v4.24.0
-Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
-This project request had uuid: 4de30f25-b035-42cd-b10e-070eefcff17c
+Wouter van Doorn and Anneroos R. F. Everts, Smooth sums with small spacings. arXiv:2511.04585 (2025).
 
-To cite Aristotle, tag @Aristotle-Harmonic on GitHub PRs/issues, and add as co-author to commits:
-Co-authored-by: Aristotle (Harmonic) <aristotle-harmonic@harmonic.fun>
+With the help of Aristotle, Boris Alexeev formalized most of the results in the above paper into Lean as can be found here:
 
-The following was proved by Aristotle:
+https://github.com/plby/lean-proofs/blob/main/ErdosProblems/Erdos845.md
 
-- theorem reduction_step_part2_extended (n : ℕ) (h : 0 < n) (c : ℕ → ℕ) (k : ℕ)
-  (h_sum : n = (Finset.range (v3 n + 1)).sum (fun i => c i * A i))
-  (hk_le : k ≤ v2 n)
-  (hc_k : c k ∈ ({2, 3} : Set ℕ)) :
-  ∃ c' : ℕ → ℕ,
-    n = (Finset.range (v3 n + 1)).sum (fun i => c' i * A i) ∧
-    c' k = c k - 2 ∧
-    (∀ i < k, c' i = c i) ∧
-    (∀ i, i ≠ k → c i ≤ c' i) ∧
-    (∀ i, c' i > c i → k < i ∧ i ≤ v3 n) ∧
-    (∀ i, c' i ≤ c i + 1)
-
-- theorem better_initial_representation (n : ℕ) (h : 0 < n) :
-  ∃ c : ℕ → ℕ,
-    n = (Finset.range (v2 n + 1)).sum (fun i => c i * A i) ∧
-    (∀ i < m_index n - 1, c i ∈ ({2, 3} : Set ℕ)) ∧
-    (∀ i, m_index n - 1 ≤ i → i ≤ v2 n → c i ∈ ({0, 1} : Set ℕ)) ∧
-    (∀ i > v2 n, c i = 0) ∧
-    (∀ i, c i = 1 → ∃ k, A i = 2^k)
-
-- theorem c_bound_le_5 (n : ℕ) (h : 0 < n) (k : ℕ) (i : ℕ) :
-  coeffs_sequence_v2 n h (c_initial n) k i ≤ 5
-
-- theorem c_initial_plus_potential_increase_le_5 (n : ℕ) (h : 0 < n) (i : ℕ) :
-  c_initial n i + potential_increase n i ≤ 5
-
-- theorem c_bound_part2 (n : ℕ) (h : 0 < n) (k : ℕ)
-  (hk_gt : v1 n < k) (hk_le : k ≤ v2 n) :
-  coeffs_sequence_v2 n h (c_initial n) k k ≤ 3
-
-- theorem coeffs_bound_large (n : ℕ) (h : 0 < n) (k : ℕ) (i : ℕ) (hi : v2 n < i) :
-  coeffs_sequence_v2 n h (c_initial n) k i ≤ (Finset.range k).sum (fun j => if v1 n < j ∧ j ≤ v2 n ∧ 2 * A j = A i then 1 else 0)
-
-- theorem coeffs_bound_large_general (n : ℕ) (h : 0 < n) (c : ℕ → ℕ) (hc : is_valid_initial n c) (k : ℕ) (i : ℕ) (hi : v2 n < i) :
-  coeffs_sequence_v2 n h c k i ≤ (Finset.range k).sum (fun j => if v1 n < j ∧ j ≤ v2 n ∧ 2 * A j = A i then 1 else 0)
-
-- theorem c_bound_le_5_general (n : ℕ) (h : 0 < n) (c : ℕ → ℕ) (hc : is_valid_initial n c) (k : ℕ) (i : ℕ) :
-  coeffs_sequence_v2 n h c k i ≤ 5
-
-- theorem c_sol_le_one (n : ℕ) (h : 0 < n) (i : ℕ) : c_sol n h i ≤ 1
-
-- theorem I_sol_mem_iff (n : ℕ) (h : 0 < n) (i : ℕ) : i ∈ I_sol n h ↔ c_sol n h i = 1
--/
-
-/-
--- Harmonic `generalize_proofs` tactic
-Make sure you are extra careful to prevent the following type of mistake:
-
-Application type mismatch: The argument
-  Nat.lt_succ_of_le (mul_closure_bound_part2 n h k l hl.right hk_le)
-has type
-  l < (v3 n).succ
-but is expected to have type
-  l ≤ v3 n
-in the application
-  ⟨ne_of_gt hl.left, Nat.lt_succ_of_le (mul_closure_bound_part2 n h k l hl.right hk_le)⟩
+Anneroos and I moreover proved that one can take $C = 6$. The proof of this bound had however not been formalized yet, and this file is here to fill that final remaining gap. This could not have been done without the help of Aristotle, ChatGPT, Google, Gemini and Claude, so I thank and welcome our AI overlords.
 
 -/
 
 import Mathlib
 
-
 set_option linter.mathlibStandardSet false
-
 open scoped BigOperators
-
 open scoped Real
-
 open scoped Nat
-
 open scoped Classical
-
 open scoped Pointwise
-
 set_option maxHeartbeats 0
-
 set_option maxRecDepth 4000
-
 set_option synthInstance.maxHeartbeats 20000
-
 set_option synthInstance.maxSize 128
-
 set_option relaxedAutoImplicit false
-
 set_option autoImplicit false
-
 set_option linter.unusedVariables false
-
 noncomputable section
 
 /-
@@ -1545,5 +1473,6 @@ theorem main_result_proven (n : ℕ) (h : 0 < n) :
               rw [← I_sol_mem_iff n h] at hj
               apply I.min'_le _ hj
           · rw [← I_sol_mem_iff n h]; exact hi
+
 
 #print axioms main_result_proven
