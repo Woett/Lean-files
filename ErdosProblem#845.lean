@@ -1,5 +1,5 @@
 /-
-For an odd integer $p > 1$, let $A_p$ be the sequence of integers of the form $2^x p^y$, with $x$ and $y$ non-negative integers. In joint work with Anneroos Everts, we proved that for every odd integer $p > 1$ there exists a constant $C_p$ such that every positive integer $n$ can be written as a sum $n = b_1 + .. + b_r$ with $b_i \in A_p$ for all $i$, and $b_1 < .. < b_r < C_p b_1$. This answers Erdős Problem 845 (https://www.erdosproblems.com/845) in the negative.
+For an odd integer $p > 1$, let $A_p$ be the sequence of integers of the form $2^x p^y$, with $x$ and $y$ non-negative integers. In joint work with Anneroos Everts, we proved that for every odd integer $p > 1$ there exists a constant $C_p$ such that every positive integer $n$ can be written as a sum $n = b_1 + .. + b_r$ with $b_i \in A_p$ for all $i$, and $b_1 < .. < b_r < C_p b_1$. This answers a generalization of Erdős Problem 845 (https://www.erdosproblems.com/845) in the negative.
 
 Wouter van Doorn and Anneroos R. F. Everts, Smooth sums with small spacings. arXiv:2511.04585 (2025).
 
@@ -1466,5 +1466,6 @@ theorem main_result_proven (n : ℕ) (h : 0 < n) :
           · rw [← I_sol_mem_iff n h]; exact hi
 
 #print axioms main_result_proven
+
 
 
