@@ -1,5 +1,5 @@
 /-
-We prove that for every non-decreasing unbounded function $f$ on the positive integers, there exists an infinite set $B$ of positive integers omitting a residue class modulo every prime, whose counting function increases more slowly than $f$ does, and has the property that for every integer $n$, the set $B+n$ contains a composite number. This formalization follows the second proof in 
+We prove that for every function $f$ on the positive integers that goes to infinity, there exists an infinite set $B$ of positive integers omitting a residue class modulo every prime, whose counting function increases more slowly than $f$ does, and has the property that for every integer $n$, the set $B+n$ contains a composite number. This formalization follows the second proof in 
 
 D. Weisenberg, Sparse Admissible Sets and a Problem of Erdős and Graham. Integers (2024)
 
@@ -830,3 +830,4 @@ theorem main_theorem (f : ℕ → ℕ) (hf : Filter.Tendsto f Filter.atTop Filte
 
 
 #print axioms main_theorem
+
