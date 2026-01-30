@@ -7,8 +7,13 @@ We thereby solved Erdos Problem #355 (https://www.erdosproblems.com/355).
 
 Below you can find a formalization of this result. Even though the above paper shows that any lacunarity constant smaller than 2 is possible, the formalization below is based on a simplified proof that Vjeko wrote, which has lacunarity constant 1.01. This simplified proof was given to Gemini3 in order to make it more easily formalizable, which was eventually done with the use of Aristotle (and a whole lot of patience on my end).
 
+At the very end you can find the statement of Erdos Problem #355 taken from the Formal Conjectures from Google DeepMind 
+
+https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjectures/ErdosProblems/355.lean
+
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
+-- Harmonic `generalize_proofs
 -/
 
 import Mathlib
@@ -139,7 +144,7 @@ lemma full_seq_list_nonempty (k : ℕ) (hk : k ≥ 1) : full_seq_list k ≠ [] :
 /-
 The infinite sequence `a` is well-defined and consistent with the finite block construction.
 -/
-def a_seq (n : ℕ) : ℤ :=
+def a_seq (n : ℕ) : ℕ :=
   if n = 0 then 0 else
   let k := n + 2
   let list := full_seq_list k
@@ -178,7 +183,7 @@ Definitions of the set of subset sums `P` and the lacunarity property `IsLacunar
 def P (x : ℕ → ℝ) : Set ℝ :=
   { s | ∃ T : Finset ℕ, s = ∑ i ∈ T, x i }
 
-def IsLacunary (a : ℕ → ℤ) : Prop :=
+def IsLacunary (a : ℕ → ℕ) : Prop :=
   ∃ lambda_val > 1, ∀ i ≥ 1, (a (i + 1) : ℝ) / a i ≥ lambda_val
 
 /-
@@ -833,20 +838,30 @@ Any reciprocal sum of a subset of `full_seq_list k` is in the set `P` of the seq
 lemma finite_sums_in_P (k : ℕ) (hk : k ≥ 1) :
   ∀ s : ℚ, (∃ T : Finset ℕ, T ⊆ (full_seq_list k).toFinset ∧ s = ∑ x ∈ T, (1:ℚ)/x) →
   (s : ℝ) ∈ P (fun i => 1 / (a_seq i : ℝ)) := by
-    -- By definition of `a_seq`, every element in `full_seq_list k` is of the form `a_seq i` for some `i`.
-    have h_a_seq : ∀ x ∈ full_seq_list k, ∃ i, x = a_seq i := by
+    intro s hs
+    obtain ⟨T, hT_sub, hs_eq⟩ := hs
+    have h_finset : ∀ x ∈ T, ∃ i, x = a_seq i := by
       intro x hx
-      obtain ⟨i, hi⟩ : ∃ i, i < (full_seq_list k).length ∧ x = (full_seq_list k).get! i := by
-        obtain ⟨ i, hi ⟩ := List.mem_iff_get.1 hx; use i; aesop;
-      use i + 1;
-      rw [ hi.2, a_seq_eq_get ];
-      exacts [ rfl, Nat.succ_pos _, hi.1 ];
-    rintro s ⟨ T, hT₁, rfl ⟩;
-    choose! f hf using fun x hx => by simpa [ eq_comm ] using h_a_seq x ( List.mem_toFinset.mp ( hT₁ hx ) ) ;
-    refine' ⟨ Finset.image f T, _ ⟩;
-    rw [ Finset.sum_image ];
-    · aesop;
-    · intro x hx y hy; have := hf x hx; have := hf y hy; aesop;
+      have hx_seq : x ∈ (full_seq_list k).toFinset := by
+        exact hT_sub hx;
+      -- By definition of `a_seq`, every element in `full_seq_list k` is of the form `a_seq i` for some `i`.
+      have hx_seq_def : ∀ x ∈ (full_seq_list k).toFinset, ∃ i, x = a_seq i := by
+        intro x hx_seq
+        have hx_seq_def : x ∈ List.map (fun i => a_seq (i + 1)) (List.range (full_seq_list k).length) := by
+          have hx_seq_def : ∀ i < (full_seq_list k).length, (full_seq_list k).get! i = a_seq (i + 1) := by
+            intro i hi;
+            rw [ a_seq_eq_get ];
+            exacts [ rfl, Nat.succ_pos _, hi ];
+          norm_num +zetaDelta at *;
+          obtain ⟨ i, hi ⟩ := List.mem_iff_get.1 hx_seq; use i; aesop;
+        aesop;
+      exact hx_seq_def x hx_seq;
+    choose! f hf using h_finset;
+    use T.image f;
+    rw [ Finset.sum_image ] <;> norm_num [ hs_eq ];
+    · exact Finset.sum_congr rfl fun x hx => hf x hx ▸ rfl;
+    · intro x hx y hy; have := hf x hx; have := hf y hy; simp +decide [ ← this ] at *;
+      grind
 
 /-
 For any rational $q < 2$ and positive integer $v$, there exists a block index $k$ divisible by $v$ such that the partial sum up to block $k$ is at least $q$.
@@ -928,6 +943,31 @@ lemma a_seq_pos (n : ℕ) (hn : n ≥ 1) : a_seq n > 0 := by
     grind
 
 /-
+Shifted sequence of a_seq to avoid the zero index.
+-/
+def a_shifted (n : ℕ) : ℕ := a_seq (n + 1)
+
+/-
+The shifted sequence consists of positive integers.
+-/
+lemma a_shifted_pos (n : ℕ) : a_shifted n > 0 := by
+  exact a_seq_pos _ ( Nat.succ_pos _ )
+
+lemma P_a_seq_eq_P_a_shifted : P (fun i => 1 / (a_seq i : ℝ)) = P (fun i => 1 / (a_shifted i : ℝ)) := by
+  apply Set.ext;
+  intro x;
+  constructor <;> rintro ⟨ T, rfl ⟩;
+  · -- By definition of $a_shifted$, we know that $a_shifted i = a_seq (i + 1)$. Therefore, we can rewrite the sum over $T$ as a sum over $T' = \{i - 1 \mid i \in T, i \neq 0\}$.
+    obtain ⟨T', hT'⟩ : ∃ T' : Finset ℕ, T = T'.image (fun i => i + 1) ∪ (if 0 ∈ T then {0} else ∅) := by
+      use T.image (fun i => i - 1) |> Finset.filter (fun i => i + 1 ∈ T);
+      ext ( _ | i ) <;> aesop;
+    split_ifs at hT' <;> simp_all +decide [Finset.sum_image];
+    · exact ⟨ T', rfl ⟩;
+    · exact ⟨ T', rfl ⟩;
+  · use T.image ( fun i => i + 1 );
+    rw [ Finset.sum_image ] <;> aesop
+
+/-
 There exists a lacunary sequence of positive integers and an interval $(\alpha, \beta)$ such that the set of reciprocal sums contains all rationals in the interval.
 -/
 theorem maintheorem : ∃ (a : ℕ → ℕ) (α β : ℝ),
@@ -935,29 +975,54 @@ theorem maintheorem : ∃ (a : ℕ → ℕ) (α β : ℝ),
   (∃ lambda_val > 1, ∀ i, (a (i + 1) : ℝ) / a i ≥ lambda_val) ∧
   0 ≤ α ∧ α < β ∧
   ∀ q : ℚ, α < q → q < β → (q : ℝ) ∈ P (fun i => 1 / (a i : ℝ)) := by
-    -- Let's choose the sequence $a$ defined above and the interval $(0, 2)$.
-    use fun n => Int.natAbs (a_seq (n + 1)), 0, 2;
-    refine' ⟨ _, _, _ ⟩;
-    · exact fun n => Int.natAbs_pos.mpr ( ne_of_gt ( a_seq_pos _ ( Nat.succ_pos _ ) ) );
-    · -- By definition of `a_seq`, we know that it is lacunary.
-      obtain ⟨lambda_val, hlambda_val⟩ := a_seq_is_lacunary;
-      refine' ⟨ lambda_val, hlambda_val.1, fun i => _ ⟩;
-      simpa [ abs_of_nonneg ( show ( 0 : ℤ ) ≤ a_seq ( i + 1 + 1 ) from le_of_lt ( a_seq_pos _ ( by linarith ) ) ), abs_of_nonneg ( show ( 0 : ℤ ) ≤ a_seq ( i + 1 ) from le_of_lt ( a_seq_pos _ ( by linarith ) ) ) ] using hlambda_val.2 ( i + 1 ) ( by linarith );
-    · -- By definition of $P$, we know that if $q \in P (fun i => 1 / (a_seq i : ℝ))$, then $q \in P (fun i => 1 / (a_seq (i + 1)).natAbs)$.
-      have hP_eq : ∀ q : ℚ, (q : ℝ) ∈ P (fun i => 1 / (a_seq i : ℝ)) → (q : ℝ) ∈ P (fun i => 1 / (a_seq (i + 1)).natAbs) := by
-        intro q hq
-        obtain ⟨T, hT⟩ := hq;
-        -- Let's define the finite set $T'$ corresponding to $T$.
-        obtain ⟨T', hT'⟩ : ∃ T' : Finset ℕ, T = T'.image (fun j => j + 1) ∪ (if 0 ∈ T then {0} else ∅) := by
-          use T.image (fun j => j - 1) |> Finset.filter (fun j => j + 1 ∈ T);
-          ext ( _ | i ) <;> aesop;
-        by_cases h : 0 ∈ T <;> simp +decide [ h ] at hT' ⊢;
-        · simp_all +decide [ a_seq ];
-          refine' ⟨ T', _ ⟩;
-          field_simp;
-          exact Finset.sum_congr rfl fun x hx => by rw [ abs_of_nonneg ] ; split_ifs <;> norm_num;
-        · simp_all +decide [ P ];
-          exact ⟨ T', Finset.sum_congr rfl fun x hx => by rw [ abs_of_nonneg ( Int.cast_nonneg.mpr ( le_of_lt ( a_seq_pos _ ( Nat.succ_pos _ ) ) ) ) ] ⟩;
-      exact ⟨ le_rfl, by norm_num, fun q hq₁ hq₂ => hP_eq q <| main_result_a_seq q ( mod_cast hq₁ ) ( mod_cast hq₂ ) ⟩
+    -- Choose the sequence `a` to be `a_shifted`, and the interval `(0, 2)`.
+    use a_shifted, 0, 2;
+    refine' ⟨ _, _, _, _, _ ⟩;
+    · exact fun n => a_shifted_pos n;
+    · exact a_seq_is_lacunary |> fun ⟨ lambda, hlambda₁, hlambda₂ ⟩ => ⟨ lambda, hlambda₁, fun i => hlambda₂ ( i + 1 ) ( by linarith ) ⟩;
+    · norm_num;
+    · grind;
+    · intro q hq₁ hq₂;
+      convert main_result_a_seq q ( by exact_mod_cast hq₁ ) ( by exact_mod_cast hq₂ ) using 1;
+      exact Eq.symm P_a_seq_eq_P_a_shifted
 
-#print axioms maintheorem
+theorem erdos_355 :
+    ∃ A : ℕ → ℕ, IsLacunary A ∧ ∃ u v : ℝ, u < v ∧ ∀ q : ℚ, ↑q ∈ Set.Ioo u v →
+      q ∈ {∑ a ∈ A', (1 / a : ℚ) | (A' : Finset ℕ) (_ : A'.toSet ⊆ Set.range A)} := by
+  -- Apply the main theorem to obtain the lacunary sequence A and the interval (α, β).
+  obtain ⟨A, hA_lacunary, α, β, hαβ⟩ := maintheorem;
+  -- Use the existence of lambda_val from hαβ.left to conclude that A is lacunary.
+  use A, by
+    -- By definition of IsLacunary, we need to show that there exists a lambda_val > 1 such that for all i, (A (i + 1) : ℝ) / A i ≥ lambda_val.
+    obtain ⟨lambda_val, hlambda_val_gt1, hlambda_val⟩ := hαβ.left;
+    use lambda_val;
+    aesop, hA_lacunary, α, by
+    -- By definition of $hαβ$, we know that $hA_lacunary < α$.
+    apply hαβ.right.right.left
+  generalize_proofs at *;
+  -- Apply the hypothesis `hαβ` to conclude the proof.
+  intros q hq; exact (by
+  -- By definition of $P$, there exists a finite subset $T$ of $\mathbb{N}$ such that $q = \sum_{i \in T} \frac{1}{A i}$.
+  obtain ⟨T, hT⟩ : ∃ T : Finset ℕ, (q : ℝ) = ∑ i ∈ T, (1 / (A i : ℝ)) := by
+    exact hαβ.2.2.2 q hq.1 hq.2 |> fun ⟨ T, hT ⟩ => ⟨ T, by simpa using hT ⟩
+  generalize_proofs at *; (
+  -- Let $A'$ be the image of $T$ under $A$.
+  use Finset.image A T; simp;
+  -- Since $A$ is injective, the image of $T$ under $A$ is just a reordering of the elements in $T$.
+  have h_inj : Function.Injective A := by
+    -- Since $A$ is lacunary, we have $A (i + 1) > A i$ for all $i$.
+    have h_increasing : ∀ i, A (i + 1) > A i := by
+      -- Since $\lambda_val > 1$, we have $A (i + 1) \geq \lambda_val \cdot A i > A i$ for all $i$.
+      intros i
+      obtain ⟨lambda_val, hlambda_val_gt1, hlambda_val⟩ := hαβ.left
+      have h_ratio : (A (i + 1) : ℝ) / (A i : ℝ) ≥ lambda_val := hlambda_val i
+      have h_gt : (A (i + 1) : ℝ) > (A i : ℝ) := by
+        exact_mod_cast ( by nlinarith [ show ( A i : ℝ ) > 0 from Nat.cast_pos.mpr ( β i ), show ( A ( i + 1 ) : ℝ ) > 0 from Nat.cast_pos.mpr ( β ( i + 1 ) ), div_mul_cancel₀ ( A ( i + 1 ) : ℝ ) ( show ( A i : ℝ ) ≠ 0 from Nat.cast_ne_zero.mpr ( ne_of_gt ( β i ) ) ) ] : ( A i : ℝ ) < A ( i + 1 ) ) ;
+      exact_mod_cast h_gt
+    generalize_proofs at *; (
+    exact ( StrictMono.injective ( strictMono_nat_of_lt_succ h_increasing ) ))
+  generalize_proofs at *; (
+  rw [ Finset.sum_image <| by tauto ] ; norm_num [ ← @Rat.cast_inj ℝ, hT ] ;)))
+
+  #print axioms maintheorem
+  #print axioms erdos_355
