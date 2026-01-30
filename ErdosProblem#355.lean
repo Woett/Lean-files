@@ -1,11 +1,11 @@
 /-
-Vjekoslav Kovač and I proved that there exists a lacunary sequence of positive integers whose reciprocal sums represent all rational numbers in an interval.
+Vjekoslav Kovač and I proved that there exists a lacunary sequence of positive integers whose reciprocal sums represent all rational numbers in an interval solving Erdos Problem #355 (https://www.erdosproblems.com/355)
 
 W. van Doorn and V. Kovač, Lacunary sequences whose reciprocal sums represent all rationals in an interval. arXiv:2509.24971 (2025).
 
-We thereby solved Erdos Problem #355 (https://www.erdosproblems.com/355).
+Below you can find a formalization of this result, with thanks to Boris Alexeev for being kind enough to slightly alter the code to get rid of all the warnings. 
 
-Below you can find a formalization of this result. Even though the above paper shows that any lacunarity constant smaller than 2 is possible, the formalization below is based on a simplified proof that Vjeko wrote, which has lacunarity constant 1.01. This simplified proof was given to Gemini3 in order to make it more easily formalizable, which was eventually done with the use of Aristotle (and a whole lot of patience on my end).
+As for the exact result that we will prove: even though the above paper shows that any lacunarity constant smaller than 2 is possible, the formalization below is based on a simplified proof that Vjeko wrote, which has lacunarity constant 1.01. This simplified proof was given to Gemini3 in order to make it more easily formalizable, which was eventually done with the use of Aristotle (and a whole lot of patience on my end).
 
 At the very end you can find the statement of Erdos Problem #355 taken from the Formal Conjectures project by Google DeepMind. 
 
@@ -61,8 +61,8 @@ lemma simple_block_valid (k : ℕ) (hk : k ≥ 2) :
   k ∣ data.getLast! ∧
   (∀ x ∈ data, x ∣ data.getLast!) ∧
   (∀ i, i + 1 < data.length →
-    (101 : ℝ) / 100 ≤ (data.get! (i + 1) : ℝ) / data.get! i ∧
-    (data.get! (i + 1) : ℝ) / data.get! i ≤ 2) := by
+    (101 : ℝ) / 100 ≤ (data[i + 1]! : ℝ) / data[i]! ∧
+    (data[i + 1]! : ℝ) / data[i]! ≤ 2) := by
       unfold simple_block_data;
       refine' ⟨ _, _, _, _ ⟩;
       · simp +arith +decide [ List.range_succ_eq_map ];
@@ -83,7 +83,7 @@ lemma simple_block_valid (k : ℕ) (hk : k ≥ 2) :
           · exact mul_dvd_mul_left _ ( pow_dvd_pow _ ( by linarith ) );
       · intro i hi;
         by_cases hi' : i < Nat.log 2 k + 10 + 1;
-        · norm_num [ List.get! ];
+        · norm_num
           rw [ List.getElem?_append, List.getElem?_append ];
           split_ifs <;> simp_all +decide;
           · norm_num [ pow_succ', mul_div_assoc ];
@@ -150,7 +150,7 @@ def a_seq (n : ℕ) : ℕ :=
   if h : n - 1 < list.length then list.get ⟨n - 1, h⟩ else 0
 
 lemma a_seq_eq_get (n k : ℕ) (hn : n > 0) (hk : n - 1 < (full_seq_list k).length) :
-  a_seq n = (full_seq_list k).get! (n - 1) := by
+  a_seq n = (full_seq_list k)[n - 1]! := by
     -- By definition of `a_seq`, since `n > 0`, we have `a_seq n = (full_seq_list (n + 2)).get ⟨n - 1, h⟩`.
     have h_a_seq_def : a_seq n = (full_seq_list (n + 2)).get ⟨n - 1, by
       -- The length of `full_seq_list` is strictly increasing with respect to `k`.
@@ -166,7 +166,7 @@ lemma a_seq_eq_get (n k : ℕ) (hn : n > 0) (hk : n - 1 < (full_seq_list k).leng
       unfold a_seq; aesop;
     generalize_proofs at *;
     -- By definition of `full_seq_list`, we know that `full_seq_list k` is a prefix of `full_seq_list (n + 2)`.
-    have h_prefix : ∀ m n : ℕ, m ≤ n → (full_seq_list m).length ≤ (full_seq_list n).length ∧ ∀ i < (full_seq_list m).length, (full_seq_list m).get! i = (full_seq_list n).get! i := by
+    have h_prefix : ∀ m n : ℕ, m ≤ n → (full_seq_list m).length ≤ (full_seq_list n).length ∧ ∀ i < (full_seq_list m).length, (full_seq_list m)[i]! = (full_seq_list n)[i]! := by
       intros m n hmn
       induction' hmn with m n hmn ih;
       · exact ⟨ le_rfl, fun i hi => rfl ⟩;
@@ -207,7 +207,7 @@ lemma reachable_sums_append_singleton (L : List ℕ) (x : ℕ) :
 If a list starts with 1 and satisfies the growth condition, its reachable sums cover the full range.
 -/
 lemma reachability_integers (b : List ℕ) (h_head : b.head? = some 1)
-  (h_growth : ∀ i, i + 1 < b.length → b.get! (i + 1) ≤ 1 + (b.take (i + 1)).sum) :
+  (h_growth : ∀ i, i + 1 < b.length → b[i + 1]! ≤ 1 + (b.take (i + 1)).sum) :
   reachable_sums b = { s | s ≤ b.sum } := by
     induction' b using List.reverseRecOn with b ih;
     · contradiction;
@@ -229,13 +229,13 @@ lemma reachability_integers (b : List ℕ) (h_head : b.head? = some 1)
 A list satisfies the growth condition if every element (except the first) is at most 1 plus the sum of all preceding elements.
 -/
 def GrowthCondition (b : List ℕ) : Prop :=
-  ∀ i, i + 1 < b.length → b.get! (i + 1) ≤ 1 + (b.take (i + 1)).sum
+  ∀ i, i + 1 < b.length → b[i + 1]! ≤ 1 + (b.take (i + 1)).sum
 
 /-
 If a list starts with 1 and consecutive elements satisfy $x_{i+1} \le 2 x_i$, then it satisfies the growth condition.
 -/
 lemma ratio_le_2_implies_growth (b : List ℕ) (h_head : b.head? = some 1)
-  (h_ratio : ∀ i, i + 1 < b.length → b.get! (i + 1) ≤ 2 * b.get! i) :
+  (h_ratio : ∀ i, i + 1 < b.length → b[i + 1]! ≤ 2 * b[i]!) :
   GrowthCondition b := by
     intro i hi; induction' i with i ih;
     · cases b <;> aesop;
@@ -259,8 +259,8 @@ def ValidPrefix (L : List ℕ) : Prop :=
   L.head? = some 1 ∧
   L ≠ [] ∧
   (∀ i, i + 1 < L.length →
-    (101 : ℝ) / 100 ≤ (L.get! (i + 1) : ℝ) / L.get! i ∧
-    (L.get! (i + 1) : ℝ) / L.get! i ≤ 2) ∧
+    (101 : ℝ) / 100 ≤ (L[i + 1]! : ℝ) / L[i]! ∧
+    (L[i + 1]! : ℝ) / L[i]! ≤ 2) ∧
   (∀ x ∈ L, x ∣ L.getLast!)
 
 /-
@@ -269,8 +269,8 @@ def ValidPrefix (L : List ℕ) : Prop :=
 -/
 def HasGrowth (L : List ℕ) : Prop :=
   ∀ i, i + 1 < L.length →
-    (101 : ℝ) / 100 ≤ (L.get! (i + 1) : ℝ) / L.get! i ∧
-    (L.get! (i + 1) : ℝ) / L.get! i ≤ 2
+    (101 : ℝ) / 100 ≤ (L[i + 1]! : ℝ) / L[i]! ∧
+    (L[i + 1]! : ℝ) / L[i]! ≤ 2
 
 lemma growth_map_scale (L : List ℕ) (c : ℕ) (hc : c > 0) (h : HasGrowth L) :
   HasGrowth (L.map (c * ·)) := by
@@ -405,7 +405,7 @@ lemma valid_prefix_merge (L1 L2 : List ℕ) (h1 : ValidPrefix L1) (h2 : ValidPre
 -/
 lemma simple_block_valid_prefix (k : ℕ) (hk : k ≥ 2) : ValidPrefix (D k) := by
   -- By definition of `D`, we know that `D k` satisfies the conditions of being a valid prefix except for ending in a multiple of `k`.
-  have h_D_valid : ∀ i, i + 1 < (D k).length → (101 : ℝ) / 100 ≤ ((D k).get! (i + 1) : ℝ) / (D k).get! i ∧ ((D k).get! (i + 1) : ℝ) / (D k).get! i ≤ 2 := by
+  have h_D_valid : ∀ i, i + 1 < (D k).length → (101 : ℝ) / 100 ≤ ((D k)[i + 1]! : ℝ) / (D k)[i]! ∧ ((D k)[i + 1]! : ℝ) / (D k)[i]! ≤ 2 := by
     convert simple_block_valid k hk |>.2.2.2 using 1;
   refine' ⟨ _, _, h_D_valid, _ ⟩;
   · convert simple_block_valid k hk |>.1 using 1;
@@ -453,17 +453,17 @@ lemma reachable_sums_reverse (L : List ℕ) : reachable_sums L.reverse = reachab
 -/
 lemma inv_scaled_reverse_ratio (x : List ℕ) (hx_len : x.length > 0)
   (h_div : ∀ y ∈ x, y ∣ x.getLast!)
-  (h_growth : ∀ i, i + 1 < x.length → (x.get! (i + 1) : ℝ) / x.get! i ≤ 2)
+  (h_growth : ∀ i, i + 1 < x.length → (x[i + 1]! : ℝ) / x[i]! ≤ 2)
   (h_pos : ∀ y ∈ x, y > 0) :
   let b := (x.map (fun z => x.getLast! / z)).reverse
   b.head? = some 1 ∧
-  ∀ i, i + 1 < b.length → b.get! (i + 1) ≤ 2 * b.get! i := by
+  ∀ i, i + 1 < b.length → b[i + 1]! ≤ 2 * b[i]! := by
     -- Show that the head of the reversed list is 1.
     have h_head : (List.map (fun z => x.getLast! / z) x).reverse.head? = some 1 := by
       induction x using List.reverseRecOn <;> aesop;
     refine And.intro h_head ( fun j hj ↦ ?_ );
     -- By definition of `b`, we know that `b.get! (j + 1) = x.getLast! / x.get! (x.length - 2 - j)` and `b.get! j = x.getLast! / x.get! (x.length - 1 - j)`.
-    have h_b_values : (List.map (fun z => x.getLast! / z) x).reverse.get! (j + 1) = x.getLast! / x.get! (x.length - 2 - j) ∧ (List.map (fun z => x.getLast! / z) x).reverse.get! j = x.getLast! / x.get! (x.length - 1 - j) := by
+    have h_b_values : (List.map (fun z => x.getLast! / z) x).reverse[j + 1]! = x.getLast! / x[x.length - 2 - j]! ∧ (List.map (fun z => x.getLast! / z) x).reverse[j]! = x.getLast! / x[x.length - 1 - j]! := by
       simp +zetaDelta at *;
       grind;
     have := h_growth ( x.length - 2 - j ) ?_ <;> simp_all +decide [ Nat.sub_sub ];
@@ -503,7 +503,7 @@ theorem a_seq_is_lacunary : IsLacunary a_seq := by
       grind;
     obtain ⟨ k, hk₁, hk₂, hk₃ ⟩ := h_block;
     -- By definition of `a_seq`, we know that for all `n`, `(a_seq (n + 1))` and `(a_seq n)` are elements of the same block `D k`, and the ratio between consecutive elements in `D k` is at least 1.01.
-    have h_ratio : ∀ i, i + 1 < (full_seq_list k).length → ((full_seq_list k).get! (i + 1) : ℝ) / ((full_seq_list k).get! i) ≥ 1.01 := by
+    have h_ratio : ∀ i, i + 1 < (full_seq_list k).length → ((full_seq_list k)[i + 1]! : ℝ) / ((full_seq_list k)[i]!) ≥ 1.01 := by
       intro i hi; have := full_seq_valid k hk₁; have := this.2.2.1 i hi; norm_num at * ; aesop;
     convert h_ratio ( n - 1 ) _ using 1;
     · rw [ a_seq_eq_get, a_seq_eq_get ];
@@ -552,10 +552,10 @@ lemma a_seq_ratio_le_2 : ∀ n ≥ 1, (a_seq (n + 1) : ℝ) / a_seq n ≤ 2 := b
         linarith [ Nat.zero_le ( Nat.log 2 ( k + 2 ) ), Nat.zero_le ( ( get_params ( k + 2 ) ).2 ) ];
     grind;
   -- By construction of `a_seq`, `a_seq n` is the element at index $n-1$ of $L$, and `a_seq (n+1)` is the element at index $n$ of $L$.
-  have h_an : a_seq n = L.get! (n - 1) := by
+  have h_an : a_seq n = L[n - 1]! := by
     convert a_seq_eq_get n ( n + 2 ) hn _;
     grind
-  have h_an1 : a_seq (n + 1) = L.get! n := by
+  have h_an1 : a_seq (n + 1) = L[n]! := by
     convert a_seq_eq_get ( n + 1 ) ( n + 2 ) ( Nat.succ_pos _ ) _ using 1;
     exact lt_of_lt_of_le ( by omega ) h_len;
   have := h_growth ( n - 1 ) ?_ <;> rcases n with ( _ | _ | n ) <;> norm_num at *;
@@ -677,12 +677,12 @@ The reachable sums of the dual sequence form a complete interval from 0 to the t
 lemma reachable_sums_dual_eq_interval (L : List ℕ) (h_nonempty : L ≠ [])
   (h_pos : ∀ x ∈ L, x > 0)
   (h_div : ∀ x ∈ L, x ∣ L.getLast!)
-  (h_ratio : ∀ i, i + 1 < L.length → (L.get! (i + 1) : ℝ) / L.get! i ≤ 2) :
+  (h_ratio : ∀ i, i + 1 < L.length → (L[i + 1]! : ℝ) / L[i]! ≤ 2) :
   reachable_sums (L.map (fun x => L.getLast! / x)) = { u | u ≤ (L.map (fun x => L.getLast! / x)).sum } := by
     -- By `inv_scaled_reverse_ratio`, we know that the reversed dual sequence starts with 1 and satisfies the ratio condition $\le 2$.
     have h_rev_dual_ratio : let b := (L.map (fun x => L.getLast! / x)).reverse;
       b.head? = some 1 ∧
-      (∀ i, i + 1 < b.length → b.get! (i + 1) ≤ 2 * b.get! i) := by
+      (∀ i, i + 1 < b.length → b[i + 1]! ≤ 2 * b[i]!) := by
         convert inv_scaled_reverse_ratio L _ _ _ _;
         · exact List.length_pos_iff.mpr h_nonempty;
         · assumption;
@@ -706,7 +706,7 @@ The set of reciprocal sums of a finite sequence satisfying the divisibility and 
 -/
 lemma finite_reach (L : List ℕ) (h_nonempty : L ≠ []) (h_sorted : L.Sorted (· < ·)) (h_pos : ∀ x ∈ L, x > 0)
   (h_div : ∀ x ∈ L, x ∣ L.getLast!)
-  (h_ratio : ∀ i, i + 1 < L.length → (L.get! (i + 1) : ℝ) / L.get! i ≤ 2) :
+  (h_ratio : ∀ i, i + 1 < L.length → (L[i + 1]! : ℝ) / L[i]! ≤ 2) :
   { s : ℚ | ∃ T : Finset ℕ, T ⊆ L.toFinset ∧ s = ∑ x ∈ T, (1:ℚ)/x } =
   { q : ℚ | ∃ u : ℕ, q = u / L.getLast! ∧ q ≤ (L.map (fun x => (1:ℚ)/x)).sum } := by
     -- By Lemma 25, the set of reciprocal sums of `L` is equal to the set of reachable sums of the dual sequence scaled by `1/L.getLast!`.
@@ -742,7 +742,7 @@ The set of reciprocal sums of a finite sequence satisfying the divisibility and 
 -/
 lemma finite_reach_thm (L : List ℕ) (h_nonempty : L ≠ []) (h_sorted : L.Sorted (· < ·)) (h_pos : ∀ x ∈ L, x > 0)
   (h_div : ∀ x ∈ L, x ∣ L.getLast!)
-  (h_ratio : ∀ i, i + 1 < L.length → (L.get! (i + 1) : ℝ) / L.get! i ≤ 2) :
+  (h_ratio : ∀ i, i + 1 < L.length → (L[i + 1]! : ℝ) / L[i]! ≤ 2) :
   { s : ℚ | ∃ T : Finset ℕ, T ⊆ L.toFinset ∧ s = ∑ x ∈ T, (1:ℚ)/x } =
   { q : ℚ | ∃ u : ℕ, q = u / L.getLast! ∧ q ≤ (L.map (fun x => (1:ℚ)/x)).sum } := by
     convert finite_reach L h_nonempty h_sorted h_pos h_div h_ratio using 1
@@ -759,12 +759,12 @@ lemma full_seq_properties (k : ℕ) (hk : k ≥ 1) :
       have h_growth : ∀ k ≥ 1, HasGrowth (full_seq_list k) := by
         exact fun k hk => valid_prefix_growth _ ( full_seq_valid k hk ) |> fun h => by simpa using h;
       -- Since the ratios are all at least 1.01, each element is strictly greater than the previous one.
-      have h_strict_mono : ∀ k ≥ 1, ∀ i < (full_seq_list k).length - 1, (full_seq_list k).get! i < (full_seq_list k).get! (i + 1) := by
+      have h_strict_mono : ∀ k ≥ 1, ∀ i < (full_seq_list k).length - 1, (full_seq_list k)[i]! < (full_seq_list k)[i + 1]! := by
         intros k hk i hi
-        have h_ratio : (101 : ℝ) / 100 ≤ (full_seq_list k).get! (i + 1) / (full_seq_list k).get! i := by
+        have h_ratio : (101 : ℝ) / 100 ≤ (full_seq_list k)[i + 1]! / (full_seq_list k)[i]! := by
           exact h_growth k hk i ( by omega ) |>.1;
         rw [ div_le_div_iff₀ ] at h_ratio <;> norm_cast at *;
-        · linarith [ show 0 < ( full_seq_list k |> List.get! ) i from Nat.pos_of_dvd_of_pos ( show ( full_seq_list k |> List.get! ) i ∣ ( full_seq_list k |> List.getLast! ) from by
+        · linarith [ show 0 < (full_seq_list k)[i]! from Nat.pos_of_dvd_of_pos ( show (full_seq_list k)[i]! ∣ ( full_seq_list k |> List.getLast! ) from by
                                                                                                 have h_div : ∀ k ≥ 1, ∀ x ∈ full_seq_list k, x ∣ (full_seq_list k).getLast! := by
                                                                                                   intros k hk x hx;
                                                                                                   have := full_seq_valid k hk;
@@ -809,7 +809,7 @@ def partial_sum (k : ℕ) : ℚ := ((full_seq_list k).map (fun x => (1:ℚ)/x)).
 lemma partial_sum_ge (k : ℕ) (hk : k ≥ 1) : partial_sum k ≥ 2 - (1:ℚ)/(2^((full_seq_list k).length - 1)) := by
   -- Apply the lemma that states the partial sum is at least the difference of the geometric series sum formula.
   have h_partial_sum_ge : partial_sum k ≥ ∑ i ∈ Finset.range (full_seq_list k).length, (1 : ℚ) / (2^i) := by
-    have h_partial_sum_ge : ∀ i ∈ Finset.range (full_seq_list k).length, (1 : ℚ) / (full_seq_list k).get! i ≥ (1 : ℚ) / (2^i) := by
+    have h_partial_sum_ge : ∀ i ∈ Finset.range (full_seq_list k).length, (1 : ℚ) / (full_seq_list k)[i]! ≥ (1 : ℚ) / (2^i) := by
       intro i hi;
       gcongr ; norm_cast;
       · have := full_seq_properties k hk; aesop;
@@ -834,7 +834,7 @@ lemma partial_sum_ge (k : ℕ) (hk : k ≥ 1) : partial_sum k ≥ 2 - (1:ℚ)/(2
 /-
 Any reciprocal sum of a subset of `full_seq_list k` is in the set `P` of the sequence `a_seq`.
 -/
-lemma finite_sums_in_P (k : ℕ) (hk : k ≥ 1) :
+lemma finite_sums_in_P (k : ℕ) :
   ∀ s : ℚ, (∃ T : Finset ℕ, T ⊆ (full_seq_list k).toFinset ∧ s = ∑ x ∈ T, (1:ℚ)/x) →
   (s : ℝ) ∈ P (fun i => 1 / (a_seq i : ℝ)) := by
     intro s hs
@@ -847,7 +847,7 @@ lemma finite_sums_in_P (k : ℕ) (hk : k ≥ 1) :
       have hx_seq_def : ∀ x ∈ (full_seq_list k).toFinset, ∃ i, x = a_seq i := by
         intro x hx_seq
         have hx_seq_def : x ∈ List.map (fun i => a_seq (i + 1)) (List.range (full_seq_list k).length) := by
-          have hx_seq_def : ∀ i < (full_seq_list k).length, (full_seq_list k).get! i = a_seq (i + 1) := by
+          have hx_seq_def : ∀ i < (full_seq_list k).length, (full_seq_list k)[i]! = a_seq (i + 1) := by
             intro i hi;
             rw [ a_seq_eq_get ];
             exacts [ rfl, Nat.succ_pos _, hi ];
@@ -921,7 +921,7 @@ theorem main_result_a_seq : ∀ q : ℚ, 0 < q → q < 2 → (q : ℝ) ∈ P (fu
       · exact dvd_trans hk_div_v ( full_seq_divisible k hk_ge_one );
       · exact Nat.cast_ne_zero.mpr q.pos.ne';
     · exact hk_partial_sum;
-  have := finite_sums_in_P k hk_ge_one q h_q_in_P; aesop;
+  have := finite_sums_in_P k q h_q_in_P; aesop;
 
 /-
 The terms of `a_seq` are positive for $n \ge 1$.
@@ -929,7 +929,7 @@ The terms of `a_seq` are positive for $n \ge 1$.
 lemma a_seq_pos (n : ℕ) (hn : n ≥ 1) : a_seq n > 0 := by
   unfold a_seq;
   field_simp;
-  split_ifs <;> norm_cast ; aesop;
+  split_ifs ; aesop;
   · exact full_seq_properties ( n + 2 ) ( by linarith ) |>.2 _ ( by simp );
   · -- By definition of `full_seq_list`, its length is at least `n + 2`.
     have h_len : ∀ k ≥ 1, (full_seq_list k).length ≥ k := by
@@ -1023,5 +1023,5 @@ theorem erdos_355 :
   generalize_proofs at *; (
   rw [ Finset.sum_image <| by tauto ] ; norm_num [ ← @Rat.cast_inj ℝ, hT ] ;)))
 
-  #print axioms maintheorem
-  #print axioms erdos_355
+#print axioms maintheorem
+#print axioms erdos_355
