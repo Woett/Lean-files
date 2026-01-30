@@ -13,7 +13,6 @@ https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjecture
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
--- Harmonic `generalize_proofs
 -/
 
 import Mathlib
