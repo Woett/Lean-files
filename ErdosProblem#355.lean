@@ -7,7 +7,7 @@ We thereby solved Erdos Problem #355 (https://www.erdosproblems.com/355).
 
 Below you can find a formalization of this result. Even though the above paper shows that any lacunarity constant smaller than 2 is possible, the formalization below is based on a simplified proof that Vjeko wrote, which has lacunarity constant 1.01. This simplified proof was given to Gemini3 in order to make it more easily formalizable, which was eventually done with the use of Aristotle (and a whole lot of patience on my end).
 
-At the very end you can find the statement of Erdos Problem #355 taken from the Formal Conjectures from Google DeepMind 
+At the very end you can find the statement of Erdos Problem #355 taken from the Formal Conjectures from Google DeepMind. 
 
 https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjectures/ErdosProblems/355.lean
 
