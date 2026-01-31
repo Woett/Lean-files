@@ -1,5 +1,5 @@
 /-
-Ruzsa answered Erdos Problem #331 (https://www.erdosproblems.com/331) by exhibiting two sets of positive integers $A$ and $B$ such that both $|\{a \in A : a \le x\}| \gg x$ and $|\{b \in B : b \le x\}| \gg x$ for large enough $x$ such that $a_1 - a_2 = b_1 - b_2$ implies $a_1 = a_2$ and $b_1 = b_2$. Indeed, take $A$ to be the set of positive integers whose binary representation only have non-zero digits in even places, and $B$ to be the set of positive integers whose binary representation only have non-zero digits in odd places. A formalization of this result, obtained with the help of Aristotle, can be found below.
+Ruzsa answered Erdos Problem #331 (https://www.erdosproblems.com/331) by exhibiting two sets of positive integers $A$ and $B$ such that both $|\{a \in A : a \le x\}| \gg \sqrt{x}$ and $|\{b \in B : b \le x\}| \gg \sqrt{x}$ for large enough $x$ and such that $a_1 - a_2 = b_1 - b_2$ implies $a_1 = a_2$ and $b_1 = b_2$. Indeed, take $A$ and $B$ to be the sets of positive integers whose binary representation only have non-zero digits in even and odd places respectively. A formalization of this result, obtained with the help of Aristotle, can be found below.
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
