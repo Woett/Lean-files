@@ -196,7 +196,7 @@ theorem cor_surject_powers (n : ℕ) (h : n ≥ 1) (r : ZMod (5^n)) (hr : IsUnit
 /-
 For x >= 2 and n >= 1, the number of elements in A_n less than or equal to x is at most min(2 * floor(x/5^n), 2 * (2^(5^(n+1)) - 1)).
 -/
-lemma lem_two_bounds_AnN (x : ℕ) (n : ℕ) (hx : x ≥ 2) (hn : n ≥ 1) :
+lemma lem_two_bounds_AnN (x : ℕ) (n : ℕ) :
   Set.ncard {a ∈ A_n n | a ≤ x} ≤ min (2 * (x / 5^n)) (2 * (2^(5^(n+1)) - 1)) := by
     refine' le_min _ _;
     · -- By definition of $A_n$, we know that every element in $A_n$ is of the form $5^n m$ or $5^n m + 1$ for some $m$.
@@ -205,7 +205,7 @@ lemma lem_two_bounds_AnN (x : ℕ) (n : ℕ) (hx : x ≥ 2) (hn : n ≥ 1) :
         rintro a ⟨ ⟨ m, hm₁, hm₂, rfl | rfl ⟩, ha ⟩ <;> [ exact Or.inl ⟨ m, ⟨ hm₁, Nat.lt_succ_of_le ( Nat.le_div_iff_mul_le ( by positivity ) |>.2 <| by nlinarith ) ⟩, rfl ⟩ ; exact Or.inr ⟨ m, ⟨ hm₁, Nat.lt_succ_of_le ( Nat.le_div_iff_mul_le ( by positivity ) |>.2 <| by nlinarith ) ⟩, rfl ⟩ ];
       refine' le_trans ( Set.ncard_le_ncard h_A_n ) _;
       rw [ Set.ncard_eq_toFinset_card' ] ; norm_num [ two_mul ];
-      exact le_trans ( Finset.card_union_le _ _ ) ( by rw [ Finset.card_image_of_injective, Finset.card_image_of_injective ] <;> norm_num [ Function.Injective, hn ] );
+      exact le_trans ( Finset.card_union_le _ _ ) ( by rw [ Finset.card_image_of_injective, Finset.card_image_of_injective ] <;> norm_num [ Function.Injective ] );
     · refine' le_trans ( Set.ncard_le_ncard <| show { a : ℕ | a ∈ A_n n ∧ a ≤ x } ⊆ Set.image ( fun m ↦ 5 ^ n * m ) ( Set.Ico 1 ( 2 ^ 5 ^ ( n + 1 ) ) ) ∪ Set.image ( fun m ↦ 5 ^ n * m + 1 ) ( Set.Ico 1 ( 2 ^ 5 ^ ( n + 1 ) ) ) from _ ) _;
       · intro a ha; unfold A_n at ha; aesop;
       · refine' le_trans ( Set.ncard_union_le _ _ ) _;
@@ -323,7 +323,7 @@ theorem prop_upper_linear :
     intro x hx n hn;
     -- We use Lemma lem_two_bounds_AnN.
     have h_bound : (Set.ncard {a ∈ (A_n n) | a ≤ x} : ℝ) ≤ min (2 * (x / 5^n)) (2 * (2^(5^(n+1)) - 1)) := by
-      exact_mod_cast lem_two_bounds_AnN x n hx hn;
+      exact_mod_cast lem_two_bounds_AnN x n;
     -- We consider two cases: $\log x \leq 5^{n+1}$ and $\log x > 5^{n+1}$.
     by_cases h_log : Real.log x ≤ 5^(n+1);
     · refine le_trans h_bound ?_;
@@ -362,7 +362,7 @@ For n >= 1, the intersection of A_{n+1} with [1, M_n] is a subset of A_n.
 -/
 def M (n : ℕ) : ℕ := 5^n * 2^(5^(n+1))
 
-lemma lemma_A_succ_subset_A_n (n : ℕ) (hn : n ≥ 1) :
+lemma lemma_A_succ_subset_A_n (n : ℕ) :
   {a ∈ A_n (n+1) | a ≤ M n} ⊆ A_n n := by
     rintro a ⟨ ⟨ m, hm₁, hm₂, rfl | rfl ⟩, ha ⟩ <;> simp_all +decide [ A_n ];
     · refine' ⟨ 5 * m, _, _, _ ⟩ <;> ring_nf at *;
@@ -386,18 +386,18 @@ lemma lemma_A_succ_subset_A_n (n : ℕ) (hn : n ≥ 1) :
 /-
 For n >= 1 and k > n, the intersection of A_k with [1, M_n] is a subset of A_n.
 -/
-lemma lemma_Ak_subset_An (n k : ℕ) (hn : n ≥ 1) (hk : k > n) :
+lemma lemma_Ak_subset_An (n k : ℕ) (hk : k > n) :
   {a ∈ A_n k | a ≤ M n} ⊆ A_n n := by
     -- Assume k > n. We proceed by induction on k.
     induction' hk with k ih;
-    · exact lemma_A_succ_subset_A_n n hn;
+    · exact lemma_A_succ_subset_A_n n;
     · -- Since $M_n < M_k$, we have $\{a \in A_{k+1} \mid a \leq M_n\} \subseteq \{a \in A_{k+1} \mid a \leq M_k\}$.
       have h_subset_Mk : {a ∈ A_n (k + 1) | a ≤ M n} ⊆ {a ∈ A_n (k + 1) | a ≤ M k} := by
         refine' fun x hx => ⟨ hx.1, le_trans hx.2 _ ⟩;
         exact Nat.mul_le_mul ( pow_le_pow_right₀ ( by decide ) ( by linarith [ Nat.succ_le_iff.mp ih ] ) ) ( pow_le_pow_right₀ ( by decide ) ( by linarith [ Nat.succ_le_iff.mp ih, Nat.pow_le_pow_right ( by decide : 1 ≤ 5 ) ( by linarith [ Nat.succ_le_iff.mp ih ] : n + 1 ≤ k + 1 ) ] ) );
       -- By lemma_A_succ_subset_A_n, we have {a ∈ A_{k+1} | a ≤ M_k} ⊆ A_k.
       have h_subset_Ak : {a ∈ A_n (k + 1) | a ≤ M k} ⊆ A_n k := by
-        exact lemma_A_succ_subset_A_n k ( by linarith [ Nat.succ_le_iff.mp ih ] );
+        exact lemma_A_succ_subset_A_n k
       grind
 
 /-
@@ -420,7 +420,7 @@ lemma lemma_card_A_bound (x : ℕ) (n : ℕ) (hn : n ≥ 1) (hx : x ≤ M n) :
           · have h_ak_subset_an : {a ∈ A_n k | a ≤ M n} ⊆ A_n n := by
               by_cases hkn : k = n;
               · aesop;
-              · exact lemma_Ak_subset_An n k hn ( lt_of_le_of_ne ( le_of_not_gt hk ) ( Ne.symm hkn ) );
+              · exact lemma_Ak_subset_An n k ( lt_of_le_of_ne ( le_of_not_gt hk ) ( Ne.symm hkn ) );
             exact h_ak_subset_an ⟨ hk₂, le_trans hax hx ⟩;
         exact Set.mem_union_right _ ⟨ h_an, hax ⟩;
     have h_card_union : (Set.ncard {a ∈ A | a ≤ x}) ≤ (Set.ncard (⋃ k ∈ Finset.Ico 1 n, A_n k)) + (Set.ncard {a ∈ A_n n | a ≤ x}) := by
