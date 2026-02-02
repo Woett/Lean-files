@@ -1,5 +1,5 @@
 /-
-I asked ChatGPT to write a TeX-file explaining the proof of a result by Mirsky-Newman and Davenport-Rado, which states that no exact covering system exists with distinct moduli (except for the trivial case of a single congruence class). They thereby solved Erdos Problem #947 (https://www.erdosproblems.com/947). This TeX-file was given to Aristotle, which managed to formalize it into Lean, the result of which can be found below.. 
+I asked ChatGPT to write a TeX-file explaining the proof of a result by Mirsky-Newman and Davenport-Rado, which states that no exact covering system exists with distinct moduli (except for the trivial case of a single congruence class). They thereby solved Erdos Problem #947 (https://www.erdosproblems.com/947). This TeX-file was given to Aristotle, which managed to formalize it into Lean, the result of which can be found below.
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
@@ -214,5 +214,6 @@ theorem exact_covering_system_distinct_moduli_impossible (l : List (ℤ × ℕ))
   rw [ Finset.sum_eq_single k ] at h_P_zero <;> simp_all +decide;
   intro j hj; rw [ ← Finset.mul_prod_erase _ _ ( Finset.mem_univ j ) ] ; simp +decide ;
   exact Or.inr <| Finset.prod_eq_zero ( Finset.mem_erase_of_ne_of_mem ( Ne.symm hj ) <| Finset.mem_univ _ ) <| sub_eq_zero.mpr <| by simp +decide [ hk.1, hζ.pow_eq_one ] ;
+
 
 #print axioms exact_covering_system_distinct_moduli_impossible
