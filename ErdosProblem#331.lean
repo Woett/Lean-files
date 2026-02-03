@@ -400,7 +400,7 @@ theorem main_theorem : ∃ (A' B' : Set ℕ),
 /-
 If a set A of positive integers has density at least c * sqrt(N) in {1, ..., N}, then sqrt(n) = O(count A n).
 -/
-lemma density_to_bigO {A : Set ℕ} {c : ℝ} (hc : 0 < c) (h_pos : ∀ x ∈ A, 0 < x)
+lemma density_to_bigO {A : Set ℕ} {c : ℝ} (hc : 0 < c)
   (h_dens : ∃ N₀, ∀ N ≥ N₀, ((Finset.Icc 1 N).filter (· ∈ A)).card ≥ c * Real.sqrt N) :
   (fun (n : ℕ) ↦ (n : ℝ) ^ (1 / 2 : ℝ)) =O[atTop] (fun (n : ℕ) ↦ (Nat.count A n : ℝ)) := by
     -- By definition of $count$, we know that for $n \geq N₀$, $count A n \geq (1/2) * c * \sqrt{n}$.
@@ -428,9 +428,9 @@ theorem erdos_331 :
   -- Let's choose the sets A' and B' from the main theorem.
   obtain ⟨A', hA', B', hB', h_diff⟩ := main_theorem;
   refine' ⟨ A', _, hA', _, _ ⟩;
-  · apply density_to_bigO _ _;
-    exacts [ ⟨ h_diff.1.choose, fun N hN => h_diff.1.choose_spec N hN |>.1 ⟩, by norm_num, B' ];
-  · have := density_to_bigO ( show 0 < ( 1 / 4 : ℝ ) by norm_num ) hB' ⟨ h_diff.1.choose, fun N hN => h_diff.1.choose_spec N hN |>.2 ⟩ ; aesop;
+  · apply density_to_bigO _;
+    exacts [ ⟨ h_diff.1.choose, fun N hN => h_diff.1.choose_spec N hN |>.1 ⟩, by norm_num ]
+  · have := density_to_bigO ( show 0 < ( 1 / 4 : ℝ ) by norm_num ) ⟨ h_diff.1.choose, fun N hN => h_diff.1.choose_spec N hN |>.2 ⟩ ; aesop;
   · exact Set.finite_empty.subset fun x hx => h_diff.2 _ hx.1 _ hx.2.1 _ hx.2.2.1 _ hx.2.2.2.1 hx.2.2.2.2.1 <| by linarith [ hx.2.2.2.2.2 ] ;
 
 #print axioms main_theorem
