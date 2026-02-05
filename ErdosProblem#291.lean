@@ -1,3 +1,15 @@
+/-
+Let $r_1, r_2, \ldots$ be a bounded sequence of non-zero integers, let $L_n$ be the least common multiple of $1, 2, \ldots, n$ and let $X_n$ be such that $\frac{X_n}{L_n} = \sum_{i=1}^n \frac{r_i}{i}$. Below you can find a Lean proof that $X_n$ has arbitrarily large prime divisors. From this fact one can conclude that, if the $r_i$ are periodic, then $\limsup \gcd(X_n, L_n) = \infty$. In particular, there are infinitely many $n$ for which $\gcd(X_n, L_n) > 1$, settling a generalization of the first part of Erdős Problem #291 (https://www.erdosproblems.com/291). The Lean proof was formalized by Aristotle based on the following note:
+
+https://github.com/Woett/Miscellaneous/blob/main/Generalized%20harmonic%20sums%20have%20arbitrarily%20large%20prime%20factors.pdf
+
+This note itself is based on my paper
+
+W. van Doorn, On the non-monotonicity of the denominator of generalized harmonic sums. arXiv:2411.03073 (2024)
+
+in which a generalized version of Erdős Problem #290 (https://www.erdosproblems.com/290) is solved.
+-/
+
 import Mathlib
 
 set_option linter.mathlibStandardSet false
@@ -2026,5 +2038,6 @@ theorem ohyeah1 (p : ProblemParameters) :
       obtain ⟨j, hj₁, hj₂⟩ : ∃ j ∈ Finset.Icc 1 (z p.m + 1), d p (n_seq_v4 p j) ≤ (n_seq_v4 p j) ^ (z p.m) := by
         exact exists_n_le_pow p;
       exact ⟨ n_seq_v4 p j, n_seq_mem_I0 p j hj₁, by have := d_le_pow_implies_exists_large_prime p ( n_seq_v4 p j ) ( n_seq_mem_I0 p j hj₁ ) hj₂; tauto ⟩
+
 
 #print axioms ohyeah1
