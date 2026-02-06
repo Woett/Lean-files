@@ -76,6 +76,41 @@ def J1' (p : ProblemParameters) : Finset ℕ := Finset.Ico (p.tilde_m - p.m^(2 *
 def J2' (p : ProblemParameters) : Finset ℕ := Finset.Ico p.tilde_m (p.tilde_m + p.m^(2 * z p.m - 1))
 
 /-
+For m >= 4, z(m) >= 2.
+-/
+theorem z_ge_two (m : ℕ) (hm : 4 ≤ m) : 2 ≤ z m := by
+  exact Finset.one_lt_card.2 ⟨ 2, by norm_num; linarith, 3, by norm_num; linarith ⟩
+
+/-
+Helper lemma to construct ProblemParameters from global hypotheses.
+-/
+lemma exists_good_p (r : ℕ → ℤ) (m : ℕ) (hm : 4 ≤ m) (h_r_nz : ∀ i, r i ≠ 0) (h_r_bdd : ∀ i, |r i| < m)
+    (h_priemteller : (m : ℝ)^(2 * z m) < Real.exp (2.52 * m))
+    (h_bla0_global : ∀ n ≥ 100, L n > 2^n) :
+    ∃ p : ProblemParameters, p.r = r ∧ p.m = m := by
+      obtain ⟨q0, hq0_prime, hq0_large⟩ : ∃ q0, Nat.Prime q0 ∧ q0 > m^(2 * z m - 1) := by
+        exact Exists.imp ( by tauto ) ( Nat.exists_infinite_primes ( m ^ ( 2 * z m - 1 ) + 1 ) )
+      generalize_proofs at *;
+      obtain ⟨tilde_m, htilde_m_gt, htilde_m_div⟩ : ∃ tilde_m, tilde_m > 20 * m^(2 * z m) ∧ q0 ∣ tilde_m := by
+        exact ⟨ q0 * ( 20 * m ^ ( 2 * z m ) + 1 ), by nlinarith [ pow_pos ( zero_lt_four.trans_le hm ) ( 2 * z m ), hq0_prime.two_le ], by norm_num ⟩
+      generalize_proofs at *; (
+      constructor;
+      swap;
+      constructor;
+      any_goals tauto;
+      intro w hw k
+      have h_wk_ge_100 : w + k ≥ 100 := by
+        -- Since $m \geq 4$, we have $m^{2z-1} \geq 4^3 = 64$.
+        have h_m_pow : m^(2 * z m - 1) ≥ 64 := by
+          have h_m_pow : 2 * z m - 1 ≥ 3 := by
+            exact Nat.le_sub_one_of_lt ( by linarith [ show z m ≥ 2 from z_ge_two m hm ] )
+          generalize_proofs at *; (
+          exact le_trans ( by decide ) ( Nat.pow_le_pow_left hm _ ) |> le_trans <| Nat.pow_le_pow_right ( by linarith ) h_m_pow)
+        generalize_proofs at *; (
+        linarith [ Finset.mem_Ico.mp hw, Nat.sub_add_cancel ( show m ^ ( 2 * z m - 1 ) ≤ tilde_m from by linarith [ pow_le_pow_right₀ ( by linarith : 1 ≤ m ) ( show 2 * z m - 1 ≤ 2 * z m from Nat.sub_le _ _ ) ] ), pow_le_pow_right₀ ( by linarith : 1 ≤ m ) ( show 2 * z m ≥ 2 * z m - 1 from Nat.sub_le _ _ ) ])
+      generalize_proofs at *; exact h_bla0_global (w + k) h_wk_ge_100;)
+      
+/-
 The sum $\sum_{i=w+1}^{w+k} \frac{r_i}{i}$ is non-zero.
 -/
 theorem bla_nonzero (p : ProblemParameters) (w : ℕ) (hw : w ∈ J1' p) (k : ℕ) (hk : w + k ∈ J2' p) :
@@ -278,12 +313,6 @@ theorem bound_step2 (m : ℕ) (hm : 4 ≤ m) (z : ℕ) (hz : 2 ≤ z) :
         exact_mod_cast lt_of_lt_of_le ( by decide ) ( Nat.pow_le_pow_left hm _ ) |> lt_of_lt_of_le <| Nat.pow_le_pow_right ( by linarith ) <| show 2 * z - 2 ≥ 2 by exact Nat.le_sub_of_add_le <| by linarith;
       rcases z with ( _ | _ | z ) <;> norm_num [ Nat.mul_succ, pow_succ' ] at *;
       nlinarith [ ( by norm_cast : ( 4 : ℝ ) ≤ m ) ]
-
-/-
-For m >= 4, z(m) >= 2.
--/
-theorem z_ge_two (m : ℕ) (hm : 4 ≤ m) : 2 ≤ z m := by
-  exact Finset.one_lt_card.2 ⟨ 2, by norm_num; linarith, 3, by norm_num; linarith ⟩
 
 /-
 Numerical bound step 3: 2m + 5.8 m^(2z-1) > 2z + 4 m^(2z-1) / log 2.
@@ -2042,16 +2071,33 @@ theorem n_seq_mem_I0 (p : ProblemParameters) (j : ℕ) (hj : j ∈ Finset.Icc 1 
           exact h_subset_I0 h_subset
 
 /-
-There exists an integer $n \in I_0$ for which $X_n$ is divisible by a prime larger than or equal to $m$.
+All integers in the interval $I_0$ are positive.
 -/
-theorem ohyeah1 (p : ProblemParameters) :
-    ∃ n ∈ I0 p, ∃ q, q.Prime ∧ q ≥ p.m ∧ q ∣ Int.natAbs (X_int p.r n) := by
-      -- By `exists_n_le_pow`, there exists $j \in \{1, \dots, z+1\}$ such that $d(n_j) \le n_j^z$.
-      obtain ⟨j, hj₁, hj₂⟩ : ∃ j ∈ Finset.Icc 1 (z p.m + 1), d p (n_seq_v4 p j) ≤ (n_seq_v4 p j) ^ (z p.m) := by
-        exact exists_n_le_pow p;
-      exact ⟨ n_seq_v4 p j, n_seq_mem_I0 p j hj₁, by have := d_le_pow_implies_exists_large_prime p ( n_seq_v4 p j ) ( n_seq_mem_I0 p j hj₁ ) hj₂; tauto ⟩
-
-#print axioms ohyeah1
+lemma I0_pos (p : ProblemParameters) : ∀ n ∈ I0 p, n > 0 := by
+  -- Since $p.tilde_m > 20 * p.m^(2 * z p.m)$ and $p.m \geq 4$, we have $p.tilde_m > p.m^(2 * z p.m - 1)$.
+  have h_tilde_m_gt : p.tilde_m > p.m^(2 * z p.m - 1) := by
+    -- Since $p.tilde_m \geq 280$ and $p.m \geq 4$, we have $p.m^{2z p.m} \leq p.m^{2z p.m}$.
+    have h_m_ge_4 : 4 ≤ p.m := by
+      exact p.hm4
+    generalize_proofs at *; (
+    have h_m_ge_4 : p.tilde_m > 20 * p.m^(2 * z p.m) := by
+      exact p.htilde_m
+    generalize_proofs at *; (
+    exact lt_of_le_of_lt ( Nat.pow_le_pow_right ( by linarith ) ( Nat.sub_le _ _ ) ) ( lt_of_le_of_lt ( by nlinarith [ pow_pos ( by linarith : 0 < p.m ) ( 2 * z p.m ) ] ) h_m_ge_4 )))
+  generalize_proofs at *; (
+  -- Since $p.tilde_m > p.m^{2z-1}$ and $p.tilde_m > 20p.m^{2z}$, the lower bound of $J1' p$ is positive.
+  have h_J1'_pos : ∀ n ∈ J1' p, 0 < n := by
+    exact fun n hn => lt_of_lt_of_le ( Nat.sub_pos_of_lt ( by linarith ) ) ( Finset.mem_Ico.mp hn |>.1 ) ;
+  generalize_proofs at *; (
+  -- Since $p.tilde_m > 20 * p.m^(2 * z p.m)$ and $p.m \geq 4$, we have $p.tilde_m > p.m^(2 * z p.m - 1)$, thus the lower bound of $J2' p$ is positive.
+  have h_J2'_pos : ∀ n ∈ J2' p, 0 < n := by
+    -- Since $p.tilde_m > 20 * p.m^(2 * z p.m)$ and $p.m \geq 4$, we have $p.tilde_m > 0$.
+    have h_tilde_m_pos : 0 < p.tilde_m := by
+      grind
+    generalize_proofs at *; (
+    exact fun n hn => lt_of_lt_of_le h_tilde_m_pos ( Finset.mem_Ico.mp hn |>.1 ) |> lt_of_lt_of_le <| Nat.le_refl _;)
+  generalize_proofs at *; (
+  unfold I0; aesop;)))
 
 /-
 If a sequence $r$ is periodic with positive period $t$, then it is bounded.
@@ -2070,7 +2116,7 @@ lemma periodic_bounded (r : ℕ → ℤ) (t : ℕ) (ht : t > 0) (h_per : Functio
       exact ⟨ h_bounded.choose, fun i => h_bounded.choose_spec ⟨ i, rfl ⟩ ⟩
 
 /-
-$p^{\varphi(t)}$ divides $L(n p^{\varphi(t)})$.
+For any positive integer $t$, $p^{\varphi(t)}$ divides $L(n p^{\varphi(t)})$.
 -/
 lemma pow_totient_dvd_Lb (n : ℕ) (p : ℕ) (t : ℕ) (hp : p.Prime) (ht : t > 0) (hn : n ≥ 1) :
     p ^ (Nat.totient t) ∣ L (n * p ^ (Nat.totient t)) := by
@@ -2080,7 +2126,7 @@ lemma pow_totient_dvd_Lb (n : ℕ) (p : ℕ) (t : ℕ) (hp : p.Prime) (ht : t > 
       exact Finset.dvd_lcm h_p_phi_t_range
 
 /-
-If $r$ is periodic with period $t$, and $a \equiv b \pmod t$, then $r(a) = r(b)$.
+If $r$ is periodic with period $t$ and $a \equiv b \pmod t$, then $r(a) = r(b)$.
 -/
 lemma periodic_mod_eq {r : ℕ → ℤ} {t : ℕ} (h : Function.Periodic r t) (a b : ℕ) (hab : a ≡ b [MOD t]) :
     r a = r b := by
@@ -2095,7 +2141,7 @@ lemma periodic_mod_eq {r : ℕ → ℤ} {t : ℕ} (h : Function.Periodic r t) (a
       exact h_periodic a b hab
 
 /-
-If $b = n p^{\varphi(t)}$ and $p \mid X_n$, then $p \mid X_b$.
+If $r$ is periodic with period $t$ and $b = n p^{\varphi(t)}$, then $p \mid X_n$ implies $p \mid X_b$.
 -/
 lemma X_b_congruence (r : ℕ → ℤ) (t : ℕ) (n : ℕ) (p : ℕ)
     (ht : t > 0) (hp : p.Prime) (hp_gt_t : p > t) (hn_pos : n > 0) (hn_lt_p : n < p)
@@ -2172,7 +2218,7 @@ lemma X_b_congruence (r : ℕ → ℤ) (t : ℕ) (n : ℕ) (p : ℕ)
       exact Int.dvd_of_emod_eq_zero ( h_sum_restrict.trans ( Int.emod_eq_zero_of_dvd <| dvd_mul_of_dvd_right ( by simpa [ X_int ] using h_div ) _ ) )
 
 /-
-If $p \mid X_n$ and $p > t$, there exists $b$ such that $p \mid \gcd(X_b, L_b)$.
+If $r$ is periodic with period $t$, $p \mid X_n$ and $p > t$, then there exists $b$ such that $p \mid \gcd(X_b, L_b)$.
 -/
 lemma exists_b_gcd_ge_p (r : ℕ → ℤ) (t : ℕ) (ht : t > 0) (h_per : Function.Periodic r t)
     (n : ℕ) (hn : n ≥ 1) (p : ℕ) (hp : p.Prime) (hp_gt_t : p > t) (h_div : p ∣ Int.natAbs (X_int r n)) :
@@ -2189,62 +2235,14 @@ lemma exists_b_gcd_ge_p (r : ℕ → ℤ) (t : ℕ) (ht : t > 0) (h_per : Functi
         exact Nat.dvd_trans ( by aesop ) ( Finset.dvd_lcm ( Finset.mem_Icc.mpr ⟨ by linarith, by linarith ⟩ : p ∈ Finset.Icc 1 n ) )
 
 /-
-All integers in the interval $I_0$ are positive.
+There exists an integer $n \in I_0$ for which $X_n$ is divisible by a prime larger than or equal to $m$. (note: this does not assume periodicity)
 -/
-lemma I0_pos (p : ProblemParameters) : ∀ n ∈ I0 p, n > 0 := by
-  -- Since $p.tilde_m > 20 * p.m^(2 * z p.m)$ and $p.m \geq 4$, we have $p.tilde_m > p.m^(2 * z p.m - 1)$.
-  have h_tilde_m_gt : p.tilde_m > p.m^(2 * z p.m - 1) := by
-    -- Since $p.tilde_m \geq 280$ and $p.m \geq 4$, we have $p.m^{2z p.m} \leq p.m^{2z p.m}$.
-    have h_m_ge_4 : 4 ≤ p.m := by
-      exact p.hm4
-    generalize_proofs at *; (
-    have h_m_ge_4 : p.tilde_m > 20 * p.m^(2 * z p.m) := by
-      exact p.htilde_m
-    generalize_proofs at *; (
-    exact lt_of_le_of_lt ( Nat.pow_le_pow_right ( by linarith ) ( Nat.sub_le _ _ ) ) ( lt_of_le_of_lt ( by nlinarith [ pow_pos ( by linarith : 0 < p.m ) ( 2 * z p.m ) ] ) h_m_ge_4 )))
-  generalize_proofs at *; (
-  -- Since $p.tilde_m > p.m^{2z-1}$ and $p.tilde_m > 20p.m^{2z}$, the lower bound of $J1' p$ is positive.
-  have h_J1'_pos : ∀ n ∈ J1' p, 0 < n := by
-    exact fun n hn => lt_of_lt_of_le ( Nat.sub_pos_of_lt ( by linarith ) ) ( Finset.mem_Ico.mp hn |>.1 ) ;
-  generalize_proofs at *; (
-  -- Since $p.tilde_m > 20 * p.m^(2 * z p.m)$ and $p.m \geq 4$, we have $p.tilde_m > p.m^(2 * z p.m - 1)$, thus the lower bound of $J2' p$ is positive.
-  have h_J2'_pos : ∀ n ∈ J2' p, 0 < n := by
-    -- Since $p.tilde_m > 20 * p.m^(2 * z p.m)$ and $p.m \geq 4$, we have $p.tilde_m > 0$.
-    have h_tilde_m_pos : 0 < p.tilde_m := by
-      grind
-    generalize_proofs at *; (
-    exact fun n hn => lt_of_lt_of_le h_tilde_m_pos ( Finset.mem_Ico.mp hn |>.1 ) |> lt_of_lt_of_le <| Nat.le_refl _;)
-  generalize_proofs at *; (
-  unfold I0; aesop;)))
-
-/-
-Helper lemma to construct ProblemParameters from global hypotheses.
--/
-lemma exists_good_p (r : ℕ → ℤ) (m : ℕ) (hm : 4 ≤ m) (h_r_nz : ∀ i, r i ≠ 0) (h_r_bdd : ∀ i, |r i| < m)
-    (h_priemteller : (m : ℝ)^(2 * z m) < Real.exp (2.52 * m))
-    (h_bla0_global : ∀ n ≥ 100, L n > 2^n) :
-    ∃ p : ProblemParameters, p.r = r ∧ p.m = m := by
-      obtain ⟨q0, hq0_prime, hq0_large⟩ : ∃ q0, Nat.Prime q0 ∧ q0 > m^(2 * z m - 1) := by
-        exact Exists.imp ( by tauto ) ( Nat.exists_infinite_primes ( m ^ ( 2 * z m - 1 ) + 1 ) )
-      generalize_proofs at *;
-      obtain ⟨tilde_m, htilde_m_gt, htilde_m_div⟩ : ∃ tilde_m, tilde_m > 20 * m^(2 * z m) ∧ q0 ∣ tilde_m := by
-        exact ⟨ q0 * ( 20 * m ^ ( 2 * z m ) + 1 ), by nlinarith [ pow_pos ( zero_lt_four.trans_le hm ) ( 2 * z m ), hq0_prime.two_le ], by norm_num ⟩
-      generalize_proofs at *; (
-      constructor;
-      swap;
-      constructor;
-      any_goals tauto;
-      intro w hw k
-      have h_wk_ge_100 : w + k ≥ 100 := by
-        -- Since $m \geq 4$, we have $m^{2z-1} \geq 4^3 = 64$.
-        have h_m_pow : m^(2 * z m - 1) ≥ 64 := by
-          have h_m_pow : 2 * z m - 1 ≥ 3 := by
-            exact Nat.le_sub_one_of_lt ( by linarith [ show z m ≥ 2 from z_ge_two m hm ] )
-          generalize_proofs at *; (
-          exact le_trans ( by decide ) ( Nat.pow_le_pow_left hm _ ) |> le_trans <| Nat.pow_le_pow_right ( by linarith ) h_m_pow)
-        generalize_proofs at *; (
-        linarith [ Finset.mem_Ico.mp hw, Nat.sub_add_cancel ( show m ^ ( 2 * z m - 1 ) ≤ tilde_m from by linarith [ pow_le_pow_right₀ ( by linarith : 1 ≤ m ) ( show 2 * z m - 1 ≤ 2 * z m from Nat.sub_le _ _ ) ] ), pow_le_pow_right₀ ( by linarith : 1 ≤ m ) ( show 2 * z m ≥ 2 * z m - 1 from Nat.sub_le _ _ ) ])
-      generalize_proofs at *; exact h_bla0_global (w + k) h_wk_ge_100;)
+theorem ohyeah1 (p : ProblemParameters) :
+    ∃ n ∈ I0 p, ∃ q, q.Prime ∧ q ≥ p.m ∧ q ∣ Int.natAbs (X_int p.r n) := by
+      -- By `exists_n_le_pow`, there exists $j \in \{1, \dots, z+1\}$ such that $d(n_j) \le n_j^z$.
+      obtain ⟨j, hj₁, hj₂⟩ : ∃ j ∈ Finset.Icc 1 (z p.m + 1), d p (n_seq_v4 p j) ≤ (n_seq_v4 p j) ^ (z p.m) := by
+        exact exists_n_le_pow p;
+      exact ⟨ n_seq_v4 p j, n_seq_mem_I0 p j hj₁, by have := d_le_pow_implies_exists_large_prime p ( n_seq_v4 p j ) ( n_seq_mem_I0 p j hj₁ ) hj₂; tauto ⟩
 
 /-
 If the sequence of numerators r is periodic, then limsup gcd(X_b, L_b) = infinity.
@@ -2283,4 +2281,5 @@ theorem generalErdos291 (r : ℕ → ℤ) (t : ℕ) (ht : t > 0) (h_per : Functi
       · linarith [ hn.2.choose_spec.2.1, abs_of_nonneg ( by linarith : 0 ≤ m ) ];
       · exact ne_of_gt <| Nat.pos_of_ne_zero <| mt Finset.lcm_eq_zero_iff.mp <| by aesop;
 
+#print axioms ohyeah1
 #print axioms generalErdos291
