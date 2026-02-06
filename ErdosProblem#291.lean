@@ -15,6 +15,9 @@ The Lean proof uses two prime number theorem type results as axioms, which is th
 https://github.com/AlexKontorovich/PrimeNumberTheoremAnd
 
 The exact statements of these two axioms are recorded as h_priemteller and h_bla0 below, and can be found as Lemma 2 and Lemma 3 in the GitHub note I linked above.
+
+Lean version: leanprover/lean4:v4.24.0
+Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
 -/
 
 import Mathlib
@@ -31,6 +34,8 @@ set_option maxHeartbeats 0
 set_option maxRecDepth 4000
 set_option synthInstance.maxHeartbeats 20000
 set_option synthInstance.maxSize 128
+
+set_option linter.unusedVariables false
 
 set_option relaxedAutoImplicit false
 set_option autoImplicit false
@@ -2046,7 +2051,236 @@ theorem ohyeah1 (p : ProblemParameters) :
         exact exists_n_le_pow p;
       exact ⟨ n_seq_v4 p j, n_seq_mem_I0 p j hj₁, by have := d_le_pow_implies_exists_large_prime p ( n_seq_v4 p j ) ( n_seq_mem_I0 p j hj₁ ) hj₂; tauto ⟩
 
-
 #print axioms ohyeah1
 
+/-
+If a sequence $r$ is periodic with positive period $t$, then it is bounded.
+-/
+lemma periodic_bounded (r : ℕ → ℤ) (t : ℕ) (ht : t > 0) (h_per : Function.Periodic r t) :
+    ∃ M, ∀ i, |r i| ≤ M := by
+      -- By Lemma~\ref{lem:max_periodic}, a periodic function with a positive period is bounded.
+      have h_bounded : BddAbove (Set.range fun i => abs (r i)) := by
+        -- Since $r$ is periodic with period $t$, the values of $r$ are determined by the values on $0, \dots, t-1$. The set of values is finite, so it is bounded.
+        have h_finite : Set.Finite (Set.range (fun i => r (i % t))) := by
+          exact Set.Finite.subset ( Set.toFinite ( Finset.image ( fun i => r i ) ( Finset.range t ) ) ) ( Set.range_subset_iff.mpr fun i => Finset.mem_image.mpr ⟨ i % t, Finset.mem_range.mpr ( Nat.mod_lt _ ht ), rfl ⟩ );
+        -- Since $r$ is periodic with period $t$, we have $r i = r (i % t)$ for all $i$.
+        have h_eq : ∀ i, r i = r (i % t) := by
+          exact fun i => by rw [ ← Nat.mod_add_div i t, Function.Periodic.map_mod_nat h_per ] ;
+        exact ⟨ ∑ x ∈ h_finite.toFinset, |x|, Set.forall_mem_range.mpr fun i => by simpa [ h_eq ] using Finset.single_le_sum ( fun x _ => abs_nonneg x ) ( h_finite.mem_toFinset.mpr <| Set.mem_range_self i ) ⟩;
+      exact ⟨ h_bounded.choose, fun i => h_bounded.choose_spec ⟨ i, rfl ⟩ ⟩
 
+/-
+$p^{\varphi(t)}$ divides $L(n p^{\varphi(t)})$.
+-/
+lemma pow_totient_dvd_Lb (n : ℕ) (p : ℕ) (t : ℕ) (hp : p.Prime) (ht : t > 0) (hn : n ≥ 1) :
+    p ^ (Nat.totient t) ∣ L (n * p ^ (Nat.totient t)) := by
+      -- By definition of $L$, we know that $p^{\varphi(t)}$ is one of the numbers in the range $1$ to $n \cdot p^{\varphi(t)}$.
+      have h_p_phi_t_range : p ^ Nat.totient t ∈ Finset.Icc 1 (n * p ^ Nat.totient t) := by
+        exact Finset.mem_Icc.mpr ⟨ Nat.one_le_pow _ _ hp.pos, Nat.le_mul_of_pos_left _ hn ⟩;
+      exact Finset.dvd_lcm h_p_phi_t_range
+
+/-
+If $r$ is periodic with period $t$, and $a \equiv b \pmod t$, then $r(a) = r(b)$.
+-/
+lemma periodic_mod_eq {r : ℕ → ℤ} {t : ℕ} (h : Function.Periodic r t) (a b : ℕ) (hab : a ≡ b [MOD t]) :
+    r a = r b := by
+      -- By definition of periodicity, we have $r(a) = r(b)$ if $a \equiv b \pmod{t}$.
+      have h_periodic : ∀ a b, a ≡ b [MOD t] → r a = r b := by
+        intro a b hab
+        have h_periodic : ∀ k : ℕ, r (a + k * t) = r a := by
+          exact fun k => Nat.recOn k ( by norm_num ) fun k ih => by rw [ Nat.succ_mul, ← add_assoc, h, ih ] ;
+        rw [ ← Nat.mod_add_div a t, ← Nat.mod_add_div b t, hab ];
+        induction' a / t with k hk generalizing b <;> simp_all +decide [ Nat.mul_succ, ← add_assoc ];
+        exact Nat.recOn ( b / t ) rfl fun n hn => by rw [ Nat.mul_succ, ← add_assoc, h, hn ] ;
+      exact h_periodic a b hab
+
+/-
+If $b = n p^{\varphi(t)}$ and $p \mid X_n$, then $p \mid X_b$.
+-/
+lemma X_b_congruence (r : ℕ → ℤ) (t : ℕ) (n : ℕ) (p : ℕ)
+    (ht : t > 0) (hp : p.Prime) (hp_gt_t : p > t) (hn_pos : n > 0) (hn_lt_p : n < p)
+    (h_per : Function.Periodic r t)
+    (h_div : p ∣ Int.natAbs (X_int r n)) :
+    let b := n * p ^ Nat.totient t
+    p ∣ Int.natAbs (X_int r b) := by
+      -- Thus, modulo $p$, the sum restricts to these terms:
+      have h_sum_restrict : (X_int r (n * p ^ (Nat.totient t))) ≡ (∑ j ∈ Finset.Icc 1 n, r (j * p ^ (Nat.totient t)) * ((L (n * p ^ (Nat.totient t))) / (j * p ^ (Nat.totient t)) : ℤ)) [ZMOD p] := by
+        have h_sum_restrict : (X_int r (n * p ^ (Nat.totient t))) ≡ (∑ i ∈ Finset.filter (fun i => i % p ^ (Nat.totient t) = 0) (Finset.Icc 1 (n * p ^ (Nat.totient t))), r i * ((L (n * p ^ (Nat.totient t))) / i : ℤ)) [ZMOD p] := by
+          have h_sum_restrict : (∑ i ∈ Finset.Icc 1 (n * p ^ (Nat.totient t)), r i * ((L (n * p ^ (Nat.totient t))) / i : ℤ)) ≡ (∑ i ∈ Finset.filter (fun i => i % p ^ (Nat.totient t) = 0) (Finset.Icc 1 (n * p ^ (Nat.totient t))), r i * ((L (n * p ^ (Nat.totient t))) / i : ℤ)) [ZMOD p] := by
+            -- For each $i$ not divisible by $p^{\varphi(t)}$, the term $r_i \frac{L_b}{i}$ is divisible by $p$.
+            have h_not_div : ∀ i ∈ Finset.Icc 1 (n * p ^ (Nat.totient t)), ¬(p ^ (Nat.totient t) ∣ i) → (p : ℤ) ∣ r i * ((L (n * p ^ (Nat.totient t))) / i : ℤ) := by
+              intros i hi h_not_div
+              have h_div_term : (p : ℤ) ∣ (L (n * p ^ (Nat.totient t))) / i := by
+                have h_div_term : (p : ℤ) ^ (Nat.totient t) ∣ (L (n * p ^ (Nat.totient t))) := by
+                  exact_mod_cast pow_totient_dvd_Lb n p t hp ht hn_pos |> dvd_trans <| by aesop;
+                generalize_proofs at *; (
+                norm_cast at *; simp_all +decide [ Nat.Prime.dvd_iff_not_coprime hp ] ;
+                refine' fun h => h_not_div <| Nat.Coprime.dvd_of_dvd_mul_left _ _;
+                convert Nat.Coprime.pow_left _ h using 1
+                generalize_proofs at *; (
+                rw [ Nat.div_mul_cancel ] ; aesop
+                generalize_proofs at *; (
+                exact Nat.dvd_trans ( Nat.dvd_of_mod_eq_zero <| Nat.mod_eq_zero_of_dvd <| by aesop ) ( Finset.dvd_lcm ( Finset.mem_Icc.mpr ⟨ by linarith, by linarith ⟩ ) ))))
+              generalize_proofs at *; (
+              exact dvd_mul_of_dvd_right h_div_term _);
+            rw [ ← Finset.sum_filter_add_sum_filter_not ( Finset.Icc 1 ( n * p ^ φ t ) ) fun i => i % p ^ φ t = 0 ];
+            norm_num [ Int.modEq_iff_dvd ];
+            exact Finset.dvd_sum fun x hx => h_not_div x ( Finset.mem_filter.mp hx |>.1 ) ( by simpa [ Nat.dvd_iff_mod_eq_zero ] using Finset.mem_filter.mp hx |>.2 );
+          convert h_sum_restrict using 1;
+        have h_filter : Finset.filter (fun i => i % p ^ (Nat.totient t) = 0) (Finset.Icc 1 (n * p ^ (Nat.totient t))) = Finset.image (fun j => j * p ^ (Nat.totient t)) (Finset.Icc 1 n) := by
+          ext i; simp [Finset.mem_image];
+          exact ⟨ fun hi => ⟨ i / p ^ φ t, ⟨ Nat.div_pos ( Nat.le_of_dvd ( by linarith ) ( Nat.dvd_of_mod_eq_zero hi.2 ) ) ( pow_pos hp.pos _ ), Nat.div_le_of_le_mul <| by linarith ⟩, Nat.div_mul_cancel <| Nat.dvd_of_mod_eq_zero hi.2 ⟩, by rintro ⟨ a, ⟨ ha₁, ha₂ ⟩, rfl ⟩ ; exact ⟨ ⟨ by nlinarith [ pow_pos hp.pos ( φ t ) ], by nlinarith [ pow_pos hp.pos ( φ t ) ] ⟩, by norm_num ⟩ ⟩;
+        simp_all +decide [ Int.ModEq ];
+        rw [ Finset.sum_image ] <;> norm_num [ hp.ne_zero ];
+      -- Since $p$ is prime and $t$ is positive, $\gcd(p, t) = 1$. By Euler's theorem, $p^{\varphi(t)} \equiv 1 \pmod t$.
+      have h_euler : p ^ (Nat.totient t) ≡ 1 [MOD t] := by
+        exact Nat.ModEq.pow_totient <| Nat.coprime_iff_gcd_eq_one.mpr <| hp.coprime_iff_not_dvd.mpr <| Nat.not_dvd_of_pos_of_lt ht hp_gt_t;
+      -- Since $r$ is periodic with period $t$, $r_{j p^{\varphi(t)}} = r_j$.
+      have h_periodic : ∀ j ∈ Finset.Icc 1 n, r (j * p ^ (Nat.totient t)) = r j := by
+        -- Since $j * p^{\varphi(t)} \equiv j \pmod{t}$ and $r$ is periodic with period $t$, we have $r(j * p^{\varphi(t)}) = r(j)$.
+        intros j hj
+        have h_cong : j * p ^ (Nat.totient t) ≡ j [MOD t] := by
+          simpa using h_euler.mul_left j;
+        exact periodic_mod_eq h_per (j * p ^ φ t) j h_cong;
+      -- We can factor out $\frac{L_b}{L_n p^{\varphi(t)}}$. Note that $L_n$ is not divisible by $p$ since $n < p$.
+      have h_factor : (∑ j ∈ Finset.Icc 1 n, r j * ((L (n * p ^ (Nat.totient t))) / (j * p ^ (Nat.totient t)) : ℤ)) = ((L (n * p ^ (Nat.totient t))) / (L n * p ^ (Nat.totient t)) : ℤ) * (∑ j ∈ Finset.Icc 1 n, r j * ((L n) / j : ℤ)) := by
+        have h_factor : ∀ j ∈ Finset.Icc 1 n, ((L (n * p ^ (Nat.totient t))) / (j * p ^ (Nat.totient t)) : ℤ) = ((L (n * p ^ (Nat.totient t))) / (L n * p ^ (Nat.totient t)) : ℤ) * ((L n) / j : ℤ) := by
+          intro j hj
+          have h_div : (L (n * p ^ (Nat.totient t))) = (L n) * (p ^ (Nat.totient t)) * ((L (n * p ^ (Nat.totient t))) / ((L n) * (p ^ (Nat.totient t)))) := by
+            rw [ Nat.mul_div_cancel' ];
+            refine' Nat.Coprime.mul_dvd_of_dvd_of_dvd _ _ _;
+            · refine' Nat.Coprime.pow_right _ _;
+              refine' Nat.Coprime.symm ( hp.coprime_iff_not_dvd.mpr _ );
+              -- Since $p$ is prime and $n < p$, $p$ cannot divide any number in the range $1$ to $n$, hence $p$ cannot divide $L(n)$.
+              have h_not_div : ∀ k ∈ Finset.Icc 1 n, ¬(p ∣ k) := by
+                exact fun k hk => Nat.not_dvd_of_pos_of_lt ( Finset.mem_Icc.mp hk |>.1 ) ( lt_of_le_of_lt ( Finset.mem_Icc.mp hk |>.2 ) hn_lt_p );
+              have h_not_div_L : ∀ {S : Finset ℕ}, (∀ k ∈ S, ¬(p ∣ k)) → ¬(p ∣ Finset.lcm S id) := by
+                intros S hS; induction S using Finset.induction <;> simp_all +decide ;
+                · exact hp.ne_one;
+                · exact fun h => hS.1 <| hp.dvd_mul.mp ( dvd_trans h <| Nat.lcm_dvd_mul _ _ ) |> Or.resolve_right <| by aesop;
+              exact h_not_div_L h_not_div;
+            · exact Finset.lcm_dvd fun i hi => Finset.dvd_lcm ( Finset.mem_Icc.mpr ⟨ by nlinarith [ Finset.mem_Icc.mp hi, pow_pos hp.pos ( φ t ) ], by nlinarith [ Finset.mem_Icc.mp hi, pow_pos hp.pos ( φ t ) ] ⟩ );
+            · exact pow_totient_dvd_Lb n p t hp ht hn_pos;
+          rw [ Int.ediv_eq_of_eq_mul_left ];
+          · exact mul_ne_zero ( Nat.cast_ne_zero.mpr ( by linarith [ Finset.mem_Icc.mp hj ] ) ) ( pow_ne_zero _ ( Nat.cast_ne_zero.mpr hp.ne_zero ) );
+          · norm_cast at *;
+            rw [ mul_assoc, ← mul_assoc ( L n / j ), Nat.div_mul_cancel ];
+            · grind;
+            · exact Finset.dvd_lcm ( Finset.mem_Icc.mpr ⟨ by linarith [ Finset.mem_Icc.mp hj ], by linarith [ Finset.mem_Icc.mp hj ] ⟩ );
+        rw [ Finset.mul_sum _ _ _ ] ; exact Finset.sum_congr rfl fun x hx => by rw [ h_factor x hx ] ; ring;
+      simp_all +decide [ ← Int.natCast_dvd_natCast, Int.ModEq ];
+      exact Int.dvd_of_emod_eq_zero ( h_sum_restrict.trans ( Int.emod_eq_zero_of_dvd <| dvd_mul_of_dvd_right ( by simpa [ X_int ] using h_div ) _ ) )
+
+/-
+If $p \mid X_n$ and $p > t$, there exists $b$ such that $p \mid \gcd(X_b, L_b)$.
+-/
+lemma exists_b_gcd_ge_p (r : ℕ → ℤ) (t : ℕ) (ht : t > 0) (h_per : Function.Periodic r t)
+    (n : ℕ) (hn : n ≥ 1) (p : ℕ) (hp : p.Prime) (hp_gt_t : p > t) (h_div : p ∣ Int.natAbs (X_int r n)) :
+    ∃ b, p ∣ Nat.gcd (Int.natAbs (X_int r b)) (L b) := by
+      by_cases hn_lt_p : n < p;
+      · -- Let $b = n p^{\varphi(t)}$.
+        use n * p ^ Nat.totient t;
+        refine' Nat.dvd_gcd _ _;
+        · convert X_b_congruence r t n p ht hp hp_gt_t hn hn_lt_p h_per h_div using 1;
+        · have h_pow_totient_dvd_Lb : p ^ (Nat.totient t) ∣ L (n * p ^ (Nat.totient t)) := by
+            apply pow_totient_dvd_Lb n p t hp ht hn;
+          exact dvd_trans ( dvd_pow_self _ ( by linarith [ Nat.totient_pos.mpr ht ] ) ) h_pow_totient_dvd_Lb;
+      · refine' ⟨ n, Nat.dvd_gcd h_div _ ⟩;
+        exact Nat.dvd_trans ( by aesop ) ( Finset.dvd_lcm ( Finset.mem_Icc.mpr ⟨ by linarith, by linarith ⟩ : p ∈ Finset.Icc 1 n ) )
+
+/-
+All integers in the interval $I_0$ are positive.
+-/
+lemma I0_pos (p : ProblemParameters) : ∀ n ∈ I0 p, n > 0 := by
+  -- Since $p.tilde_m > 20 * p.m^(2 * z p.m)$ and $p.m \geq 4$, we have $p.tilde_m > p.m^(2 * z p.m - 1)$.
+  have h_tilde_m_gt : p.tilde_m > p.m^(2 * z p.m - 1) := by
+    -- Since $p.tilde_m \geq 280$ and $p.m \geq 4$, we have $p.m^{2z p.m} \leq p.m^{2z p.m}$.
+    have h_m_ge_4 : 4 ≤ p.m := by
+      exact p.hm4
+    generalize_proofs at *; (
+    have h_m_ge_4 : p.tilde_m > 20 * p.m^(2 * z p.m) := by
+      exact p.htilde_m
+    generalize_proofs at *; (
+    exact lt_of_le_of_lt ( Nat.pow_le_pow_right ( by linarith ) ( Nat.sub_le _ _ ) ) ( lt_of_le_of_lt ( by nlinarith [ pow_pos ( by linarith : 0 < p.m ) ( 2 * z p.m ) ] ) h_m_ge_4 )))
+  generalize_proofs at *; (
+  -- Since $p.tilde_m > p.m^{2z-1}$ and $p.tilde_m > 20p.m^{2z}$, the lower bound of $J1' p$ is positive.
+  have h_J1'_pos : ∀ n ∈ J1' p, 0 < n := by
+    exact fun n hn => lt_of_lt_of_le ( Nat.sub_pos_of_lt ( by linarith ) ) ( Finset.mem_Ico.mp hn |>.1 ) ;
+  generalize_proofs at *; (
+  -- Since $p.tilde_m > 20 * p.m^(2 * z p.m)$ and $p.m \geq 4$, we have $p.tilde_m > p.m^(2 * z p.m - 1)$, thus the lower bound of $J2' p$ is positive.
+  have h_J2'_pos : ∀ n ∈ J2' p, 0 < n := by
+    -- Since $p.tilde_m > 20 * p.m^(2 * z p.m)$ and $p.m \geq 4$, we have $p.tilde_m > 0$.
+    have h_tilde_m_pos : 0 < p.tilde_m := by
+      grind
+    generalize_proofs at *; (
+    exact fun n hn => lt_of_lt_of_le h_tilde_m_pos ( Finset.mem_Ico.mp hn |>.1 ) |> lt_of_lt_of_le <| Nat.le_refl _;)
+  generalize_proofs at *; (
+  unfold I0; aesop;)))
+
+/-
+Helper lemma to construct ProblemParameters from global hypotheses.
+-/
+lemma exists_good_p (r : ℕ → ℤ) (m : ℕ) (hm : 4 ≤ m) (h_r_nz : ∀ i, r i ≠ 0) (h_r_bdd : ∀ i, |r i| < m)
+    (h_priemteller : (m : ℝ)^(2 * z m) < Real.exp (2.52 * m))
+    (h_bla0_global : ∀ n ≥ 100, L n > 2^n) :
+    ∃ p : ProblemParameters, p.r = r ∧ p.m = m := by
+      obtain ⟨q0, hq0_prime, hq0_large⟩ : ∃ q0, Nat.Prime q0 ∧ q0 > m^(2 * z m - 1) := by
+        exact Exists.imp ( by tauto ) ( Nat.exists_infinite_primes ( m ^ ( 2 * z m - 1 ) + 1 ) )
+      generalize_proofs at *;
+      obtain ⟨tilde_m, htilde_m_gt, htilde_m_div⟩ : ∃ tilde_m, tilde_m > 20 * m^(2 * z m) ∧ q0 ∣ tilde_m := by
+        exact ⟨ q0 * ( 20 * m ^ ( 2 * z m ) + 1 ), by nlinarith [ pow_pos ( zero_lt_four.trans_le hm ) ( 2 * z m ), hq0_prime.two_le ], by norm_num ⟩
+      generalize_proofs at *; (
+      constructor;
+      swap;
+      constructor;
+      any_goals tauto;
+      intro w hw k
+      have h_wk_ge_100 : w + k ≥ 100 := by
+        -- Since $m \geq 4$, we have $m^{2z-1} \geq 4^3 = 64$.
+        have h_m_pow : m^(2 * z m - 1) ≥ 64 := by
+          have h_m_pow : 2 * z m - 1 ≥ 3 := by
+            exact Nat.le_sub_one_of_lt ( by linarith [ show z m ≥ 2 from z_ge_two m hm ] )
+          generalize_proofs at *; (
+          exact le_trans ( by decide ) ( Nat.pow_le_pow_left hm _ ) |> le_trans <| Nat.pow_le_pow_right ( by linarith ) h_m_pow)
+        generalize_proofs at *; (
+        linarith [ Finset.mem_Ico.mp hw, Nat.sub_add_cancel ( show m ^ ( 2 * z m - 1 ) ≤ tilde_m from by linarith [ pow_le_pow_right₀ ( by linarith : 1 ≤ m ) ( show 2 * z m - 1 ≤ 2 * z m from Nat.sub_le _ _ ) ] ), pow_le_pow_right₀ ( by linarith : 1 ≤ m ) ( show 2 * z m ≥ 2 * z m - 1 from Nat.sub_le _ _ ) ])
+      generalize_proofs at *; exact h_bla0_global (w + k) h_wk_ge_100;)
+
+/-
+If the sequence of numerators r is periodic, then limsup gcd(X_b, L_b) = infinity.
+-/
+theorem generalErdos291 (r : ℕ → ℤ) (t : ℕ) (ht : t > 0) (h_per : Function.Periodic r t)
+    (h_r_nz : ∀ i, r i ≠ 0)
+    (h_priemteller : ∀ m : ℕ, m ≥ 4 → (m : ℝ)^(2 * z m) < Real.exp (2.52 * m))
+    (h_bla0 : ∀ n : ℕ, n ≥ 100 → L n > 2^n) :
+    ∀ N, ∃ b, Nat.gcd (Int.natAbs (X_int r b)) (L b) > N := by
+      intro N;
+      -- By Lemma `periodic_bounded`, there exists a bound $M$ such that $|r_i| \le M$.
+      obtain ⟨M, hM⟩ : ∃ M, ∀ i, |r i| ≤ M := by
+        apply periodic_bounded r t ht h_per;
+      -- Let $m \ge 4$ be any integer larger than $\max(M, t, N)$.
+      obtain ⟨m, hm⟩ : ∃ m, 4 ≤ m ∧ M < m ∧ t < m ∧ N < m := by
+        exact ⟨ ⌊M⌋₊ + t + N + 4, by linarith [ Nat.lt_floor_add_one M ], by linarith [ Nat.lt_floor_add_one M ], by linarith, by linarith ⟩;
+      -- By `exists_good_p`, there exists a `ProblemParameters` structure $p$ with $p.m = m$ and $p.r = r$.
+      obtain ⟨p, hp⟩ : ∃ p : ProblemParameters, p.r = r ∧ p.m = m.natAbs := by
+        apply exists_good_p;
+        · grind;
+        · assumption;
+        · grind;
+        · grind;
+        · assumption;
+      -- By `ohyeah1`, there exists an $n \in I_0$ such that $X_n$ is divisible by a prime $q$ with $q \ge m$.
+      obtain ⟨n, hn⟩ : ∃ n ∈ I0 p, ∃ q, q.Prime ∧ q ≥ p.m ∧ q ∣ Int.natAbs (X_int p.r n) := by
+        convert ohyeah1 p;
+      -- We then claim that $b = n q^{\varphi(t)}$ works.
+      obtain ⟨b, hb⟩ : ∃ b, hn.right.choose ∣ Nat.gcd (Int.natAbs (X_int r b)) (L b) := by
+        apply exists_b_gcd_ge_p r t ht h_per n (by
+        exact Nat.pos_of_ne_zero ( by rintro rfl; exact absurd ( I0_pos p 0 ( by simpa using hn.1 ) ) ( by norm_num ) )) hn.right.choose hn.right.choose_spec.left (by
+        linarith [ hn.2.choose_spec.2.1, abs_of_nonneg ( by linarith : 0 ≤ m ) ]) (by
+        simpa only [ hp.1 ] using hn.2.choose_spec.2.2);
+      use b;
+      refine' lt_of_lt_of_le _ ( Nat.le_of_dvd ( Nat.gcd_pos_of_pos_right _ <| Nat.pos_of_ne_zero <| _ ) hb );
+      · linarith [ hn.2.choose_spec.2.1, abs_of_nonneg ( by linarith : 0 ≤ m ) ];
+      · exact ne_of_gt <| Nat.pos_of_ne_zero <| mt Finset.lcm_eq_zero_iff.mp <| by aesop;
+
+#print axioms generalErdos291
