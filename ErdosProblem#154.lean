@@ -14,7 +14,6 @@ Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
 
 import Mathlib
 
-
 set_option linter.mathlibStandardSet false
 
 open scoped BigOperators
@@ -27,6 +26,7 @@ set_option maxHeartbeats 0
 set_option maxRecDepth 4000
 set_option synthInstance.maxHeartbeats 20000
 set_option synthInstance.maxSize 128
+
 set_option relaxedAutoImplicit false
 set_option autoImplicit false
 
@@ -386,10 +386,8 @@ theorem sum_diffs_order_eq_complement (A : Finset ℕ) (s : ℕ) (hs : s < A.car
       · rw [ List.getElem?_eq_getElem ] ; aesop;
       · grind;
     convert h_sorted _ _ _ _ _ using 1 <;> norm_num;
-    ·
-      grind
-    ·
-      grind
+    · grind
+    · grind
   · simp +decide [Finset.sum_range];
     refine' eq_tsub_of_add_eq _;
     rw [ ← Finset.sum_add_distrib ];
@@ -1046,3 +1044,4 @@ theorem sidon_density_limit
     intro i hi; specialize h_v_const; rw [ tendsto_pi_nhds ] at h_v_const; specialize h_v_const ⟨ i, hi ⟩ ; aesop;
 
 #print axioms sidon_density_limit
+
