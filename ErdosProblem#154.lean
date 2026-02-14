@@ -153,7 +153,7 @@ The sum of differences of order v <= s from a set A.
 -/
 noncomputable def sum_diffs_le_s (A : Finset ℕ) (s : ℕ) : ℕ :=
   let l := A.sort (· ≤ ·)
-  ∑ v ∈ Finset.range s, ∑ j ∈ Finset.range (l.length - (v + 1)), ((l.get? (j + (v + 1))).getD 0 - (l.get? j).getD 0)
+  ∑ v ∈ Finset.range s, ∑ j ∈ Finset.range (l.length - (v + 1)), ((l[j + (v + 1)]?).getD 0 - (l[j]?).getD 0)
 
 /-
 The set of differences of order v <= s from a set A.
@@ -162,7 +162,7 @@ noncomputable def diffs_le_s_set (A : Finset ℕ) (s : ℕ) : Finset ℕ :=
   let l := A.sort (· ≤ ·)
   (Finset.range s).biUnion (fun v =>
     (Finset.range (l.length - (v + 1))).image (fun j =>
-      (l.get? (j + (v + 1))).getD 0 - (l.get? j).getD 0))
+      (l[j + (v + 1)]?).getD 0 - (l[j]?).getD 0))
 
 /-
 The map (v, j) -> l_{j+v} - l_j is injective for a Sidon set.
@@ -174,16 +174,16 @@ theorem sidon_diff_map_injective (A : Finset ℕ) (hA : IsSidonSetNat A) :
     1 ≤ v₂ → v₂ < A.card →
     j₁ < A.card - v₁ →
     j₂ < A.card - v₂ →
-    (l.get? (j₁ + v₁)).getD 0 - (l.get? j₁).getD 0 = (l.get? (j₂ + v₂)).getD 0 - (l.get? j₂).getD 0 →
+    (l[j₁ + v₁]?).getD 0 - (l[j₁]?).getD 0 = (l[j₂ + v₂]?).getD 0 - (l[j₂]?).getD 0 →
     v₁ = v₂ ∧ j₁ = j₂ := by
   intro l v₁ v₂ j₁ j₂ hv₁ hv₁' hv₂ hv₂' hj₁ hj₂ h_diff_eq
-  have h_sum_eq : (l.get? (j₁ + v₁)).getD 0 + (l.get? j₂).getD 0 = (l.get? (j₂ + v₂)).getD 0 + (l.get? j₁).getD 0 := by
-    have h_sum_eq : (l.get? (j₁ + v₁)).getD 0 ≥ (l.get? j₁).getD 0 ∧ (l.get? (j₂ + v₂)).getD 0 ≥ (l.get? j₂).getD 0 := by
-      have h_sorted : ∀ i j : ℕ, i < j → i < l.length → j < l.length → l.get! i ≤ l.get! j := by
+  have h_sum_eq : (l[j₁ + v₁]?).getD 0 + (l[j₂]?).getD 0 = (l[j₂ + v₂]?).getD 0 + (l[j₁]?).getD 0 := by
+    have h_sum_eq : (l[j₁ + v₁]?).getD 0 ≥ (l[j₁]?).getD 0 ∧ (l[j₂ + v₂]?).getD 0 ≥ (l[j₂]?).getD 0 := by
+      have h_sorted : ∀ i j : ℕ, i < j → i < l.length → j < l.length → l[i]! ≤ l[j]! := by
         intros i j hij hi hj
         have h_sorted : List.Sorted (· ≤ ·) l := by
           exact Finset.sort_sorted _ _
-        have h_le : l.get! i ≤ l.get! j := by
+        have h_le : l[i]! ≤ l[j]! := by
           have := List.pairwise_iff_get.mp h_sorted;
           simpa [ hi, hj ] using this ⟨ i, hi ⟩ ⟨ j, hj ⟩ hij
         exact h_le;
@@ -191,7 +191,7 @@ theorem sidon_diff_map_injective (A : Finset ℕ) (hA : IsSidonSetNat A) :
       exact ⟨ h_sorted _ _ ( by linarith ) ( by omega ) ( by omega ), h_sorted _ _ ( by linarith ) ( by omega ) ( by omega ) ⟩;
     omega;
   -- Since $A$ is a Sidon set, $\{l_{j_1+v_1}, l_{j_2}\} = \{l_{j_2+v_2}, l_{j_1}\}$.
-  have h_pair_eq : (l.get? (j₁ + v₁)).getD 0 = (l.get? (j₂ + v₂)).getD 0 ∧ (l.get? j₂).getD 0 = (l.get? j₁).getD 0 ∨ (l.get? (j₁ + v₁)).getD 0 = (l.get? j₁).getD 0 ∧ (l.get? j₂).getD 0 = (l.get? (j₂ + v₂)).getD 0 := by
+  have h_pair_eq : (l[j₁ + v₁]?).getD 0 = (l[j₂ + v₂]?).getD 0 ∧ (l[j₂]?).getD 0 = (l[j₁]?).getD 0 ∨ (l[j₁ + v₁]?).getD 0 = (l[j₁]?).getD 0 ∧ (l[j₂]?).getD 0 = (l[j₂ + v₂]?).getD 0 := by
     have h_pair_eq : ∀ a b c d : ℕ, a ∈ A → b ∈ A → c ∈ A → d ∈ A → a + b = c + d → (a = c ∧ b = d) ∨ (a = d ∧ b = c) := by
       intros a b c d ha hb hc hd h_eq
       by_cases h_cases : a ≤ b ∧ c ≤ d ∨ a ≤ b ∧ d ≤ c ∨ b ≤ a ∧ c ≤ d ∨ b ≤ a ∧ d ≤ c;
@@ -201,11 +201,11 @@ theorem sidon_diff_map_injective (A : Finset ℕ) (hA : IsSidonSetNat A) :
         · have := hA b hb a ha d hd c hc; simp_all +decide [ add_comm ] ;
       · cases le_total a b <;> cases le_total c d <;> aesop;
     -- Since $l$ is the sorted list of elements in $A$, each element in $l$ is indeed an element of $A$.
-    have h_elements_in_A : ∀ (i : ℕ), i < l.length → (l.get? i).getD 0 ∈ A := by
+    have h_elements_in_A : ∀ (i : ℕ), i < l.length → (l[i]?).getD 0 ∈ A := by
       intros i hi;
-      have h_elements_in_A : ∀ (i : ℕ), i < l.length → (l.get? i).getD 0 ∈ A := by
+      have h_elements_in_A : ∀ (i : ℕ), i < l.length → (l[i]?).getD 0 ∈ A := by
         intro i hi
-        have h_mem : (l.get? i).getD 0 ∈ l := by
+        have h_mem : (l[i]?).getD 0 ∈ l := by
           simp +decide [hi]
         exact Finset.mem_sort ( α := ℕ ) ( · ≤ · ) |>.1 h_mem;
       exact h_elements_in_A i hi;
@@ -213,13 +213,13 @@ theorem sidon_diff_map_injective (A : Finset ℕ) (hA : IsSidonSetNat A) :
     exact h_pair_eq _ _ _ _ ( h_elements_in_A _ ( by omega ) ) ( h_elements_in_A _ ( by omega ) ) ( h_elements_in_A _ ( by omega ) ) ( h_elements_in_A _ ( by omega ) ) h_sum_eq;
   -- Since $l$ is strictly increasing, $j_1 + v_1 = j_2 + v_2$ and $j_2 = j_1$.
   have h_j_eq : j₁ + v₁ = j₂ + v₂ ∧ j₂ = j₁ := by
-    have h_strict_mono : ∀ i j : ℕ, i < j → i < l.length → j < l.length → (l.get! i) < (l.get! j) := by
+    have h_strict_mono : ∀ i j : ℕ, i < j → i < l.length → j < l.length → (l[i]!) < (l[j]!) := by
       intros i j hij hi hj;
       have h_sorted : List.Pairwise (fun x y => x < y) l := by
         convert Finset.sort_sorted_lt A using 1;
       have := List.pairwise_iff_get.mp h_sorted;
       simpa [ hi, hj ] using this ⟨ i, hi ⟩ ⟨ j, hj ⟩ hij;
-    have h_j_eq : ∀ i j : ℕ, i < l.length → j < l.length → (l.get! i) = (l.get! j) → i = j := by
+    have h_j_eq : ∀ i j : ℕ, i < l.length → j < l.length → (l[i]!) = (l[j]!) → i = j := by
       exact fun i j hi hj hij => le_antisymm ( le_of_not_gt fun hi' => by linarith [ h_strict_mono _ _ hi' hj hi ] ) ( le_of_not_gt fun hj' => by linarith [ h_strict_mono _ _ hj' hi hj ] );
     simp +zetaDelta at *;
     exact h_pair_eq.elim ( fun h => ⟨ h_j_eq _ _ ( by omega ) ( by omega ) h.1, h_j_eq _ _ ( by omega ) ( by omega ) h.2 ⟩ ) fun h => False.elim <| by linarith [ h_strict_mono _ _ ( show j₁ < j₁ + v₁ from by linarith ) ( by omega ) ( by omega ) ] ;
@@ -230,7 +230,7 @@ The number of differences of order v <= s from a Sidon set A is rs - s(s+1)/2.
 -/
 theorem card_diffs_le_s_set (A : Finset ℕ) (s : ℕ) (hA : IsSidonSetNat A) (hs : s < A.card) :
   (diffs_le_s_set A s).card = count_diffs A.card s := by
-    have h_inj : Finset.card (Finset.biUnion (Finset.range s) (fun v => Finset.image (fun j => (A.sort (· ≤ ·)).get! (j + (v + 1)) - (A.sort (· ≤ ·)).get! j) (Finset.range (A.card - (v + 1))))) = ∑ v ∈ Finset.range s, (A.card - (v + 1)) := by
+    have h_inj : Finset.card (Finset.biUnion (Finset.range s) (fun v => Finset.image (fun j => (A.sort (· ≤ ·))[j + (v + 1)]! - (A.sort (· ≤ ·))[j]!) (Finset.range (A.card - (v + 1))))) = ∑ v ∈ Finset.range s, (A.card - (v + 1)) := by
       rw [ Finset.card_biUnion ];
       · refine' Finset.sum_congr rfl fun v hv => _;
         rw [ Finset.card_image_of_injOn, Finset.card_range ];
@@ -359,24 +359,25 @@ theorem sum_diffs_order_eq_complement (A : Finset ℕ) (s : ℕ) (hs : s < A.car
   sum_diffs_le_s A s =
   let l := A.sort (· ≤ ·)
   ∑ v ∈ Finset.range s, ∑ j ∈ Finset.range (l.length - (A.card - (v + 1))),
-    ((l.get? (j + (A.card - (v + 1)))).getD 0 - (l.get? j).getD 0) := by
+    ((l[j + (A.card - (v + 1))]?).getD 0 - (l[j]?).getD 0) := by
   unfold sum_diffs_le_s;
-  have h_sum_eq : ∀ v ∈ Finset.range s, ∑ j ∈ Finset.range (A.card - (v + 1)), ((A.sort (· ≤ ·)).get? (j + (v + 1))).getD 0 - ∑ j ∈ Finset.range (A.card - (v + 1)), ((A.sort (· ≤ ·)).get? j).getD 0 = ∑ j ∈ Finset.range (A.card - (A.card - (v + 1))), ((A.sort (· ≤ ·)).get? (j + (A.card - (v + 1)))).getD 0 - ∑ j ∈ Finset.range (A.card - (A.card - (v + 1))), ((A.sort (· ≤ ·)).get? j).getD 0 := by
+  have h_sum_eq : ∀ v ∈ Finset.range s, ∑ j ∈ Finset.range (A.card - (v + 1)), ((A.sort (· ≤ ·))[j + (v + 1)]?).getD 0 - ∑ j ∈ Finset.range (A.card - (v + 1)), ((A.sort (· ≤ ·))[j]?).getD 0 = ∑ j ∈ Finset.range (A.card - (A.card - (v + 1))), ((A.sort (· ≤ ·))[j + (A.card - (v + 1))]?).getD 0 - ∑ j ∈ Finset.range (A.card - (A.card - (v + 1))), ((A.sort (· ≤ ·))[j]?).getD 0 := by
     intro v hv
-    have h_sum_eq : ∑ j ∈ Finset.range (A.card), ((A.sort (· ≤ ·)).get? j).getD 0 = ∑ j ∈ Finset.range (A.card - (v + 1)), ((A.sort (· ≤ ·)).get? (j + (v + 1))).getD 0 + ∑ j ∈ Finset.range (v + 1), ((A.sort (· ≤ ·)).get? j).getD 0 := by
+    have h_sum_eq : ∑ j ∈ Finset.range (A.card), ((A.sort (· ≤ ·))[j]?).getD 0 = ∑ j ∈ Finset.range (A.card - (v + 1)), ((A.sort (· ≤ ·))[j + (v + 1)]?).getD 0 + ∑ j ∈ Finset.range (v + 1), ((A.sort (· ≤ ·))[j]?).getD 0 := by
       rw [ ← Finset.sum_range_add_sum_Ico _ ( show v + 1 ≤ A.card from by linarith [ Finset.mem_range.mp hv ] ) ];
       rw [ add_comm, Finset.sum_Ico_eq_sum_range ];
       ac_rfl;
-    have h_sum_eq : ∑ j ∈ Finset.range (A.card), ((A.sort (· ≤ ·)).get? j).getD 0 = ∑ j ∈ Finset.range (A.card - (A.card - (v + 1))), ((A.sort (· ≤ ·)).get? (j + (A.card - (v + 1)))).getD 0 + ∑ j ∈ Finset.range (A.card - (v + 1)), ((A.sort (· ≤ ·)).get? j).getD 0 := by
+    have h_sum_eq : ∑ j ∈ Finset.range (A.card), ((A.sort (· ≤ ·))[j]?).getD 0 = ∑ j ∈ Finset.range (A.card - (A.card - (v + 1))), ((A.sort (· ≤ ·))[j + (A.card - (v + 1))]?).getD 0 + ∑ j ∈ Finset.range (A.card - (v + 1)), ((A.sort (· ≤ ·))[j]?).getD 0 := by
       rw [ ← Finset.sum_range_add_sum_Ico _ ( show A.card - ( v + 1 ) ≤ A.card from Nat.sub_le _ _ ) ];
       rw [ add_comm, Finset.sum_Ico_eq_sum_range ];
       ac_rfl;
-    grind;
+    simp_all +decide [ Nat.sub_sub_self ( show v + 1 ≤ A.card from by linarith [ Finset.mem_range.mp hv ] ) ];
+    omega
   convert Finset.sum_congr rfl h_sum_eq using 2;
   · norm_num +zetaDelta at *;
     refine' eq_tsub_of_add_eq _;
     rw [ ← Finset.sum_add_distrib, Finset.sum_congr rfl fun _ _ => tsub_add_cancel_of_le <| ?_ ];
-    have h_sorted : ∀ i j : ℕ, i < j → i < (A.sort (· ≤ ·)).length → j < (A.sort (· ≤ ·)).length → ((A.sort (· ≤ ·)).get? i).getD 0 ≤ ((A.sort (· ≤ ·)).get? j).getD 0 := by
+    have h_sorted : ∀ i j : ℕ, i < j → i < (A.sort (· ≤ ·)).length → j < (A.sort (· ≤ ·)).length → ((A.sort (· ≤ ·))[i]?).getD 0 ≤ ((A.sort (· ≤ ·))[j]?).getD 0 := by
       intros i j hij hi hj;
       have h_sorted : List.Pairwise (· ≤ ·) (Finset.sort (· ≤ ·) A) := by
         exact Finset.sort_sorted _ _;
@@ -385,11 +386,8 @@ theorem sum_diffs_order_eq_complement (A : Finset ℕ) (s : ℕ) (hs : s < A.car
       · rw [ List.getElem?_eq_getElem ] ; aesop;
       · grind;
     convert h_sorted _ _ _ _ _ using 1 <;> norm_num;
-    congr! 1;
-    congr! 1;
-    · linarith;
-    · exact lt_of_lt_of_le ( Finset.mem_range.mp ‹_› ) ( Nat.sub_le _ _ );
-    · grind;
+    · grind
+    · grind
   · simp +decide [Finset.sum_range];
     refine' eq_tsub_of_add_eq _;
     rw [ ← Finset.sum_add_distrib ];
@@ -413,8 +411,8 @@ theorem sum_diffs_le_s_eq_sum_set (A : Finset ℕ) (s : ℕ) (hA : IsSidonSetNat
       1 ≤ v₁ → v₁ < A.card →
       1 ≤ v₂ → v₂ < A.card →
       j₁ < A.card - v₁ → j₂ < A.card - v₂ →
-      (A.sort (· ≤ ·)).get? (j₁ + v₁) ≠ none → (A.sort (· ≤ ·)).get? (j₂ + v₂) ≠ none →
-      ((A.sort (· ≤ ·)).get? (j₁ + v₁)).getD 0 - ((A.sort (· ≤ ·)).get? j₁).getD 0 = ((A.sort (· ≤ ·)).get? (j₂ + v₂)).getD 0 - ((A.sort (· ≤ ·)).get? j₂).getD 0 →
+      (A.sort (· ≤ ·))[j₁ + v₁]? ≠ none → (A.sort (· ≤ ·))[j₂ + v₂]? ≠ none →
+      ((A.sort (· ≤ ·))[j₁ + v₁]?).getD 0 - ((A.sort (· ≤ ·))[j₁]?).getD 0 = ((A.sort (· ≤ ·))[j₂ + v₂]?).getD 0 - ((A.sort (· ≤ ·))[j₂]?).getD 0 →
       v₁ = v₂ ∧ j₁ = j₂ := by
         intros v₁ v₂ j₁ j₂ hv₁ hv₁' hv₂ hv₂' hj₁ hj₂ hj₁' hj₂' h_eq;
         convert sidon_diff_map_injective A hA v₁ v₂ j₁ j₂ hv₁ hv₁' hv₂ hv₂' hj₁ hj₂ _;
@@ -447,11 +445,11 @@ theorem sum_diffs_le_s_eq_sum_set (A : Finset ℕ) (s : ℕ) (hA : IsSidonSetNat
 /-
 The sum of differences is bounded by the number of terms times the maximum value.
 -/
-theorem sum_diffs_le_s_bound (A : Finset ℕ) (s : ℕ) (M : ℕ) (hA : IsSidonSetNat A) (hs : s < A.card)
+theorem sum_diffs_le_s_bound (A : Finset ℕ) (s : ℕ) (M : ℕ) (hs : s < A.card)
   (hA_bound : ∀ x ∈ A, x ≤ M) :
   sum_diffs_le_s A s ≤ (s * (s + 1) / 2) * M := by
     -- The sum of differences of order v <= s equals the sum of differences of order k >= r - s. We are summing differences of order k where k goes from r - s to r - 1.
-    have h_sum_diffs_eq : sum_diffs_le_s A s = ∑ k ∈ Finset.Ico (A.card - s) A.card, ∑ j ∈ Finset.range (A.card - k), (((A.sort (· ≤ ·)).get? (j + k)).getD 0 - ((A.sort (· ≤ ·)).get? j).getD 0) := by
+    have h_sum_diffs_eq : sum_diffs_le_s A s = ∑ k ∈ Finset.Ico (A.card - s) A.card, ∑ j ∈ Finset.range (A.card - k), (((A.sort (· ≤ ·))[j + k]?).getD 0 - ((A.sort (· ≤ ·))[j]?).getD 0) := by
       have := sum_diffs_order_eq_complement A s hs;
       rw [ this, Finset.sum_Ico_eq_sum_range ];
       simp +arith +decide [ Nat.sub_sub_self hs.le ];
@@ -459,9 +457,9 @@ theorem sum_diffs_le_s_bound (A : Finset ℕ) (s : ℕ) (M : ℕ) (hA : IsSidonS
       refine' Finset.sum_congr rfl fun i hi => _;
       rw [ show A.card - ( s - 1 - i + 1 ) = A.card - s + i by exact Nat.sub_eq_of_eq_add <| by linarith [ Nat.sub_add_cancel <| show 1 ≤ s from by linarith [ Finset.mem_range.mp hi ], Nat.sub_add_cancel <| show i ≤ s - 1 from Nat.le_sub_one_of_lt <| Finset.mem_range.mp hi, Nat.sub_add_cancel <| show s ≤ A.card from by linarith [ Finset.mem_range.mp hi ] ] ] ; simp +arith +decide [ add_comm, add_left_comm, add_assoc ];
     -- Each difference is at most $M$, so the sum of differences of order $k$ is at most $(A.card - k) * M$.
-    have h_diff_bound : ∀ k ∈ Finset.Ico (A.card - s) A.card, ∑ j ∈ Finset.range (A.card - k), (((A.sort (· ≤ ·)).get? (j + k)).getD 0 - ((A.sort (· ≤ ·)).get? j).getD 0) ≤ (A.card - k) * M := by
+    have h_diff_bound : ∀ k ∈ Finset.Ico (A.card - s) A.card, ∑ j ∈ Finset.range (A.card - k), (((A.sort (· ≤ ·))[j + k]?).getD 0 - ((A.sort (· ≤ ·))[j]?).getD 0) ≤ (A.card - k) * M := by
       intros k hk
-      have h_diff_bound : ∀ j ∈ Finset.range (A.card - k), (((A.sort (· ≤ ·)).get? (j + k)).getD 0 - ((A.sort (· ≤ ·)).get? j).getD 0) ≤ M := by
+      have h_diff_bound : ∀ j ∈ Finset.range (A.card - k), (((A.sort (· ≤ ·))[j + k]?).getD 0 - ((A.sort (· ≤ ·))[j]?).getD 0) ≤ M := by
         intros j hj
         have h_diff_bound : ∀ x ∈ A, x ≤ M := by
           assumption;
@@ -543,7 +541,6 @@ The set of differences from B_i for i in I.
 -/
 noncomputable def total_diffs_subset (A : Finset ℕ) (m : ℕ) (s : ℕ → ℕ) (I : Finset ℕ) : Finset ℕ :=
   I.biUnion (fun i => diffs_le_s_set (B_finset_new A m i) (s i))
-
 
 /-
 Version of rho_equality for Fin m.
@@ -707,7 +704,7 @@ lemma eventually_inequality_premises
           exact ⟨ k, hk, by rw [ ← h_pigeonhole ] ; exact lt_of_le_of_lt ( Finset.sum_le_sum fun _ _ => Nat.le_of_lt_succ ( hK _ ( Finset.mem_range.mp ‹_› ) ) ) ( by norm_num; linarith ) ⟩;
         refine' Finset.card_pos.mpr _;
         refine' ⟨ _, Finset.mem_biUnion.mpr ⟨ i, Finset.mem_range.mpr hi.1, _ ⟩ ⟩;
-        exact ( B_finset_new ( A_seq k ) m i |> Finset.sort ( · ≤ · ) |> List.get! <| 1 ) - ( B_finset_new ( A_seq k ) m i |> Finset.sort ( · ≤ · ) |> List.get! <| 0 );
+        exact (B_finset_new (A_seq k) m i |> Finset.sort (· ≤ ·) |> (fun l => l[1]!)) - (B_finset_new (A_seq k) m i |> Finset.sort (· ≤ ·) |> (fun l => l[0]!))
         refine' Finset.mem_biUnion.mpr ⟨ 0, _, _ ⟩ <;> norm_num;
         · exact Nat.div_pos ( Nat.le_sub_one_of_lt ( Nat.le_sqrt.mpr ( by linarith ) ) ) zero_lt_two;
         · exact ⟨ 0, Nat.sub_pos_of_lt hi.2, rfl ⟩;
@@ -925,8 +922,6 @@ lemma S_total_upper_bound_relaxed (A : Finset ℕ) (m : ℕ) (hm : 2 ≤ m) (s :
       intro i hi; by_cases hi' : 0 < ( B_finset_new A m i |> Finset.card ) <;> simp_all +decide ;
       · have h_sum_diffs_le_s_bound : sum_diffs_le_s (B_finset_new A m i) (calc_s (B_finset_new A m i).card) ≤ (calc_s (B_finset_new A m i).card * (calc_s (B_finset_new A m i).card + 1) / 2) * (n / m) := by
           apply sum_diffs_le_s_bound;
-          · convert B_is_sidon A m i hm hA using 1;
-            exact B_finset_new_eq_B A m i ( by linarith );
           · exact calc_s_lt_r _ ( Finset.card_pos.mpr hi' );
           · exact fun x a => B_finset_bound A m i n hA_bound x a;
         rw [ ← sum_diffs_le_s_eq_sum_set ] ; aesop;
@@ -1049,3 +1044,4 @@ theorem sidon_density_limit
     intro i hi; specialize h_v_const; rw [ tendsto_pi_nhds ] at h_v_const; specialize h_v_const ⟨ i, hi ⟩ ; aesop;
 
 #print axioms sidon_density_limit
+
