@@ -4,7 +4,7 @@ We say that a sequence of positive integers $A$ has:
 - property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
 - property $Q$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all $a \in A$ with $a < n$.
 - property $\overline{P}$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all $a \in A$.
-- property $\overline{P}_\infty$ if there exist infinitely many positive integers $n$ such tht $n+a$ is squarefree for all but finitely many $a \in A$.
+- property $\overline{P}_\infty$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all but finitely many $a \in A$.
 
 Terence Tao and I managed to prove tight bounds on the possible densities of sequences with one of the above properties.
 
@@ -804,4 +804,5 @@ theorem Theorem1_ii (f : ℕ → ℕ) (hf : Filter.Tendsto f Filter.atTop Filter
       rw [ div_le_iff₀ ] <;> norm_cast ; linarith
 
 #print axioms Theorem1_i
+
 #print axioms Theorem1_ii
