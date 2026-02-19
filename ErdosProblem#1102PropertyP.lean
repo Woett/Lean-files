@@ -18,7 +18,6 @@ Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
 -/
 
-
 import Mathlib
 
 set_option linter.mathlibStandardSet false
@@ -804,6 +803,4 @@ theorem Theorem1_ii (f : ℕ → ℕ) (hf : Filter.Tendsto f Filter.atTop Filter
       rw [ div_le_iff₀ ] <;> norm_cast ; linarith
 
 #print axioms Theorem1_i
-
 #print axioms Theorem1_ii
-
