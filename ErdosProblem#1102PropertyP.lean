@@ -6,7 +6,7 @@ We say that a sequence of positive integers $A$ has:
 - property $\overline{P}$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all $a \in A$.
 - property $\overline{P}_\infty$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all but finitely many $a \in A$.
 
-Terence Tao and I managed to prove tight bounds on the possible densities of sequences with one of the above properties.
+Solving Erdős Problem #1102 (https://www.erdosproblems.com/1102), Terence Tao and I managed to prove tight bounds on the possible densities of sequences with one of the above properties.
 
 W. van Doorn and T. Tao, Growth rates of sequences governed by the squarefree properties of their translates. arXiv:2512.01087 (2025).
 
@@ -806,3 +806,4 @@ theorem Theorem1_ii (f : ℕ → ℕ) (hf : Filter.Tendsto f Filter.atTop Filter
 #print axioms Theorem1_i
 
 #print axioms Theorem1_ii
+
