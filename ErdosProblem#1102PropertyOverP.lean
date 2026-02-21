@@ -4,7 +4,7 @@ We say that a sequence of positive integers $A$ has:
 - property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
 - property $Q$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all $a \in A$ with $a < n$.
 - property $\overline{P}$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all $a \in A$.
-- property $\overline{P}_\infty$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all but finitely many $a \in A$.
+- property $\overline{P}_infty$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all but finitely many $a \in A$.
 
 Solving Erdős Problem #1102 (https://www.erdosproblems.com/1102), Terence Tao and I managed to prove tight bounds on the possible densities of sequences with one of the above properties.
 
@@ -12,7 +12,7 @@ W. van Doorn and T. Tao, Growth rates of sequences governed by the squarefree pr
 
 Thanks to Aristotle, the proof of the following theorem is formalized in the Lean file below:
 
-Any sequence with property $\overline{P}$ or $\overline{P}_\infty$ has density strictly smaller than $6/\pi^2$. On the other hand, for every $\epsilon > 0$ there exist a sequence with property $\overline{P}$ (which therefore has property $\overline{P}_\infty$ as well) with lower density larger than $6/\pi^2 - \epsilon$.
+Any sequence with property $\overline{P}$ or $\overline{P}_infty$ has density strictly smaller than $6/\pi^2$. On the other hand, for every $\epsilon > 0$ there exist a sequence with property $\overline{P}$ (which therefore has property $\overline{P}_infty$ as well) with lower density larger than $6/\pi^2 - \epsilon$.
 
 The proof of the second part is conditional on various asymptotics on sums and products on primes, which all readily follow from the prime number theorem. These asymptotics are bundled as the structure SieveAssumptions that you can find at the start of the formalization below.
 
@@ -91,6 +91,123 @@ structure SieveAssumptions where
 SF is the set of squarefree numbers.
 -/
 def SF : Set ℕ := {n | Squarefree n}
+
+/-
+A set A has property P_bar if for infinitely many n, n+a is squarefree for all a in A.
+-/
+def PropertyP_bar (A : Set ℕ) : Prop := ({n | ∀ a ∈ A, Squarefree (n + a)}).Infinite
+
+/-
+A set A has property P_bar_infty if for infinitely many n, n+a is squarefree for all but finitely many a in A.
+-/
+def PropertyP_bar_infty (A : Set ℕ) : Prop := ({n | ({a ∈ A | ¬Squarefree (n + a)}).Finite}).Infinite
+
+/-
+A set A is admissible if for every prime p, there is a residue class mod p^2 that A avoids.
+-/
+def Admissible (A : Set ℕ) : Prop :=
+  ∀ p, Nat.Prime p → ∃ b, b < p^2 ∧ ∀ a ∈ A, a % p^2 ≠ b
+
+/-
+A set A is almost admissible if for every prime p, there is a residue class mod p^2 that contains only finitely many elements of A.
+-/
+def AlmostAdmissible (A : Set ℕ) : Prop :=
+  ∀ p, Nat.Prime p → ∃ b, b < p^2 ∧ ({a ∈ A | a % p^2 = b}).Finite
+
+/-
+Every set with property P_bar has property P_bar_infty.
+-/
+theorem P_bar_implies_P_bar_infty (A : Set ℕ) (h : PropertyP_bar A) : PropertyP_bar_infty A := by
+  -- By definition of PropertyP_bar, there are infinitely many n such that for all a in A, n+a is squarefree.
+  have h_inf : {n | ∀ a ∈ A, Squarefree (n + a)}.Infinite := by
+    exact h ;
+  exact h_inf.mono fun n hn => Set.Finite.subset ( Set.finite_singleton 0 ) fun x hx => by aesop;
+
+/-
+Every admissible set is almost admissible.
+-/
+theorem Admissible_implies_AlmostAdmissible (A : Set ℕ) (h : Admissible A) : AlmostAdmissible A := by
+  -- By definition of admissible, for every prime $p$, there exists a residue class $b \pmod{p^2}$ such that no element of $A$ is congruent to $b \pmod{p^2}$.
+  intro p hp
+  obtain ⟨b, hb₁, hb₂⟩ := h p hp
+  use b
+  simp [hb₁];
+  exact Set.finite_empty.subset fun x hx => hb₂ x hx.1 hx.2
+
+/-
+Every set with property P_bar_infty is almost admissible.
+-/
+theorem PropertyP_bar_infty_implies_AlmostAdmissible (A : Set ℕ) (h : PropertyP_bar_infty A) : AlmostAdmissible A := by
+  intro p hp;
+  -- Fix a prime $p$.
+  by_cases h_finite : ∀ b < p ^ 2, Set.Infinite {a ∈ A | a % p ^ 2 = b};
+  · -- If for every $b < p^2$, the set $\{a \in A \mid a \equiv b \pmod{p^2}\}$ is infinite, then for any $n$, the set $\{a \in A \mid n + a \text{ is not squarefree}\}$ is infinite.
+    have h_inf_not_squarefree : ∀ n, Set.Infinite {a ∈ A | ¬Squarefree (n + a)} := by
+      intro n
+      have h_inf_not_squarefree : Set.Infinite {a ∈ A | (n + a) % p ^ 2 = 0} := by
+        have h_inf_not_squarefree : Set.Infinite {a ∈ A | a % p ^ 2 = (p ^ 2 - n % p ^ 2) % p ^ 2} := by
+          exact h_finite _ ( Nat.mod_lt _ ( pow_pos hp.pos 2 ) );
+        refine h_inf_not_squarefree.mono ?_;
+        simp +contextual [ Nat.add_mod ];
+        exact fun a ha ha' => by simp +decide [ Nat.add_sub_of_le ( Nat.mod_lt n ( pow_pos hp.pos 2 ) |> Nat.le_of_lt ) ] ;
+      refine h_inf_not_squarefree.mono ?_;
+      intro a ha; obtain ⟨ ha₁, ha₂ ⟩ := ha; rw [ ← Nat.dvd_iff_mod_eq_zero ] at ha₂; obtain ⟨ k, hk ⟩ := ha₂; simp_all +decide [ Nat.squarefree_mul_iff ] ;
+      simp_all +decide [ sq, Nat.squarefree_mul_iff ];
+      aesop;
+    contrapose! h_inf_not_squarefree;
+    exact Exists.elim ( h.nonempty ) fun n hn => ⟨ n, Set.not_infinite.mpr <| by simpa using hn ⟩;
+  · aesop
+
+/-
+Property P_bar_infty is unaffected by finite modifications of the set.
+-/
+theorem PropertyP_bar_infty_finite_diff (A B : Set ℕ) (h : (A \ B).Finite ∧ (B \ A).Finite) : PropertyP_bar_infty A ↔ PropertyP_bar_infty B := by
+  constructor <;> intro h' <;> unfold PropertyP_bar_infty at *;
+  · refine Set.Infinite.mono ?_ h';
+    intro n hn
+    have h_finite : {a ∈ B | ¬Squarefree (n + a)} ⊆ ({a ∈ A | ¬Squarefree (n + a)} ∪ (B \ A)) := by
+      exact fun x hx => if hx' : x ∈ A then Or.inl ⟨ hx', hx.2 ⟩ else Or.inr ⟨ hx.1, hx' ⟩;
+    exact Set.Finite.subset ( hn.union h.2 ) h_finite;
+  · refine' h'.diff ( h.1.union h.2 |> Set.Finite.image fun x => x ) |> fun h'' => h''.mono _;
+    intro n hn; simp_all +decide ;
+    refine' Set.Finite.subset ( hn.1.union ( h.1.union h.2 ) ) _;
+    intro a ha; by_cases ha' : a ∈ B <;> aesop;
+
+/-
+AlmostAdmissible is unaffected by finite modifications of the set.
+-/
+theorem AlmostAdmissible_finite_diff (A B : Set ℕ) (h : (A \ B).Finite ∧ (B \ A).Finite) : AlmostAdmissible A ↔ AlmostAdmissible B := by
+  constructor;
+  · intro hA p hp
+    obtain ⟨b, hb₁, hb₂⟩ := hA p hp
+    use b;
+    exact ⟨ hb₁, Set.Finite.subset ( hb₂.union ( h.1.union h.2 ) ) fun x hx => by by_cases hx' : x ∈ A <;> aesop ⟩;
+  · -- For any prime $p$, choose $b$ such that $B \mod p^2 \neq b$. Since $A \mod p^2$ can differ from $B \mod p^2$ by at most a finite number of elements, we can adjust $b$ to avoid elements of $A$ that are congruent to $b$ modulo $p^2$.
+    intros hB
+    intro p hp
+    obtain ⟨b, hb⟩ := hB p hp
+    have h_finite_diff : ({a ∈ A | a % p^2 = b}).Finite := by
+      exact Set.Finite.subset ( h.1.union hb.2 |> Set.Finite.union <| h.2 ) fun x hx => by by_cases hx' : x ∈ B <;> aesop;
+    exact ⟨ b, hb.1, h_finite_diff ⟩
+  
+/-
+Property P_bar is downwardly monotone.
+-/
+lemma PropertyP_bar_monotone (A B : Set ℕ) (h : A ⊆ B) (hB : PropertyP_bar B) : PropertyP_bar A := by
+  exact Set.Infinite.mono ( fun n hn => by rintro a ha; exact hn a ( h ha ) ) hB
+
+/-
+Property P_bar_infty is downwardly monotone.
+-/
+lemma PropertyP_bar_infty_monotone (A B : Set ℕ) (h : A ⊆ B) (hB : PropertyP_bar_infty B) : PropertyP_bar_infty A := by
+  refine Set.Infinite.mono ?_ ( hB );
+  exact fun n hn => Set.Finite.subset ( hn ) fun x hx => ⟨ h hx.1, hx.2 ⟩
+  
+/-
+The upper density of a set A of natural numbers.
+-/
+def upperDensity (A : Set ℕ) : ℝ :=
+  Filter.limsup (fun (n : ℕ) => ((A ∩ Set.Icc 1 n).ncard : ℝ) / n) Filter.atTop
 
 /-
 A set A has natural density d if the proportion of elements in A up to n tends to d as n goes to infinity.
@@ -272,123 +389,6 @@ theorem SF_density : HasNaturalDensity SF (6 / Real.pi ^ 2) := by
     · exact fun b => ⟨ b ^ 2, fun a ha => by nlinarith [ Nat.lt_succ_sqrt a ] ⟩;
   refine h_sum_approx.congr' ( by filter_upwards [ Filter.eventually_gt_atTop 0 ] with N hN using by simp +decide [div_eq_mul_inv,
     mul_assoc, mul_comm, Finset.mul_sum _ _ _, hN.ne'] )
-
-/-
-A set A has property P_bar if for infinitely many n, n+a is squarefree for all a in A.
--/
-def PropertyP_bar (A : Set ℕ) : Prop := ({n | ∀ a ∈ A, Squarefree (n + a)}).Infinite
-
-/-
-A set A has property P_bar_infty if for infinitely many n, n+a is squarefree for all but finitely many a in A.
--/
-def PropertyP_bar_infty (A : Set ℕ) : Prop := ({n | ({a ∈ A | ¬Squarefree (n + a)}).Finite}).Infinite
-
-/-
-A set A is admissible if for every prime p, there is a residue class mod p^2 that A avoids.
--/
-def Admissible (A : Set ℕ) : Prop :=
-  ∀ p, Nat.Prime p → ∃ b, b < p^2 ∧ ∀ a ∈ A, a % p^2 ≠ b
-
-/-
-A set A is almost admissible if for every prime p, there is a residue class mod p^2 that contains only finitely many elements of A.
--/
-def AlmostAdmissible (A : Set ℕ) : Prop :=
-  ∀ p, Nat.Prime p → ∃ b, b < p^2 ∧ ({a ∈ A | a % p^2 = b}).Finite
-
-/-
-Every set with property P_bar has property P_bar_infty.
--/
-theorem P_bar_implies_P_bar_infty (A : Set ℕ) (h : PropertyP_bar A) : PropertyP_bar_infty A := by
-  -- By definition of PropertyP_bar, there are infinitely many n such that for all a in A, n+a is squarefree.
-  have h_inf : {n | ∀ a ∈ A, Squarefree (n + a)}.Infinite := by
-    exact h ;
-  exact h_inf.mono fun n hn => Set.Finite.subset ( Set.finite_singleton 0 ) fun x hx => by aesop;
-
-/-
-Every admissible set is almost admissible.
--/
-theorem Admissible_implies_AlmostAdmissible (A : Set ℕ) (h : Admissible A) : AlmostAdmissible A := by
-  -- By definition of admissible, for every prime $p$, there exists a residue class $b \pmod{p^2}$ such that no element of $A$ is congruent to $b \pmod{p^2}$.
-  intro p hp
-  obtain ⟨b, hb₁, hb₂⟩ := h p hp
-  use b
-  simp [hb₁];
-  exact Set.finite_empty.subset fun x hx => hb₂ x hx.1 hx.2
-
-/-
-Every set with property P_bar_infty is almost admissible.
--/
-theorem PropertyP_bar_infty_implies_AlmostAdmissible (A : Set ℕ) (h : PropertyP_bar_infty A) : AlmostAdmissible A := by
-  intro p hp;
-  -- Fix a prime $p$.
-  by_cases h_finite : ∀ b < p ^ 2, Set.Infinite {a ∈ A | a % p ^ 2 = b};
-  · -- If for every $b < p^2$, the set $\{a \in A \mid a \equiv b \pmod{p^2}\}$ is infinite, then for any $n$, the set $\{a \in A \mid n + a \text{ is not squarefree}\}$ is infinite.
-    have h_inf_not_squarefree : ∀ n, Set.Infinite {a ∈ A | ¬Squarefree (n + a)} := by
-      intro n
-      have h_inf_not_squarefree : Set.Infinite {a ∈ A | (n + a) % p ^ 2 = 0} := by
-        have h_inf_not_squarefree : Set.Infinite {a ∈ A | a % p ^ 2 = (p ^ 2 - n % p ^ 2) % p ^ 2} := by
-          exact h_finite _ ( Nat.mod_lt _ ( pow_pos hp.pos 2 ) );
-        refine h_inf_not_squarefree.mono ?_;
-        simp +contextual [ Nat.add_mod ];
-        exact fun a ha ha' => by simp +decide [ Nat.add_sub_of_le ( Nat.mod_lt n ( pow_pos hp.pos 2 ) |> Nat.le_of_lt ) ] ;
-      refine h_inf_not_squarefree.mono ?_;
-      intro a ha; obtain ⟨ ha₁, ha₂ ⟩ := ha; rw [ ← Nat.dvd_iff_mod_eq_zero ] at ha₂; obtain ⟨ k, hk ⟩ := ha₂; simp_all +decide [ Nat.squarefree_mul_iff ] ;
-      simp_all +decide [ sq, Nat.squarefree_mul_iff ];
-      aesop;
-    contrapose! h_inf_not_squarefree;
-    exact Exists.elim ( h.nonempty ) fun n hn => ⟨ n, Set.not_infinite.mpr <| by simpa using hn ⟩;
-  · aesop
-
-/-
-Property P_bar_infty is unaffected by finite modifications of the set.
--/
-theorem PropertyP_bar_infty_finite_diff (A B : Set ℕ) (h : (A \ B).Finite ∧ (B \ A).Finite) : PropertyP_bar_infty A ↔ PropertyP_bar_infty B := by
-  constructor <;> intro h' <;> unfold PropertyP_bar_infty at *;
-  · refine Set.Infinite.mono ?_ h';
-    intro n hn
-    have h_finite : {a ∈ B | ¬Squarefree (n + a)} ⊆ ({a ∈ A | ¬Squarefree (n + a)} ∪ (B \ A)) := by
-      exact fun x hx => if hx' : x ∈ A then Or.inl ⟨ hx', hx.2 ⟩ else Or.inr ⟨ hx.1, hx' ⟩;
-    exact Set.Finite.subset ( hn.union h.2 ) h_finite;
-  · refine' h'.diff ( h.1.union h.2 |> Set.Finite.image fun x => x ) |> fun h'' => h''.mono _;
-    intro n hn; simp_all +decide ;
-    refine' Set.Finite.subset ( hn.1.union ( h.1.union h.2 ) ) _;
-    intro a ha; by_cases ha' : a ∈ B <;> aesop;
-
-/-
-AlmostAdmissible is unaffected by finite modifications of the set.
--/
-theorem AlmostAdmissible_finite_diff (A B : Set ℕ) (h : (A \ B).Finite ∧ (B \ A).Finite) : AlmostAdmissible A ↔ AlmostAdmissible B := by
-  constructor;
-  · intro hA p hp
-    obtain ⟨b, hb₁, hb₂⟩ := hA p hp
-    use b;
-    exact ⟨ hb₁, Set.Finite.subset ( hb₂.union ( h.1.union h.2 ) ) fun x hx => by by_cases hx' : x ∈ A <;> aesop ⟩;
-  · -- For any prime $p$, choose $b$ such that $B \mod p^2 \neq b$. Since $A \mod p^2$ can differ from $B \mod p^2$ by at most a finite number of elements, we can adjust $b$ to avoid elements of $A$ that are congruent to $b$ modulo $p^2$.
-    intros hB
-    intro p hp
-    obtain ⟨b, hb⟩ := hB p hp
-    have h_finite_diff : ({a ∈ A | a % p^2 = b}).Finite := by
-      exact Set.Finite.subset ( h.1.union hb.2 |> Set.Finite.union <| h.2 ) fun x hx => by by_cases hx' : x ∈ B <;> aesop;
-    exact ⟨ b, hb.1, h_finite_diff ⟩
-  
-/-
-Property P_bar is downwardly monotone.
--/
-lemma PropertyP_bar_monotone (A B : Set ℕ) (h : A ⊆ B) (hB : PropertyP_bar B) : PropertyP_bar A := by
-  exact Set.Infinite.mono ( fun n hn => by rintro a ha; exact hn a ( h ha ) ) hB
-
-/-
-Property P_bar_infty is downwardly monotone.
--/
-lemma PropertyP_bar_infty_monotone (A B : Set ℕ) (h : A ⊆ B) (hB : PropertyP_bar_infty B) : PropertyP_bar_infty A := by
-  refine Set.Infinite.mono ?_ ( hB );
-  exact fun n hn => Set.Finite.subset ( hn ) fun x hx => ⟨ h hx.1, hx.2 ⟩
-  
-/-
-The upper density of a set A of natural numbers.
--/
-def upperDensity (A : Set ℕ) : ℝ :=
-  Filter.limsup (fun (n : ℕ) => ((A ∩ Set.Icc 1 n).ncard : ℝ) / n) Filter.atTop
 
 /-
 The number of integers in an interval of length L that are congruent to a modulo m is L/m + O(1).
@@ -920,53 +920,6 @@ lemma sieve_strict_bound (A : Set ℕ) (C : ℕ)
         linarith;
       refine' lt_of_le_of_lt _ h_limit;
       exact le_of_tendsto_of_tendsto tendsto_const_nhds ‹_› ( Filter.eventually_atTop.mpr ⟨ C + 1, fun K hK => sieve_finite_bound A C K ( by linarith ) h1 h2 ⟩ )
-
-/-
-If A has property P_bar_infty, then its upper density is strictly less than 6/pi^2.
--/
-theorem theorem_overp_i (A : Set ℕ) (h : PropertyP_bar_infty A) :
-    upperDensity A < 6 / Real.pi^2 := by
-      obtain ⟨ n₁, n₂, h₁, h₂ ⟩ := P_bar_infty_implies_pair A h;
-      -- By `upperDensity_finite_diff`, `upperDensity A = upperDensity A'`.
-      have h_upperDensity_eq : upperDensity A = upperDensity {a ∈ A | Squarefree (n₁ + a) ∧ Squarefree (n₂ + a)} := by
-        apply upperDensity_finite_diff;
-        exact ⟨ h₂.subset fun x hx => by aesop, Set.finite_empty.subset fun x hx => by aesop ⟩;
-      -- Apply `sieve_strict_bound` to $A'$ with $C = n_2 - n_1$.
-      have h_sieve : ∀ p, Nat.Prime p → ∃ b, b < p^2 ∧ ∀ a ∈ {a ∈ A | Squarefree (n₁ + a) ∧ Squarefree (n₂ + a)}, a % p^2 ≠ b := by
-        intro p hp
-        use (p^2 - n₁ % p^2) % p^2;
-        refine' ⟨ Nat.mod_lt _ ( pow_pos hp.pos _ ), fun a ha ha' => _ ⟩;
-        -- Since $a \equiv -n_1 \pmod{p^2}$, we have $n_1 + a \equiv 0 \pmod{p^2}$, which implies $p^2 \mid (n_1 + a)$.
-        have h_div : p^2 ∣ (n₁ + a) := by
-          rw [ Nat.dvd_iff_mod_eq_zero ];
-          rw [ Nat.add_mod, ha' ];
-          simp +decide [ Nat.add_sub_of_le ( Nat.mod_lt _ ( pow_pos hp.pos 2 ) |> Nat.le_of_lt ) ];
-        exact absurd ( ha.2.1.squarefree_of_dvd h_div ) ( by rw [ sq, Nat.squarefree_mul_iff ] ; aesop );
-      have h_sieve_strict : ∀ p, Nat.Prime p → p > n₂ - n₁ → ∃ b1 b2, b1 < p^2 ∧ b2 < p^2 ∧ b1 ≠ b2 ∧ (∀ a ∈ {a ∈ A | Squarefree (n₁ + a) ∧ Squarefree (n₂ + a)}, a % p^2 ≠ b1) ∧ (∀ a ∈ {a ∈ A | Squarefree (n₁ + a) ∧ Squarefree (n₂ + a)}, a % p^2 ≠ b2) := by
-        intro p hp hp_gt
-        use (p^2 - n₁ % p^2) % p^2, (p^2 - n₂ % p^2) % p^2;
-        refine' ⟨ Nat.mod_lt _ ( pow_pos hp.pos _ ), Nat.mod_lt _ ( pow_pos hp.pos _ ), _, _, _ ⟩;
-        · intro h_mod_eq
-          have h_div : p^2 ∣ (n₂ - n₁) := by
-            have h_div : n₂ % p^2 = n₁ % p^2 := by
-              simp_all +decide [ ← ZMod.natCast_eq_natCast_iff' ];
-              rw [ Nat.cast_sub ( Nat.le_of_lt <| Nat.mod_lt _ <| pow_pos hp.pos _ ), Nat.cast_sub ( Nat.le_of_lt <| Nat.mod_lt _ <| pow_pos hp.pos _ ) ] at h_mod_eq ; aesop;
-            rw [ ← Nat.mod_add_div n₂ ( p ^ 2 ), ← Nat.mod_add_div n₁ ( p ^ 2 ), h_div ];
-            norm_num [ Nat.add_sub_add_left, ← mul_tsub ];
-          nlinarith [ Nat.le_of_dvd ( Nat.sub_pos_of_lt h₁ ) h_div, Nat.sub_add_cancel h₁.le ];
-        · intro a ha H; have := Nat.mod_eq_of_lt ( show n₁ % p ^ 2 < p ^ 2 from Nat.mod_lt _ ( pow_pos hp.pos _ ) ) ; simp_all +decide [ ← ZMod.natCast_eq_natCast_iff' ] ;
-          -- Since $a \equiv -n₁ \pmod{p^2}$, we have $n₁ + a \equiv 0 \pmod{p^2}$, which contradicts the assumption that $n₁ + a$ is squarefree.
-          have h_contradiction : p^2 ∣ (n₁ + a) := by
-            rw [ ← ZMod.natCast_eq_zero_iff ] ; simp_all +decide [ Nat.cast_sub ( show n₁ % p ^ 2 ≤ p ^ 2 from Nat.le_of_lt <| Nat.mod_lt _ <| pow_pos hp.pos _ ) ] ;
-          have := ha.1.2.squarefree_of_dvd h_contradiction; simp_all +decide [ sq, Nat.squarefree_mul_iff ] ;
-        · intro a ha H; have := Nat.mod_eq_of_lt ( show n₂ % p ^ 2 < p ^ 2 from Nat.mod_lt _ ( pow_pos hp.pos _ ) ) ; simp_all +decide [ ← ZMod.natCast_eq_natCast_iff' ] ;
-          -- Since $a \equiv -n₂ \pmod{p^2}$, we have $n₂ + a \equiv 0 \pmod{p^2}$, which contradicts the assumption that $n₂ + a$ is squarefree.
-          have h_contradiction : p^2 ∣ (n₂ + a) := by
-            rw [ ← ZMod.natCast_eq_zero_iff ] ; simp_all +decide [ Nat.cast_sub ( show n₂ % p ^ 2 ≤ p ^ 2 from Nat.le_of_lt <| Nat.mod_lt _ <| pow_pos hp.pos _ ) ] ;
-          have := ha.2.2.squarefree_of_dvd h_contradiction; simp_all +decide [ sq, Nat.squarefree_mul_iff ] ;
-      exact h_upperDensity_eq.symm ▸ sieve_strict_bound _ _ h_sieve h_sieve_strict
-
-#print axioms theorem_overp_i
 
 /-
 The tail sum of 1/(p (log log p)^2) tends to 0 as P goes to infinity.
@@ -2207,6 +2160,50 @@ lemma lowerDensity_A_seq_bound_nat (n : ℕ → ℕ) (K : ℕ) (hK : K ≥ 3) (h
         exact div_le_one_of_le₀ ( mod_cast le_trans ( Set.ncard_le_ncard ( show A_seq n ∩ Set.Icc 1 x ⊆ Set.Icc 1 x from fun y hy => hy.2 ) ) ( by norm_num [ Set.ncard_eq_toFinset_card' ] ) ) ( by positivity );
       · convert ha₁.trans_le _ using 1;
         linarith
+/-
+If A has property P_bar_infty (in particular, if it has property P_bar), then its upper density is strictly less than 6/pi^2.
+-/
+theorem theorem_overp_i (A : Set ℕ) (h : PropertyP_bar_infty A) :
+    upperDensity A < 6 / Real.pi^2 := by
+      obtain ⟨ n₁, n₂, h₁, h₂ ⟩ := P_bar_infty_implies_pair A h;
+      -- By `upperDensity_finite_diff`, `upperDensity A = upperDensity A'`.
+      have h_upperDensity_eq : upperDensity A = upperDensity {a ∈ A | Squarefree (n₁ + a) ∧ Squarefree (n₂ + a)} := by
+        apply upperDensity_finite_diff;
+        exact ⟨ h₂.subset fun x hx => by aesop, Set.finite_empty.subset fun x hx => by aesop ⟩;
+      -- Apply `sieve_strict_bound` to $A'$ with $C = n_2 - n_1$.
+      have h_sieve : ∀ p, Nat.Prime p → ∃ b, b < p^2 ∧ ∀ a ∈ {a ∈ A | Squarefree (n₁ + a) ∧ Squarefree (n₂ + a)}, a % p^2 ≠ b := by
+        intro p hp
+        use (p^2 - n₁ % p^2) % p^2;
+        refine' ⟨ Nat.mod_lt _ ( pow_pos hp.pos _ ), fun a ha ha' => _ ⟩;
+        -- Since $a \equiv -n_1 \pmod{p^2}$, we have $n_1 + a \equiv 0 \pmod{p^2}$, which implies $p^2 \mid (n_1 + a)$.
+        have h_div : p^2 ∣ (n₁ + a) := by
+          rw [ Nat.dvd_iff_mod_eq_zero ];
+          rw [ Nat.add_mod, ha' ];
+          simp +decide [ Nat.add_sub_of_le ( Nat.mod_lt _ ( pow_pos hp.pos 2 ) |> Nat.le_of_lt ) ];
+        exact absurd ( ha.2.1.squarefree_of_dvd h_div ) ( by rw [ sq, Nat.squarefree_mul_iff ] ; aesop );
+      have h_sieve_strict : ∀ p, Nat.Prime p → p > n₂ - n₁ → ∃ b1 b2, b1 < p^2 ∧ b2 < p^2 ∧ b1 ≠ b2 ∧ (∀ a ∈ {a ∈ A | Squarefree (n₁ + a) ∧ Squarefree (n₂ + a)}, a % p^2 ≠ b1) ∧ (∀ a ∈ {a ∈ A | Squarefree (n₁ + a) ∧ Squarefree (n₂ + a)}, a % p^2 ≠ b2) := by
+        intro p hp hp_gt
+        use (p^2 - n₁ % p^2) % p^2, (p^2 - n₂ % p^2) % p^2;
+        refine' ⟨ Nat.mod_lt _ ( pow_pos hp.pos _ ), Nat.mod_lt _ ( pow_pos hp.pos _ ), _, _, _ ⟩;
+        · intro h_mod_eq
+          have h_div : p^2 ∣ (n₂ - n₁) := by
+            have h_div : n₂ % p^2 = n₁ % p^2 := by
+              simp_all +decide [ ← ZMod.natCast_eq_natCast_iff' ];
+              rw [ Nat.cast_sub ( Nat.le_of_lt <| Nat.mod_lt _ <| pow_pos hp.pos _ ), Nat.cast_sub ( Nat.le_of_lt <| Nat.mod_lt _ <| pow_pos hp.pos _ ) ] at h_mod_eq ; aesop;
+            rw [ ← Nat.mod_add_div n₂ ( p ^ 2 ), ← Nat.mod_add_div n₁ ( p ^ 2 ), h_div ];
+            norm_num [ Nat.add_sub_add_left, ← mul_tsub ];
+          nlinarith [ Nat.le_of_dvd ( Nat.sub_pos_of_lt h₁ ) h_div, Nat.sub_add_cancel h₁.le ];
+        · intro a ha H; have := Nat.mod_eq_of_lt ( show n₁ % p ^ 2 < p ^ 2 from Nat.mod_lt _ ( pow_pos hp.pos _ ) ) ; simp_all +decide [ ← ZMod.natCast_eq_natCast_iff' ] ;
+          -- Since $a \equiv -n₁ \pmod{p^2}$, we have $n₁ + a \equiv 0 \pmod{p^2}$, which contradicts the assumption that $n₁ + a$ is squarefree.
+          have h_contradiction : p^2 ∣ (n₁ + a) := by
+            rw [ ← ZMod.natCast_eq_zero_iff ] ; simp_all +decide [ Nat.cast_sub ( show n₁ % p ^ 2 ≤ p ^ 2 from Nat.le_of_lt <| Nat.mod_lt _ <| pow_pos hp.pos _ ) ] ;
+          have := ha.1.2.squarefree_of_dvd h_contradiction; simp_all +decide [ sq, Nat.squarefree_mul_iff ] ;
+        · intro a ha H; have := Nat.mod_eq_of_lt ( show n₂ % p ^ 2 < p ^ 2 from Nat.mod_lt _ ( pow_pos hp.pos _ ) ) ; simp_all +decide [ ← ZMod.natCast_eq_natCast_iff' ] ;
+          -- Since $a \equiv -n₂ \pmod{p^2}$, we have $n₂ + a \equiv 0 \pmod{p^2}$, which contradicts the assumption that $n₂ + a$ is squarefree.
+          have h_contradiction : p^2 ∣ (n₂ + a) := by
+            rw [ ← ZMod.natCast_eq_zero_iff ] ; simp_all +decide [ Nat.cast_sub ( show n₂ % p ^ 2 ≤ p ^ 2 from Nat.le_of_lt <| Nat.mod_lt _ <| pow_pos hp.pos _ ) ] ;
+          have := ha.2.2.squarefree_of_dvd h_contradiction; simp_all +decide [ sq, Nat.squarefree_mul_iff ] ;
+      exact h_upperDensity_eq.symm ▸ sieve_strict_bound _ _ h_sieve h_sieve_strict
 
 /-
 For any epsilon > 0, there exists a set A with property P_bar such that its lower density is at least 6/pi^2 - epsilon.
@@ -2231,4 +2228,5 @@ theorem theorem_overp_ii (assumps : SieveAssumptions) :
         · exact sub_le_sub_left ( le_of_lt ( hK₁ K ( le_max_left _ _ ) ) ) _;
         · exact le_trans ( by linarith ) ( le_max_right _ _ ) |> le_trans ( le_max_right _ _ )
 
+#print axioms theorem_overp_i
 #print axioms theorem_overp_ii
