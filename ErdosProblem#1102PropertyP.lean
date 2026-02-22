@@ -1,6 +1,4 @@
 /-
-Note that this project is not quite finished yet. It will soon!
-
 We say that a sequence of positive integers $A$ has:
 
 - property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
@@ -857,11 +855,25 @@ theorem erdos_1102.density_zero_of_P
     (h_inc : StrictMono A)
     (hP : HasPropertyP (range A)) :
     Tendsto (fun j => (A j / j : ℝ)) atTop atTop := by
-  apply_rules [ tendsto_div_of_density_zero ];
-  have h_shift_density_zero : HasNaturalDensity (Set.image (fun x => x + 1) (Set.range A)) 0 := by
-    apply Theorem1_i;
-    exact?;
-  exact?
+  convert tendsto_div_of_density_zero A h_inc _;
+  -- Since the range of A is a subset of the set of numbers that are not squarefree, and squarefree numbers have density 0, the range of A must also have density 0.
+  apply Classical.byContradiction
+  intro h_nonzero_density;
+  obtain ⟨δ, hδ_pos, hδ⟩ : ∃ δ > 0, upperDensity (Set.range A) = δ := by
+    refine' ⟨ _, _, rfl ⟩;
+    contrapose! h_nonzero_density;
+    refine' tendsto_order.2 ⟨ _, _ ⟩;
+    · exact fun x hx => Filter.Eventually.of_forall fun n => hx.trans_le <| by positivity;
+    · intro a ha; have := h_nonzero_density; simp_all +decide [ upperDensity ] ;
+      rw [ Filter.limsup_eq ] at h_nonzero_density;
+      simp +zetaDelta at *;
+      exact Exists.elim ( show ∃ x, x ∈ { a : ℝ | ∃ a_1 : ℕ, ∀ b : ℕ, a_1 ≤ b → ( Set.range A ∩ Set.Icc 1 b |> Set.ncard : ℝ ) / b ≤ a } ∧ x < a from exists_lt_of_csInf_lt ( show { a : ℝ | ∃ a_1 : ℕ, ∀ b : ℕ, a_1 ≤ b → ( Set.range A ∩ Set.Icc 1 b |> Set.ncard : ℝ ) / b ≤ a }.Nonempty from ⟨ _, ⟨ 0, fun n hn => div_le_one_of_le₀ ( mod_cast le_trans ( Set.ncard_le_ncard <| Set.inter_subset_right ) <| by simp +decide [ Set.ncard_eq_toFinset_card' ] ) <| by positivity ⟩ ⟩ ) <| lt_of_le_of_lt h_nonzero_density ha ) fun x hx => ⟨ hx.1.choose, fun n hn => lt_of_le_of_lt ( hx.1.choose_spec n hn ) hx.2 ⟩;
+  have := frequent_dense_shifts_of_positive_density ( Set.range A ) ( by linarith );
+  obtain ⟨ r, c, hc_pos, hc ⟩ := this;
+  obtain ⟨ n, hn ⟩ := infinite_squarefree_of_frequent_dense_shifts ( Set.range A ) ( S_shifts r ) c hc_pos hc;
+  exact hn.2 ( Set.Finite.subset ( hP n ( Nat.pos_of_ne_zero ( by rintro rfl; exact absurd hn.1 ( by
+    simp +decide [ S_shifts ];
+    exact fun x y hx hy => Nat.sub_ne_zero_of_lt ( by linarith [ Finset.mem_Icc.mp ( Finset.mem_filter.mp hy |>.1 ) ] ) ) ) ) ) fun x hx => by aesop )
 
 theorem erdos_1102.exists_sequence_with_P
     (f : ℕ → ℕ) (h_inf : Tendsto f atTop atTop)
@@ -870,7 +882,7 @@ theorem erdos_1102.exists_sequence_with_P
     HasPropertyP (range A) ∧
     ∀ j : ℕ, (A j : ℝ) / j ≤ f j := by
   refine' ⟨ fun j => a_seq f h_inf j, _, _, _ ⟩;
-  · exact?;
+  · exact a_seq_strict_mono f h_inf;
   · intro n hn;
     have h_finite : ∀ n ≥ 1, {a ∈ Set.range (a_seq f h_inf) | Squarefree (n + a)}.Finite := by
       convert A_constructed_PropertyP_positive f h_inf using 1;
@@ -879,10 +891,9 @@ theorem erdos_1102.exists_sequence_with_P
       · refine Set.Finite.subset ( h n hn |> Set.Finite.union <| Set.finite_singleton ( a_seq f h_inf 0 ) ) ?_;
         intro a ha; cases' ha with ha₁ ha₂; cases' ha₁ with j hj; cases' j with j <;> aesop;
     exact h_finite n hn;
-  · intro j; by_cases hj : 1 ≤ j <;> simp_all +decide [ div_le_iff₀ ] ;
+  · intro j; by_cases hj : 1 ≤ j <;> simp_all +decide ;
     field_simp;
     exact_mod_cast le_trans ( a_seq_upper_bound f h_inf j hj ) ( mul_le_mul_of_nonneg_left ( W_k_le_f f h_inf ( fun n => Nat.pos_of_ne_zero ( h_pos n ) ) j ) ( Nat.cast_nonneg _ ) )
 
 #print axioms erdos_1102.density_zero_of_P
-
 #print axioms erdos_1102.exists_sequence_with_P

@@ -1,6 +1,4 @@
 /-
-Note that this project is not quite finished yet. It will soon!
-
 We say that a sequence of positive integers $A$ has:
 
 - property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
