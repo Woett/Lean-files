@@ -2767,7 +2767,7 @@ theorem erdos_1102.upper_density_Q
     convert TheoremQ_upper ( Set.range A ) hQ using 1;
   -- Since $A$ is strictly monotone, the number of elements in $\text{range}(A)$ up to $j$ is at most $j$.
   have h_card_le_j : ∀ j, ((Set.range A ∩ Set.Icc 1 j).ncard : ℝ) ≤ j := by
-    intro j; exact_mod_cast le_trans ( Set.ncard_le_ncard ( show Set.range A ∩ Set.Icc 1 j ⊆ Set.Icc 1 j from fun x hx => hx.2 ) ) ( by simpa [ Set.ncard_eq_toFinset_card' ] ) ;
+    intro j; exact_mod_cast le_trans ( Set.ncard_le_ncard ( show Set.range A ∩ Set.Icc 1 j ⊆ Set.Icc 1 j from fun x hx => hx.2 ) ) ( by simp [ Set.ncard_eq_toFinset_card' ] ) ;
   -- Since $A$ is strictly monotone, the number of elements in $\text{range}(A)$ up to $j$ is at least $j / A_j$.
   have h_card_ge_j_div_Aj : ∀ j, ((Set.range A ∩ Set.Icc 1 (A j)).ncard : ℝ) ≥ j := by
     intros j
@@ -2832,5 +2832,4 @@ theorem erdos_1102.lower_density_Q_exists :
   use A_enum; aesop;
 
 #print axioms erdos_1102.upper_density_Q
-
 #print axioms erdos_1102.lower_density_Q_exists
