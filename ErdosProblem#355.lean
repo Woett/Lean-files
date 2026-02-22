@@ -5,7 +5,7 @@ W. van Doorn and V. Kovač, Lacunary sequences whose reciprocal sums represent a
 
 Below you can find a formalization of this result, with thanks to Boris Alexeev for being kind enough to slightly alter the code to get rid of all the warnings. 
 
-As for the exact result that we will prove: even though the above paper shows that any lacunarity constant smaller than 2 is possible, the formalization below is based on a simplified proof that Vjeko wrote, which has lacunarity constant 1.01. This simplified proof was given to Gemini3 in order to make it more easily formalizable, which was eventually done with the use of Aristotle (and a whole lot of patience on my end).
+As for the exact result that we will prove: even though the above paper shows that any lacunarity constant smaller than 2 is possible, the formalization below is based on a simplified proof that Vjeko wrote, which has lacunarity constant 1.01. This simplified proof was given to Gemini3 in order to make it more easily formalizable, which was eventually done with the use of Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) (and a whole lot of patience on my end).
 
 At the very end you can find the statement of Erdős Problem #355 taken from the Formal Conjectures project by Google DeepMind, which we also prove. 
 
@@ -1025,3 +1025,4 @@ theorem erdos_355 :
 
 #print axioms maintheorem
 #print axioms erdos_355
+
