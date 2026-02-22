@@ -3,7 +3,7 @@ For an odd integer $p > 1$, let $A_p$ be the sequence of integers of the form $2
 
 Wouter van Doorn and Anneroos R. F. Everts, Smooth sums with small spacings. arXiv:2511.04585 (2025).
 
-In January 2026 Borix Alexeev successfully fed the above paper into Aristotle from Harmonic to get it formalized in Lean, and the result can be found here: 
+In January 2026 Borix Alexeev successfully fed the above paper into Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) to get it formalized in Lean, and the result can be found here: 
 
 https://github.com/plby/lean-proofs/blob/main/ErdosProblems/Erdos845.md
 
@@ -1466,6 +1466,7 @@ theorem main_result_proven (n : ℕ) (h : 0 < n) :
           · rw [← I_sol_mem_iff n h]; exact hi
 
 #print axioms main_result_proven
+
 
 
 
