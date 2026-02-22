@@ -1,4 +1,6 @@
 /-
+Note that this project is not quite finished yet. It will soon!
+
 We say that a sequence of positive integers $A$ has:
 
 - property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
@@ -882,4 +884,5 @@ theorem erdos_1102.exists_sequence_with_P
     exact_mod_cast le_trans ( a_seq_upper_bound f h_inf j hj ) ( mul_le_mul_of_nonneg_left ( W_k_le_f f h_inf ( fun n => Nat.pos_of_ne_zero ( h_pos n ) ) j ) ( Nat.cast_nonneg _ ) )
 
 #print axioms erdos_1102.density_zero_of_P
+
 #print axioms erdos_1102.exists_sequence_with_P
