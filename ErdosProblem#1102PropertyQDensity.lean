@@ -1,4 +1,6 @@
 /-
+Note that this project is not quite finished yet. It will soon!
+
 We say that a sequence of positive integers $A$ has:
 
 - property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
@@ -2830,4 +2832,5 @@ theorem erdos_1102.lower_density_Q_exists :
   use A_enum; aesop;
 
 #print axioms erdos_1102.upper_density_Q
+
 #print axioms erdos_1102.lower_density_Q_exists
