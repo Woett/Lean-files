@@ -1,4 +1,6 @@
 /-
+Note that this project is not quite finished yet. It will soon!
+
 We say that a sequence of positive integers $A$ has:
 
 - property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
@@ -1001,4 +1003,5 @@ lemma prob_condition_of_growth_v2 (h : SieveAssumptions) :
   ∃ C > 0, ∀ᶠ j in Filter.atTop,
     ∀ x, x ≥ Real.exp (C * j / Real.log j) →
     (j : ℝ) * C_freq * failure_prob_sum_2 x < 1 := by
+
       apply_mod_cast prob_condition_of_growth h
