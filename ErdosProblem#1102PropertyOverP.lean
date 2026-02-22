@@ -12,7 +12,7 @@ W. van Doorn and T. Tao, Growth rates of sequences governed by the squarefree pr
 
 Thanks to Aristotle, the proof of the following theorem is formalized in the Lean file below:
 
-Any sequence with property $\overline{P}$ or $\overline{P}_infty$ has density strictly smaller than $6/\pi^2$. On the other hand, for every $\epsilon > 0$ there exist a sequence with property $\overline{P}$ (which therefore has property $\overline{P}_infty$ as well) with lower density larger than $6/\pi^2 - \epsilon$.
+Any sequence with property $\overline{P}$ or $\overline{P}_infty$ has density strictly smaller than $6/\pi^2$. On the other hand, for every $\epsilon > 0$ there exists a sequence with property $\overline{P}$ (which therefore has property $\overline{P}_infty$ as well) with lower density larger than $6/\pi^2 - \epsilon$.
 
 The proof of the second part is conditional on various asymptotics on sums and products on primes, which all readily follow from the prime number theorem. These asymptotics are bundled as the structure SieveAssumptions that you can find at the start of the formalization below.
 
@@ -2229,4 +2229,5 @@ theorem theorem_overp_ii (assumps : SieveAssumptions) :
         · exact le_trans ( by linarith ) ( le_max_right _ _ ) |> le_trans ( le_max_right _ _ )
 
 #print axioms theorem_overp_i
+
 #print axioms theorem_overp_ii
