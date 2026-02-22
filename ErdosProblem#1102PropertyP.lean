@@ -10,15 +10,21 @@ Solving Erdős Problem #1102 (https://www.erdosproblems.com/1102), Terence Tao a
 
 W. van Doorn and T. Tao, Growth rates of sequences governed by the squarefree properties of their translates. arXiv:2512.01087 (2025).
 
-Thanks to Aristotle, the proof of the following theorem is formalized in the Lean file below:
+Thanks to Aristotle from Harmonic (aristotle-harmonic@harmonic.fun), the proof of the following theorem is formalized in the Lean file below:
 
 Any sequence with property $P$ has density $0$. On the other hand, the decay rate of this density can be arbitrarily slow.
+
+At the very end you can find the (relevant parts of the) statement of Erdős Problem #1102 taken from the Formal Conjectures project by Google DeepMind, which we also prove. 
+
+https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjectures/ErdosProblems/1102.lean
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
 -/
 
 import Mathlib
+
+open Squarefree Set Order Filter Topology
 
 set_option linter.mathlibStandardSet false
 
@@ -770,6 +776,36 @@ lemma frequent_dense_shifts_of_positive_density (A : Set ℕ) (h_density : upper
         · linarith
 
 /-
+If a strictly increasing sequence A has natural density 0, then A(j)/j tends to infinity.
+-/
+lemma tendsto_div_of_density_zero (A : ℕ → ℕ) (h_inc : StrictMono A) (h_dens : HasNaturalDensity (Set.range A) 0) : Filter.Tendsto (fun j => (A j : ℝ) / j) Filter.atTop Filter.atTop := by
+  -- Since $A$ is strictly increasing, $A(j) \ge j$. The number of elements of $S$ in $[1, x]$ is approximately $A^{-1}(x)$. Specifically, $|S \cap [1, A(j)]| = j+1$ (assuming $A(0) \ge 1$, or similar).
+  have h_card : ∀ j : ℕ, j ≥ 1 → ((Set.range A ∩ Set.Icc 1 (A j)).ncard : ℝ) ≥ j := by
+    intros j hj
+    have h_range : Set.range A ∩ Set.Icc 1 (A j) ⊇ Finset.image A (Finset.Icc 1 j) := by
+      simp +decide [ Set.subset_def ];
+      exact fun x y hy₁ hy₂ hx => ⟨ ⟨ y, hx ⟩, hx ▸ Nat.one_le_iff_ne_zero.mpr ( by linarith [ h_inc <| show 0 < y from hy₁ ] ), hx ▸ h_inc.monotone hy₂ ⟩;
+    refine' mod_cast le_trans _ ( Set.ncard_le_ncard h_range );
+    rw [ Set.ncard_coe_finset, Finset.card_image_of_injective _ h_inc.injective ] ; aesop;
+  -- This implies $A(j) / (j+1) \to \infty$, so $A(j) / j \to \infty$.
+  have h_lim : Filter.Tendsto (fun j : ℕ => ((Set.range A ∩ Set.Icc 1 (A j)).ncard : ℝ) / (A j)) Filter.atTop (nhds 0) := by
+    exact h_dens.comp h_inc.tendsto_atTop;
+  -- Since $|S \cap [1, A(j)]| \ge j$, we have $j / A(j) \le |S \cap [1, A(j)]| / A(j)$.
+  have h_le : ∀ j : ℕ, j ≥ 1 → (j : ℝ) / (A j) ≤ ((Set.range A ∩ Set.Icc 1 (A j)).ncard : ℝ) / (A j) := by
+    bound;
+  -- Since $j / A(j) \le |S \cap [1, A(j)]| / A(j)$ and $|S \cap [1, A(j)]| / A(j) \to 0$, it follows that $j / A(j) \to 0$.
+  have h_j_div_A_j_zero : Filter.Tendsto (fun j : ℕ => (j : ℝ) / (A j)) Filter.atTop (nhds 0) := by
+    exact squeeze_zero_norm' ( Filter.eventually_atTop.mpr ⟨ 1, fun j hj => by rw [ Real.norm_of_nonneg ( by positivity ) ] ; exact h_le j hj ⟩ ) h_lim;
+  have h_j_div_A_j_zero : Filter.Tendsto (fun j : ℕ => (A j : ℝ) / j) Filter.atTop Filter.atTop := by
+    have : Filter.Tendsto (fun j : ℕ => (j : ℝ) / (A j)) Filter.atTop (nhdsWithin 0 (Set.Ioi 0)) := by
+      rw [ tendsto_nhdsWithin_iff ];
+      exact ⟨ h_j_div_A_j_zero, Filter.eventually_atTop.mpr ⟨ 1, fun n hn => by simpa using div_pos ( Nat.cast_pos.mpr hn ) ( Nat.cast_pos.mpr ( Nat.pos_of_ne_zero ( by linarith [ h_inc hn ] ) ) ) ⟩ ⟩
+    have : Filter.Tendsto (fun j : ℕ => ((j : ℝ) / (A j))⁻¹) Filter.atTop Filter.atTop := by
+      exact Filter.Tendsto.inv_tendsto_nhdsGT_zero this;
+    aesop;
+  convert h_j_div_A_j_zero using 1
+
+/-
 If a set A has property P, then it has natural density 0.
 -/
 theorem Theorem1_i (A : Set ℕ) (hA : PropertyP A) : HasNaturalDensity A 0 := by
@@ -804,3 +840,46 @@ theorem Theorem1_ii (f : ℕ → ℕ) (hf : Filter.Tendsto f Filter.atTop Filter
 
 #print axioms Theorem1_i
 #print axioms Theorem1_ii
+
+/-
+Definition of HasPropertyP as written down by the Formal Conjectures project of Google DeepMind.
+-/
+def HasPropertyP (A : Set ℕ) : Prop :=
+  ∀ n ≥ 1, {a ∈ A | Squarefree (n + a)}.Finite
+
+/-
+Statements from the Formal Conjectures project of Google DeepMind concerning Property P.
+-/
+theorem erdos_1102.density_zero_of_P
+    (A : ℕ → ℕ)
+    (h_inc : StrictMono A)
+    (hP : HasPropertyP (range A)) :
+    Tendsto (fun j => (A j / j : ℝ)) atTop atTop := by
+  apply_rules [ tendsto_div_of_density_zero ];
+  have h_shift_density_zero : HasNaturalDensity (Set.image (fun x => x + 1) (Set.range A)) 0 := by
+    apply Theorem1_i;
+    exact?;
+  exact?
+
+theorem erdos_1102.exists_sequence_with_P
+    (f : ℕ → ℕ) (h_inf : Tendsto f atTop atTop)
+    (h_pos : ∀ n, f n ≠ 0) :
+    ∃ A : ℕ → ℕ, StrictMono A ∧
+    HasPropertyP (range A) ∧
+    ∀ j : ℕ, (A j : ℝ) / j ≤ f j := by
+  refine' ⟨ fun j => a_seq f h_inf j, _, _, _ ⟩;
+  · exact?;
+  · intro n hn;
+    have h_finite : ∀ n ≥ 1, {a ∈ Set.range (a_seq f h_inf) | Squarefree (n + a)}.Finite := by
+      convert A_constructed_PropertyP_positive f h_inf using 1;
+      constructor <;> intro h n hn <;> simp_all +decide [ PropertyP_positive, A_constructed ];
+      · exact Set.Finite.subset ( h n hn ) fun x hx => by obtain ⟨ ⟨ j, hj₁, rfl ⟩, hx' ⟩ := hx; exact ⟨ ⟨ j, rfl ⟩, hx' ⟩ ;
+      · refine Set.Finite.subset ( h n hn |> Set.Finite.union <| Set.finite_singleton ( a_seq f h_inf 0 ) ) ?_;
+        intro a ha; cases' ha with ha₁ ha₂; cases' ha₁ with j hj; cases' j with j <;> aesop;
+    exact h_finite n hn;
+  · intro j; by_cases hj : 1 ≤ j <;> simp_all +decide [ div_le_iff₀ ] ;
+    field_simp;
+    exact_mod_cast le_trans ( a_seq_upper_bound f h_inf j hj ) ( mul_le_mul_of_nonneg_left ( W_k_le_f f h_inf ( fun n => Nat.pos_of_ne_zero ( h_pos n ) ) j ) ( Nat.cast_nonneg _ ) )
+
+#print axioms erdos_1102.density_zero_of_P
+#print axioms erdos_1102.exists_sequence_with_P

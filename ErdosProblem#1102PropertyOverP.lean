@@ -4,17 +4,17 @@ We say that a sequence of positive integers $A$ has:
 - property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
 - property $Q$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all $a \in A$ with $a < n$.
 - property $\overline{P}$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all $a \in A$.
-- property $\overline{P}_\infty$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all but finitely many $a \in A$.
+- property $\overline{P}_infty$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all but finitely many $a \in A$.
 
 Solving Erdős Problem #1102 (https://www.erdosproblems.com/1102), Terence Tao and I managed to prove tight bounds on the possible densities of sequences with one of the above properties.
 
 W. van Doorn and T. Tao, Growth rates of sequences governed by the squarefree properties of their translates. arXiv:2512.01087 (2025).
 
-Thanks to Aristotle, the proof of the following theorem is formalized in the Lean file below:
+Thanks to Aristotle from Harmonic (aristotle-harmonic@harmonic.fun), the proof of the following theorem is formalized in the Lean file below:
 
-Any sequence with property $\overline{P}$ or $\overline{P}_ \infty$ has density strictly smaller than $6/\pi^2$. On the other hand, for every $\epsilon > 0$ there exist a sequence with property $\overline{P}$ (which therefore has property $\overline{P}_\infty$ as well) with lower density larger than $6/\pi^2 - \epsilon$.
+Any sequence with property $\overline{P}$ or $\overline{P}_infty$ has density strictly smaller than $6/\pi^2$. On the other hand, for every $\epsilon > 0$ there exist a sequence with property $\overline{P}$ (which therefore has property $\overline{P}_infty$ as well) with lower density larger than $6/\pi^2 - \epsilon$.
 
-The proof of the second part is conditional on various asymptotics on sums and products over primes, which all readily follow from the prime number theorem. These asymptotics are bundled as the structure SieveAssumptions that you can find at the start of the formalization below.
+The proof of the second part is conditional on various asymptotics on sums and products on primes, which all readily follow from the prime number theorem. These asymptotics are bundled as the structure SieveAssumptions that you can find at the start of the formalization below.
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
@@ -2206,10 +2206,10 @@ theorem theorem_overp_i (A : Set ℕ) (h : PropertyP_bar_infty A) :
       exact h_upperDensity_eq.symm ▸ sieve_strict_bound _ _ h_sieve h_sieve_strict
 
 /-
-For any epsilon > 0, there exists a set A with property P_bar such that its lower density is larger than 6/pi^2 - epsilon.
+For any epsilon > 0, there exists a set A with property P_bar such that its lower density is at least 6/pi^2 - epsilon.
 -/
 theorem theorem_overp_ii (assumps : SieveAssumptions) :
-    ∀ ε > 0, ∃ A : Set ℕ, PropertyP_bar A ∧ lowerDensity A > 6 / Real.pi^2 - ε := by
+    ∀ ε > 0, ∃ A : Set ℕ, PropertyP_bar A ∧ lowerDensity A ≥ 6 / Real.pi^2 - ε := by
       have := lemma_largeP_v2 assumps;
       -- By `tail_sum_loglog_sq_tendsto_zero`, there exists $K_1$ such that for all $K \ge K_1$, `tail_sum_loglog_sq K < \epsilon`.
       have h_tail : ∀ ε > 0, ∃ K₁ : ℕ, ∀ K ≥ K₁, tail_sum_loglog_sq K < ε := by
@@ -2224,10 +2224,8 @@ theorem theorem_overp_ii (assumps : SieveAssumptions) :
       use A_seq n;
       refine' ⟨ _, _ ⟩;
       · exact PropertyP_bar_A_seq n hn.1;
-      · refine' lt_of_lt_of_le _ ( lowerDensity_A_seq_bound_nat n K _ hn assumps );
-        · have hlt : tail_sum_loglog_sq K < ε :=
-          hK₁ K (le_max_left _ _)
-          simpa using sub_lt_sub_left hlt (6 / Real.pi^2)
+      · refine' le_trans _ ( lowerDensity_A_seq_bound_nat n K _ hn assumps );
+        · exact sub_le_sub_left ( le_of_lt ( hK₁ K ( le_max_left _ _ ) ) ) _;
         · exact le_trans ( by linarith ) ( le_max_right _ _ ) |> le_trans ( le_max_right _ _ )
 
 #print axioms theorem_overp_i
