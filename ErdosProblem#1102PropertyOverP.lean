@@ -1,4 +1,6 @@
 /-
+Note that this project is not quite finished yet. It will soon!
+
 We say that a sequence of positive integers $A$ has:
 
 - property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
@@ -2229,4 +2231,5 @@ theorem theorem_overp_ii (assumps : SieveAssumptions) :
         · exact le_trans ( by linarith ) ( le_max_right _ _ ) |> le_trans ( le_max_right _ _ )
 
 #print axioms theorem_overp_i
+
 #print axioms theorem_overp_ii
