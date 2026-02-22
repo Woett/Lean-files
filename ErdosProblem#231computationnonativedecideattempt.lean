@@ -1,3 +1,10 @@
+/-
+Read my comment here for some context: https://www.erdosproblems.com/forum/thread/231#post-4294
+
+Lean version: leanprover/lean4:v4.24.0
+Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
+-/
+
 import Mathlib
 
 set_option linter.mathlibStandardSet false
@@ -132,5 +139,6 @@ theorem dfs_check_optimized_eq_computable (w : List Alphabet) (g_w : List Alphab
     · -- By definition of `dfs_check_optimized` and `dfs_check_computable`, we can see that they are equivalent for `depth = 0`.
       simp [dfs_check_optimized, dfs_check_computable];
     · unfold dfs_check_optimized dfs_check_computable; aesop;)
+
 
 #print axioms dfs_check_optimized_eq_computable
