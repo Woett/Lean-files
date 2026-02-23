@@ -1935,17 +1935,6 @@ lemma exists_GeometricGood_rec :
     exact h_exists_good
 
 /-
-For sufficiently large n and x, there exists a candidate n' that satisfies the GeometricGood_rec property.
--/
-lemma exists_GeometricGood_rec_v2 :
-  ∀ ε : ℝ, 0 < ε → ε < 1 →
-  ∃ N₀ : ℕ, ∀ n ≥ N₀,
-  ∃ x₀ : ℕ, ∀ x ≥ x₀,
-  ∃ n', GeometricGood_rec n n' x ε := by
-    -- Apply the lemma `exists_GeometricGood_rec` to conclude the proof.
-    apply exists_GeometricGood_rec
-
-/-
 If a set has good density at R1, and R is close to R1 (within factor 1+epsilon), then it has good density at R.
 -/
 lemma density_interpolation_lemma (S : Set ℕ) (R1 R2 R : ℕ) (ε C : ℝ)
@@ -2220,10 +2209,10 @@ theorem PropositionKey :
   ∀ M : ℕ, ∃ n' ≥ M, PropositionKey_conclusion n n' ε C := by
     obtain ⟨C_key, hC_key_pos, hC_key⟩ := GeometricGood_implies_PropositionKey;
     use C_key;
-    -- By combining the results from hC_key and exists_GeometricGood_rec_v2, we can conclude the proof.
+    -- By combining the results from hC_key and exists_GeometricGood_rec, we can conclude the proof.
     have h_combined : ∀ ε : ℝ, 0 < ε → ε < 1 → ∃ N₀, ∀ n ≥ N₀, ∃ x₀, ∀ x ≥ x₀, ∃ n', GeometricGood_rec n n' x ε ∧ n' ≥ x / 2 := by
       intro ε hε_pos hε_lt_1
-      obtain ⟨N₀, hN₀⟩ := exists_GeometricGood_rec_v2 ε hε_pos hε_lt_1
+      obtain ⟨N₀, hN₀⟩ := exists_GeometricGood_rec ε hε_pos hε_lt_1
       use N₀ + 1
       intro n hn
       obtain ⟨x₀, hx₀⟩ := hN₀ n (by linarith);
@@ -2356,21 +2345,6 @@ lemma n_seq_prop_key (k : ℕ) (hk : k ≥ 1) :
     · rcases k with ( _ | _ | k ) <;> tauto
 
 /-
-n_seq (k+1) satisfies the Key Proposition conclusion with respect to n_seq k and epsilon_seq k.
--/
-lemma n_seq_prop_key_v2 (k : ℕ) (hk : k ≥ 1) :
-  PropositionKey_conclusion (n_seq k) (n_seq (k + 1)) (epsilon_seq k) C_seq := by
-    convert n_seq_prop_key k hk using 1
-
-/-
-n_seq (k+1) satisfies the Key Proposition conclusion with respect to n_seq k and epsilon_seq k.
--/
-lemma n_seq_prop_key_final (k : ℕ) (hk : k ≥ 1) :
-  PropositionKey_conclusion (n_seq k) (n_seq (k + 1)) (epsilon_seq k) C_seq := by
-    -- Apply the lemma n_seq_prop_key_v2 with the given k and hk.
-    apply n_seq_prop_key_v2 k hk
-
-/-
 There exists a sequence n_k and a constant C satisfying the SequenceProperties.
 -/
 lemma exists_sequence :
@@ -2381,7 +2355,7 @@ lemma exists_sequence :
     · refine' ⟨ _, _, _ ⟩;
       · intro k hk a ha ha'; have := n_seq_prop_key k hk; unfold PropositionKey_conclusion at this; aesop;
       · intro k hk R hR₁ hR₂;
-        have := n_seq_prop_key_final k hk;
+        have := n_seq_prop_key k hk;
         refine' le_trans _ ( this.2 R hR₁ hR₂ );
         unfold epsilon_seq;
         gcongr ; norm_num;
