@@ -980,7 +980,7 @@ lemma error_term_small (assumps : SieveAssumptions) :
     · filter_upwards [ Filter.eventually_gt_atTop 0 ] with x hx hx' using absurd hx' hx.ne'
 
 /-
-Definitions for relevant primes, bound for a, relevant pairs, and the set S_x of multiples of W in the interval. Corrected type of relevant_pairs.
+Definitions for relevant primes, bound for a, relevant pairs, and the set S_x of multiples of W in the interval.
 -/
 def relevant_primes (P : ℕ) (x : ℝ) : Finset ℕ :=
   (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)).filter (fun p => Nat.Prime p ∧ p > P)
@@ -1413,17 +1413,6 @@ lemma P_seq_growth (K j : ℕ) (hK : K ≥ 3) (p : ℕ) (hp : p > P_seq K j) :
       rw [ Real.lt_log_iff_exp_lt ];
       · linarith [ Real.log_nonneg ( show ( K : ℝ ) ≥ 1 by norm_cast; linarith ) ];
       · exact lt_of_le_of_lt ( add_nonneg ( Real.log_nonneg ( by norm_cast; linarith ) ) ( Real.exp_nonneg _ ) ) h_log_p
-
-/-
-For any sufficiently large $P \ge 3$, there exist arbitrarily large natural numbers $n$ such that
-(a) $n \equiv 0 \pmod{p^2}$ whenever $p \leq P$; and
-(b) $n + a \not \equiv 0 \pmod{p^2}$ whenever $p>P$ and $1 \leq a \leq \frac{p}{(\log\log p)^2}$.
--/
-lemma lemma_largeP_v2 (assumps : SieveAssumptions) :
-    ∃ P₀ ≥ 3, ∀ P ≥ P₀, ∀ M : ℕ, ∃ n ≥ M,
-    (∀ p, Nat.Prime p → p ≤ P → n % p^2 = 0) ∧
-    (∀ p, Nat.Prime p → p > P → ∀ (a : ℕ), 1 ≤ a → (a : ℝ) ≤ (p : ℝ) / (Real.log (Real.log p))^2 → (n + a) % p^2 ≠ 0) := by
-      apply_rules [ lemma_largeP ]
 
 /-
 If a <= x and a > p / (log log p)^2, then p <= 4 x (log log x)^2.
@@ -2210,7 +2199,7 @@ For any epsilon > 0, there exists a set A with property P_bar such that its lowe
 -/
 theorem theorem_overp_ii (assumps : SieveAssumptions) :
     ∀ ε > 0, ∃ A : Set ℕ, PropertyP_bar A ∧ lowerDensity A ≥ 6 / Real.pi^2 - ε := by
-      have := lemma_largeP_v2 assumps;
+      have := lemma_largeP assumps;
       -- By `tail_sum_loglog_sq_tendsto_zero`, there exists $K_1$ such that for all $K \ge K_1$, `tail_sum_loglog_sq K < \epsilon`.
       have h_tail : ∀ ε > 0, ∃ K₁ : ℕ, ∀ K ≥ K₁, tail_sum_loglog_sq K < ε := by
         exact fun ε ε_pos => by rcases Metric.tendsto_atTop.mp ( tail_sum_loglog_sq_tendsto_zero ) ε ε_pos with ⟨ K₁, hK₁ ⟩ ; exact ⟨ K₁, fun K hK => by linarith [ abs_lt.mp ( hK₁ K hK ) ] ⟩ ;
