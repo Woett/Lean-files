@@ -14,7 +14,7 @@ Define a sequence to be admissible if if avoids at least one residue class modul
 
 There exists an absolute constant $C$ such that any admissible sequence $A = \{a_1 < a_2 < \cdots \}$ for which $a_j \ge \exp(C j/\log j)$ holds for infinitely many $j$, has property $Q$. In particular, the specific sequences $2^n \pm 1$ and $n! \pm 1$ all have property $Q$. 
 
-The proof is conditional on asymptotics on a sum and a product on primes, which both readily follow from the prime number theorem. These asymptotics are bundled as the structure SieveAssumptions that you can find at the start of the formalization.
+The proof is conditional on asymptotic bounds on a sum and a product on primes, which both readily follow from the prime number theorem. These asymptotics are bundled as the structure SieveAssumptions that you can find at the start of the formalization.
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
@@ -1179,5 +1179,6 @@ All four sequences A1, A2, A3, A4 have property Q.
 -/
 theorem All_Sequences_PropertyQ (h : SieveAssumptions) : PropertyQ A1 ∧ PropertyQ A2 ∧ PropertyQ A3 ∧ PropertyQ A4 := by
   exact ⟨A1_PropertyQ h, A2_PropertyQ h, A3_PropertyQ h, A4_PropertyQ h⟩
+
 
 #print axioms All_Sequences_PropertyQ
