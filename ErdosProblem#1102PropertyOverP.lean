@@ -14,7 +14,7 @@ Thanks to Aristotle from Harmonic (aristotle-harmonic@harmonic.fun), the proof o
 
 Any sequence with property $\overline{P}$ or $\overline{P}_infty$ has density strictly smaller than $6/\pi^2$. On the other hand, for every $\epsilon > 0$ there exist a sequence with property $\overline{P}$ (which therefore has property $\overline{P}_infty$ as well) with lower density larger than $6/\pi^2 - \epsilon$.
 
-The proof of the second part is conditional on various asymptotics on sums and products on primes, which all readily follow from the prime number theorem. These asymptotics are bundled as the structure SieveAssumptions that you can find at the start of the formalization below.
+The proof of the second part is conditional on asymptotic bounds on two sums and a product on primes, which all readily follow from the prime number theorem. These asymptotics are bundled as the structure SieveAssumptions that you can find at the start of the formalization below.
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
@@ -47,22 +47,10 @@ def Bound_prod_primes_le_x_sq : Prop :=
   (fun (x : ℝ) => Real.log (∏ p ∈ Finset.filter (fun (p : ℕ) => (p : ℝ) ≤ x ∧ Nat.Prime p) (Finset.range (Nat.floor x + 1)), ((p : ℝ)^2)) - 2 * x) =o[Filter.atTop] (fun (x : ℝ) => x)
 
 /-
-The statement of the asymptotic bound for the sum of 1/p^2 for p >= x.
--/
-def Bound_sum_primes_ge_x_inv_sq : Prop :=
-  (fun (x : ℝ) => ∑' (p : ℕ), if (p : ℝ) ≥ x ∧ Nat.Prime p then 1 / (p : ℝ)^2 else 0) =Θ[Filter.atTop] (fun (x : ℝ) => 1 / (x * Real.log x))
-
-/-
 The statement of the asymptotic bound for the sum of 1/(p (log log p)^2) for p >= x.
 -/
 def Bound_sum_primes_ge_x_inv_p_loglog_sq : Prop :=
   (fun (x : ℝ) => ∑' (p : ℕ), if (p : ℝ) ≥ x ∧ Nat.Prime p then 1 / ((p : ℝ) * (Real.log (Real.log p))^2) else 0) =Θ[Filter.atTop] (fun (x : ℝ) => 1 / Real.log (Real.log x))
-
-/-
-The statement of the asymptotic bound for the sum of log log p / p^2 for p >= x.
--/
-def Bound_sum_primes_ge_x_loglog_div_sq : Prop :=
-  (fun (x : ℝ) => ∑' (p : ℕ), if (p : ℝ) ≥ x ∧ Nat.Prime p then Real.log (Real.log p) / (p : ℝ)^2 else 0) =Θ[Filter.atTop] (fun (x : ℝ) => Real.log (Real.log x) / (x * Real.log x))
 
 /-
 The statement of the asymptotic bound for the sum of p / (log log p)^2 for 2 < p <= x.
@@ -71,21 +59,12 @@ def Bound_sum_primes_le_x_p_div_loglog_sq : Prop :=
   (fun (x : ℝ) => ∑ p ∈ Finset.filter (fun (p : ℕ) => 2 < p ∧ (p : ℝ) ≤ x ∧ Nat.Prime p) (Finset.range (Nat.floor x + 1)), (p : ℝ) / (Real.log (Real.log p))^2) =Θ[Filter.atTop] (fun (x : ℝ) => x^2 / (Real.log x * (Real.log (Real.log x))^2))
 
 /-
-The statement of the asymptotic bound for the sum of log log p for 2 < p <= x.
--/
-def Bound_sum_primes_le_x_loglog : Prop :=
-  (fun (x : ℝ) => ∑ p ∈ Finset.filter (fun (p : ℕ) => 2 < p ∧ (p : ℝ) ≤ x ∧ Nat.Prime p) (Finset.range (Nat.floor x + 1)), Real.log (Real.log p)) =Θ[Filter.atTop] (fun (x : ℝ) => x * Real.log (Real.log x) / Real.log x)
-
-/-
 Structure bundling the asymptotic bounds that are assumed without proof.
 -/
 structure SieveAssumptions where
   bound_prod_primes_le_x_sq : Bound_prod_primes_le_x_sq
-  bound_sum_primes_ge_x_inv_sq : Bound_sum_primes_ge_x_inv_sq
   bound_sum_primes_ge_x_inv_p_loglog_sq : Bound_sum_primes_ge_x_inv_p_loglog_sq
-  bound_sum_primes_ge_x_loglog_div_sq : Bound_sum_primes_ge_x_loglog_div_sq
   bound_sum_primes_le_x_p_div_loglog_sq : Bound_sum_primes_le_x_p_div_loglog_sq
-  bound_sum_primes_le_x_loglog : Bound_sum_primes_le_x_loglog
 
 /-
 SF is the set of squarefree numbers.
@@ -1091,7 +1070,7 @@ The tail series of 1/(p (log log p)^2) is summable.
 lemma tail_summable (assumps : SieveAssumptions) (P : ℕ) :
   Summable (fun p : ℕ => if p > P ∧ Nat.Prime p then 1 / ((p : ℝ) * (Real.log (Real.log p))^2) else 0) := by
     contrapose! assumps;
-    rintro ⟨ h1, h2, h3, h4, h5, h6 ⟩;
+    rintro ⟨ h1, h3, h5 ⟩;
     have := h3;
     obtain ⟨ C, hC ⟩ := this;
     rw [ Asymptotics.isBigO_iff ] at hC;
