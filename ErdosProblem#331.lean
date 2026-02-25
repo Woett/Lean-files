@@ -1,7 +1,7 @@
 /-
-Ruzsa answered Erdos Problem #331 (https://www.erdosproblems.com/331) by exhibiting two sets of positive integers $A$ and $B$ such that both $|\{a \in A : a \le x\}| \gg \sqrt{x}$ and $|\{b \in B : b \le x\}| \gg \sqrt{x}$ for large enough $x$ and such that $a_1 - a_2 = b_1 - b_2$ implies $a_1 = a_2$ and $b_1 = b_2$. Indeed, take $A$ and $B$ to be the sets of positive integers whose binary representation only have non-zero digits in even and odd places respectively. A formalization of this result, obtained with the help of Aristotle from Harmonic (aristotle-harmonic@harmonic.fun), can be found below.
+Ruzsa answered Erdos Problem #331 (https://www.erdosproblems.com/331) by exhibiting two sets of positive integers $A$ and $B$ such that both $|\{a \in A : a \le x\}| \gg \sqrt{x}$ and $|\{b \in B : b \le x\}| \gg \sqrt{x}$ for large enough $x$ and such that $a_1 - a_2 = b_1 - b_2$ implies $a_1 = a_2$ and $b_1 = b_2$. Indeed, take $A$ and $B$ to be the sets of positive integers whose binary representation only have non-zero digits in even and odd places respectively. A formalization of this result, obtained with the help of Aristotle, can be found below.
 
-Even though the Formal Conjectures project by Google DeepMind had a formalisation of the problem as well, it (at least originally) contained a mistake. A hopefully fixed version can be found at the very end of this file.
+Even though the Formal Conjectures project by Google DeepMind had a formalization of the problem as well, we found that it originally contained a mistake. The hopefully fixed version can be found at the very end of this file.
 
 https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjectures/ErdosProblems/331.lean
 
@@ -25,6 +25,7 @@ set_option maxHeartbeats 0
 set_option maxRecDepth 4000
 set_option synthInstance.maxHeartbeats 20000
 set_option synthInstance.maxSize 128
+
 set_option relaxedAutoImplicit false
 set_option autoImplicit false
 
@@ -372,6 +373,25 @@ lemma density_lemma : ∃ N₀ ≥ 2, ∀ N ≥ N₀,
     · linarith [ show ( 2 : ℝ ) ^ ( m / 2 ) ≤ ( Finset.card ( Finset.filter ( fun x => x ∈ B ) ( Finset.Icc 1 N ) ) + 1 : ℝ ) by exact_mod_cast h_card_B, show ( Real.sqrt N : ℝ ) ≥ 32 by exact Real.le_sqrt_of_sq_le ( mod_cast by linarith ) ]
 
 /-
+If a set A of positive integers has density at least c * sqrt(N) in {1, ..., N}, then sqrt(n) = O(count A n).
+-/
+lemma density_to_bigO {A : Set ℕ} {c : ℝ} (hc : 0 < c)
+  (h_dens : ∃ N₀, ∀ N ≥ N₀, ((Finset.Icc 1 N).filter (· ∈ A)).card ≥ c * Real.sqrt N) :
+  (fun (n : ℕ) ↦ (n : ℝ) ^ (1 / 2 : ℝ)) =O[atTop] (fun (n : ℕ) ↦ (Nat.count A n : ℝ)) := by
+    -- By definition of $count$, we know that for $n \geq N₀$, $count A n \geq (1/2) * c * \sqrt{n}$.
+    have h_count_bound : ∃ N₀, ∀ n ≥ N₀, (Nat.count A n : ℝ) ≥ (1/2) * c * Real.sqrt n := by
+      obtain ⟨ N₀, hN₀ ⟩ := h_dens; use N₀ + 2; intros n hn; have := hN₀ ( n - 1 ) ( Nat.le_sub_one_of_lt <| by linarith ) ; rcases n with ( _ | _ | n ) <;> norm_num at *;
+      · linarith;
+      · field_simp;
+        rw [ Nat.count_eq_card_filter_range ];
+        refine' le_trans _ ( mul_le_mul_of_nonneg_left ( Nat.cast_le.mpr <| Finset.card_mono <| show Finset.filter ( fun x => A x ) ( Finset.range ( n + 1 + 1 ) ) ≥ Finset.filter ( fun x => A x ) ( Finset.Icc 1 ( n + 1 ) ) from _ ) zero_le_two );
+        · nlinarith! [ sq_nonneg ( Real.sqrt ( n + 1 ) - Real.sqrt ( n + 1 + 1 ) ), Real.mul_self_sqrt ( show ( n:ℝ ) + 1 ≥ 0 by positivity ), Real.mul_self_sqrt ( show ( n:ℝ ) + 1 + 1 ≥ 0 by positivity ), Real.sqrt_nonneg ( n + 1 ), Real.sqrt_nonneg ( n + 1 + 1 ) ];
+        · exact fun x hx => Finset.mem_filter.mpr ⟨ Finset.mem_range.mpr ( by linarith [ Finset.mem_Icc.mp ( Finset.mem_filter.mp hx |>.1 ) ] ), Finset.mem_filter.mp hx |>.2 ⟩;
+    rw [ Asymptotics.isBigO_iff ];
+    norm_num [ ← Real.sqrt_eq_rpow ] at *;
+    exact ⟨ 2 / c, h_count_bound.choose, fun n hn => by rw [ abs_of_nonneg ( Real.sqrt_nonneg _ ) ] ; rw [ div_mul_eq_mul_div, le_div_iff₀ ] <;> nlinarith [ h_count_bound.choose_spec n hn, Real.sqrt_nonneg n, mul_div_cancel₀ 2 hc.ne' ] ⟩
+    
+/-
 There exist sets of positive integers A' and B' such that they have density at least (1/4)sqrt(N) and their difference sets are disjoint (except at 0).
 -/
 theorem main_theorem : ∃ (A' B' : Set ℕ),
@@ -397,41 +417,22 @@ theorem main_theorem : ∃ (A' B' : Set ℕ),
         grind;
       grind
 
-/-
-If a set A of positive integers has density at least c * sqrt(N) in {1, ..., N}, then sqrt(n) = O(count A n).
--/
-lemma density_to_bigO {A : Set ℕ} {c : ℝ} (hc : 0 < c)
-  (h_dens : ∃ N₀, ∀ N ≥ N₀, ((Finset.Icc 1 N).filter (· ∈ A)).card ≥ c * Real.sqrt N) :
-  (fun (n : ℕ) ↦ (n : ℝ) ^ (1 / 2 : ℝ)) =O[atTop] (fun (n : ℕ) ↦ (Nat.count A n : ℝ)) := by
-    -- By definition of $count$, we know that for $n \geq N₀$, $count A n \geq (1/2) * c * \sqrt{n}$.
-    have h_count_bound : ∃ N₀, ∀ n ≥ N₀, (Nat.count A n : ℝ) ≥ (1/2) * c * Real.sqrt n := by
-      obtain ⟨ N₀, hN₀ ⟩ := h_dens; use N₀ + 2; intros n hn; have := hN₀ ( n - 1 ) ( Nat.le_sub_one_of_lt <| by linarith ) ; rcases n with ( _ | _ | n ) <;> norm_num at *;
-      · linarith;
-      · field_simp;
-        rw [ Nat.count_eq_card_filter_range ];
-        refine' le_trans _ ( mul_le_mul_of_nonneg_left ( Nat.cast_le.mpr <| Finset.card_mono <| show Finset.filter ( fun x => A x ) ( Finset.range ( n + 1 + 1 ) ) ≥ Finset.filter ( fun x => A x ) ( Finset.Icc 1 ( n + 1 ) ) from _ ) zero_le_two );
-        · nlinarith! [ sq_nonneg ( Real.sqrt ( n + 1 ) - Real.sqrt ( n + 1 + 1 ) ), Real.mul_self_sqrt ( show ( n:ℝ ) + 1 ≥ 0 by positivity ), Real.mul_self_sqrt ( show ( n:ℝ ) + 1 + 1 ≥ 0 by positivity ), Real.sqrt_nonneg ( n + 1 ), Real.sqrt_nonneg ( n + 1 + 1 ) ];
-        · exact fun x hx => Finset.mem_filter.mpr ⟨ Finset.mem_range.mpr ( by linarith [ Finset.mem_Icc.mp ( Finset.mem_filter.mp hx |>.1 ) ] ), Finset.mem_filter.mp hx |>.2 ⟩;
-    rw [ Asymptotics.isBigO_iff ];
-    norm_num [ ← Real.sqrt_eq_rpow ] at *;
-    exact ⟨ 2 / c, h_count_bound.choose, fun n hn => by rw [ abs_of_nonneg ( Real.sqrt_nonneg _ ) ] ; rw [ div_mul_eq_mul_div, le_div_iff₀ ] <;> nlinarith [ h_count_bound.choose_spec n hn, Real.sqrt_nonneg n, mul_div_cancel₀ 2 hc.ne' ] ⟩
-
 theorem erdos_331 :
-    (False) ↔
-      ∀ A B : Set ℕ,
-      ((fun (n : ℕ) ↦ (n : ℝ) ^ (1 / 2 : ℝ)) =O[atTop] (fun (n : ℕ) ↦ (count A n : ℝ)) ∧
-      (fun (n : ℕ) ↦ (n : ℝ) ^ (1 / 2 : ℝ)) =O[atTop] (fun (n : ℕ) ↦ (count B n : ℝ))) →
+    ¬(∀ A B : Set ℕ,
+      (fun (n : ℕ) ↦ (n : ℝ) ^ (1 / 2 : ℝ)) =O[atTop] (fun (n : ℕ) ↦ (count A n : ℝ)) →
+      (fun (n : ℕ) ↦ (n : ℝ) ^ (1 / 2 : ℝ)) =O[atTop] (fun (n : ℕ) ↦ (count B n : ℝ)) →
       { s : ℕ × ℕ × ℕ × ℕ | let ⟨a₁, a₂, b₁, b₂⟩ := s
         a₁ ∈ A ∧ a₂ ∈ A ∧ b₁ ∈ B ∧ b₂ ∈ B ∧
-        a₁ ≠ a₂ ∧ a₁ + b₂ = a₂ + b₁ }.Infinite := by
-  norm_num +zetaDelta at *;
-  -- Let's choose the sets A' and B' from the main theorem.
-  obtain ⟨A', hA', B', hB', h_diff⟩ := main_theorem;
-  refine' ⟨ A', _, hA', _, _ ⟩;
-  · apply density_to_bigO _;
-    exacts [ ⟨ h_diff.1.choose, fun N hN => h_diff.1.choose_spec N hN |>.1 ⟩, by norm_num ]
-  · have := density_to_bigO ( show 0 < ( 1 / 4 : ℝ ) by norm_num ) ⟨ h_diff.1.choose, fun N hN => h_diff.1.choose_spec N hN |>.2 ⟩ ; aesop;
-  · exact Set.finite_empty.subset fun x hx => h_diff.2 _ hx.1 _ hx.2.1 _ hx.2.2.1 _ hx.2.2.2.1 hx.2.2.2.2.1 <| by linarith [ hx.2.2.2.2.2 ] ;
+        a₁ ≠ a₂ ∧ a₁ + b₂ = a₂ + b₁ }.Infinite) := by
+  push_neg;
+  -- Let's choose any $A$ and $B$ that satisfy the conditions.
+  obtain ⟨A, B, hA, hB⟩ := main_theorem;
+  refine' ⟨ A, B, _, _, _ ⟩;
+  · apply density_to_bigO;
+    exacts [ show 0 < ( 1 / 4 : ℝ ) by norm_num, ⟨ hB.2.1.choose, fun N hN => hB.2.1.choose_spec N hN |>.1 ⟩ ];
+  · have := density_to_bigO ( show 0 < ( 1 / 4 : ℝ ) by norm_num ) ⟨ hB.2.1.choose, fun N hN => hB.2.1.choose_spec N hN |>.2 ⟩ ; aesop;
+  · simp +zetaDelta at *;
+    exact Set.finite_empty.subset fun x hx => hB.2.2 _ hx.1 _ hx.2.1 _ hx.2.2.1 _ hx.2.2.2.1 hx.2.2.2.2.1 <| by linarith [ hx.2.2.2.2.2 ] ;
 
 #print axioms main_theorem
 #print axioms erdos_331
