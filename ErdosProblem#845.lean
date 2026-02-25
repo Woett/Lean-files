@@ -9,6 +9,8 @@ https://github.com/plby/lean-proofs/blob/main/ErdosProblems/Erdos845.md
 
 Anneroos and I moreover proved that one can take $C_p = 6$ when $p = 3$. The proof of this bound had however not been formalized yet, and this file is here to fill that final remaining gap. I first rewrote and simplified the above paper tailored to the $p = 3$-case, and then had a long back and forth with Aristotle, which ended up being successful. The entire process could obviously not have been done without the help of Aristotle (as well as a lot of patience on my end), but ChatGPT, Google, Gemini and Claude definitely deserve a lot of praise as well, so I thank and welcome our AI overlords.
 
+https://github.com/Woett/Miscellaneous/blob/main/Blueprint%20for%20formalizing%20solution%20to%20%23845.pdf
+
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
 -/
@@ -1466,6 +1468,7 @@ theorem main_result_proven (n : ℕ) (h : 0 < n) :
           · rw [← I_sol_mem_iff n h]; exact hi
 
 #print axioms main_result_proven
+
 
 
 
