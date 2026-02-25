@@ -9,7 +9,6 @@ W. van Doorn, On the non-monotonicity of the denominator of generalized harmonic
 
 in which a generalized version of Erdős Problem #290 (https://www.erdosproblems.com/290) is solved.
 
-
 The Lean proof uses two prime number theorem type results as axioms, which is the reason the Lean proof is conditional. Both results will eventually follow from the PNT+ Project which can be found here:
 
 https://github.com/AlexKontorovich/PrimeNumberTheoremAnd
@@ -2284,3 +2283,4 @@ theorem generalErdos291 (r : ℕ → ℤ) (t : ℕ) (ht : t > 0) (h_per : Functi
 #print axioms ohyeah1
 
 #print axioms generalErdos291
+
