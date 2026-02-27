@@ -3,7 +3,7 @@ Define a red/blue-colouring of $\mathbb{R}^2$ to be unit-distance-avoiding if no
 
 R. Juhász, Ramsey type theorems in the plane. J. Combin. Theory Ser. A (1979), 152-160. 
 
-In the reverse direction, in Theorem 2 of her paper she also gave an example of a configuration $K$ of $12$ points and a specific unit-distance-avoiding coloring of the plane such that any congruent copy of $K$ contains a blue point. 
+In the reverse direction, in Theorem 2 of her paper she also gave an example of a configuration $K$ of $12$ points and a specific unit-distance-avoiding colouring of the plane such that any congruent copy of $K$ contains a blue point. 
 
 The formalization of this Theorem 2 can be found below, and was written by Aristotle from Harmonic (aristotle-harmonic@harmonic.fun).
 
@@ -593,5 +593,6 @@ theorem theorem_2 :
       · exact config_X_finite;
       · exact lemma_config_X_card;
       · rintro X' ⟨ f, rfl ⟩ ; exact lemma_config_intersects_blue f;
+
 
 #print axioms theorem_2
