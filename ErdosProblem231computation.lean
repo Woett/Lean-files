@@ -1,8 +1,8 @@
 /-
+Read my comment here for some context: https://www.erdosproblems.com/forum/thread/231#post-4294
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
-
 -/
 
 import Mathlib
@@ -108,5 +108,6 @@ decreasing_by all_goals (simp_wf; try omega)
 Computational verification for length 4 (optimized).
 -/
 lemma check_keranen : dfs_check_optimized [] [] 4 = true := by native_decide
+
 
 #print axioms check_keranen
