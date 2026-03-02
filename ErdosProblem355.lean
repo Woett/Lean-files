@@ -1,13 +1,15 @@
 /-
-Vjekoslav Kovač and I proved that there exists a lacunary sequence of positive integers whose reciprocal sums represent all rational numbers in an interval solving Erdos Problem #355 (https://www.erdosproblems.com/355).
+Solving Erdős Problem #355 (https://www.erdosproblems.com/355), Vjekoslav Kovač and I proved that there exists a lacunary sequence of positive integers whose reciprocal sums represent all rational numbers in an interval. 
 
 W. van Doorn and V. Kovač, Lacunary sequences whose reciprocal sums represent all rationals in an interval. arXiv:2509.24971 (2025).
 
 Below you can find a formalization of this result, with thanks to Boris Alexeev for being kind enough to slightly alter the code to get rid of all the warnings. 
 
-As for the exact result that we will prove: even though the above paper shows that any lacunarity constant smaller than 2 is possible, the formalization below is based on a simplified proof that Vjeko wrote, which has lacunarity constant 1.01. This simplified proof was given to Gemini in order to make it more easily formalizable, which was eventually done with the use of Aristotle (and a whole lot of patience on my end).
+As for the exact result that we will prove: even though the above paper shows that any lacunarity constant smaller than 2 is possible, the formalization below is based on a simplified proof that Vjeko wrote, which has lacunarity constant 1.01. This simplified proof was given to Gemini3 in order to make it more easily formalizable, which was eventually done with the use of Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) (and a whole lot of patience on my end).
 
-At the very end you can find the statement of Erdos Problem #355 taken from the Formal Conjectures project by Google DeepMind. 
+https://github.com/Woett/Miscellaneous/blob/main/Blueprint%20for%20formalizing%20solution%20to%20%23355.pdf
+
+At the very end of this file you can find the statement of Erdős Problem #355 taken from the Formal Conjectures project by Google DeepMind, which we also prove. 
 
 https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjectures/ErdosProblems/355.lean
 
@@ -1028,4 +1030,5 @@ theorem erdos_355 :
   rw [ Finset.sum_image <| by tauto ] ; norm_num [ ← @Rat.cast_inj ℝ, hT ] ;)))
 
 #print axioms maintheorem
+
 #print axioms erdos_355
