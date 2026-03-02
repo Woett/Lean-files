@@ -1,11 +1,14 @@
 /-
-We prove that for every non-decreasing unbounded function $f$ on the positive integers, there exists an infinite set $B$ of positive integers omitting a residue class modulo every prime, whose counting function increases more slowly than $f$ does, and has the property that for every integer $n$, the set $B+n$ contains a composite number. This formalization follows the second proof in 
+We prove that for every function $f$ on the positive integers that goes to infinity, there exists an infinite set $B$ of positive integers omitting a residue class modulo every prime, whose counting function increases more slowly than $f$ does, and which has the property that for every integer $n$, the set $B+n$ contains a composite number. This formalization (which was obtained by Aristotle from Harmonic (aristotle-harmonic@harmonic.fun)) follows the second proof in 
 
 D. Weisenberg, Sparse Admissible Sets and a Problem of Erdős and Graham. Integers (2024)
 
-which can be found here: https://math.colgate.edu/~integers/y89/y89.pdf
+which can also be found here: https://math.colgate.edu/~integers/y89/y89.pdf.
 
-This provides one solution to Erdos Problem #429 (https://www.erdosproblems.com/429), of which Weisenberg gives three more in the aforementioned paper.
+This provides one solution to Erdős Problem #429 (https://www.erdosproblems.com/429), of which Weisenberg gives three more in the aforementioned paper.
+
+Lean version: leanprover/lean4:v4.24.0
+Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
 -/
 
 import Mathlib
@@ -824,5 +827,6 @@ theorem main_theorem (f : ℕ → ℕ) (hf : Filter.Tendsto f Filter.atTop Filte
       -- Let's choose the set B_final_v4 as our witness.
       use B_final_v4 f hf;
       exact ⟨ B_final_v4_infinite f hf, B_final_v4_density f hf, B_final_v4_admissible f hf, B_final_v4_composite_shift f hf ⟩
+
 
 #print axioms main_theorem
