@@ -3,7 +3,9 @@ Answering Erdos Problem #221 (https://www.erdosproblems.com/221), Ruzsa proved t
 
 Ruzsa, Jr., I., On a problem of P. Erdős. Canad. Math. Bull. (1972), 309-310. Available here: https://www.cambridge.org/core/services/aop-cambridge-core/content/view/802ABD868A907C2ADB78C580C73C86FC/S0008439500061348a.pdf/on-a-problem-of-p-erdos.pdf.
 
-I rewrote his proof to make it slightly more explicit, which Aristotle then formalized, the result of which can be found below.
+I rewrote his proof to make it slightly more explicit, which Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) then formalized, the result of which can be found below. 
+
+Boris Alexeev was kind enough to slightly alter the proof in order to get rid of all the warnings on unused variables. Thankyou!
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
@@ -552,5 +554,6 @@ theorem thm_main : ∃ A : Set ℕ,
     obtain ⟨ c, hc, x₀, hx₀ ⟩ := density_bound;
     refine' ⟨ A, ⟨ c, hc, x₀, hx₀ ⟩, 32, _ ⟩;
     exact fun N a => thm_covering_explicit N a
+
 
 #print axioms thm_main
