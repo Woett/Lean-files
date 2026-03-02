@@ -1,5 +1,9 @@
 /-
-For positive integers $a$ and $b$, let $u_{a,b}$ and $v_{a,b}$ be the coprime positive integers with $\frac{u_{a,b}}{v_{a,b}} = \sum_{i=a}^b \frac{1}{i}$. That is, $v_{a,b}$ is the denominator of the partial harmonic sum from $a$ to $b$. Below you can find a Lean formalization of a proof that for every positive integer $a$, there exists a positive integer $b$ with $a < b \le 6a$ such that $v_{a,b} < v_{a,b-1}$. This provides a solution to Erdős problem #290; https://www.erdosproblems.com/290. The mathematical content was written by me (Wouter van Doorn), which I fed into Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) to get it formalized. Boris Alexeev then used the output from Aristotle to completely finish the Lean proof, cleaning it all up in the process. I owe him a huge thanks :)
+For positive integers $a$ and $b$, let $u_{a,b}$ and $v_{a,b}$ be the coprime positive integers with $\frac{u_{a,b}}{v_{a,b}} = \sum_{i=a}^b \frac{1}{i}$. That is, $v_{a,b}$ is the denominator of the partial harmonic sum from $a$ to $b$. Below you can find a Lean formalization of a proof that for every positive integer $a$, there exists a positive integer $b$ with $a < b \le 6a$ such that $v_{a,b} < v_{a,b-1}$. This provides a solution to Erdős problem #290; https://www.erdosproblems.com/290. The mathematical content was written by me and consisted of a highly simplified version of my 2024 paper on the subject.
+
+W. van Doorn, On the non-monotonicity of the denominator of generalized harmonic sums. arXiv:2411.03073 (2024).
+
+I fed this simplified version into Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) to get it formalized. Boris Alexeev then used the output from Aristotle to completely finish the Lean proof, cleaning it all up in the process. I owe him a huge thanks :)
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
