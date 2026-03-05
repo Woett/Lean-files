@@ -12,7 +12,7 @@ $c_6 \sqrt{n} \le g_6(n) \le C_6 \sqrt{n}$.
 
 Choi, S. L. G. and Erdős, P. and Szemerédi, E., Some additive and multiplicative problems in number theory. Acta Arith., 37--50 (1975).
 
-I got interested in trying to extract explicit values for these constants from their proofs, and in particular obtained $C_4 \le 2032$ and $C_5 \le 10^9$.
+I should add however that their lower bounds on $g_3(n)$ and $g_5(n)$ (unwittingly?) assume that the $b_i$ are positive, and they do not work otherwise. In fact, without the positivity assumption we actually have $g_3(n) = 1$ for all $n \ge 3$. In any case, I got interested in trying to extract explicit values for these constants from their proofs, and in particular obtained $C_4 \le 2032$ and $C_5 \le 10^9$.
 
 Below you can find formalizations of various bounds of this type, gotten with the help of Aristotle from Harmonic (aristotle-harmonic@harmonic.fun). In the proofs I used an explicit upper bound on the size of Sidon sequences by O'Bryant, so his result is also included in the formalization.
 
@@ -20,8 +20,6 @@ O'Bryant, K. On the Size of Finite Sidon Sets. Ukr. Math. J. 76, 1352–1368 (20
 
 Lean version: leanprover/lean4:v4.24.0
 Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
-
--- Harmonic `generalize_proofs` tactic
 -/
 
 import Mathlib
@@ -2588,3 +2586,4 @@ theorem theorem_pairwise_sums_of_five_elements (n : ℕ) (hn : n ≥ 2) : g 5 n 
 #print axioms pairwise_sums_of_three_positive_elements
 #print axioms theorem_pairwise_sums_of_four_elements
 #print axioms theorem_pairwise_sums_of_five_elements
+
