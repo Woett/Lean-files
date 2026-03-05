@@ -1,9 +1,11 @@
 /-
-Let $k \ge 3$ be an integer and let $g_k(n)$ be the smallest integer such that for any set $A \subseteq \{1, 2, \ldots, 2n\}$ with $|A| \ge n + g_k(n)$ there exist integers $b_1, b_2 \ldots, b_k$ such that all $\binom{k}{2}$ pairwise sums are in $A$.
+For an integer $k \ge 3$ we define $g_k(n)$ as the smallest integer such that for any set $A \subseteq \{1, 2, \ldots, 2n\}$ with $|A| \ge n + g_k(n)$ there exist distinct integers $b_1, b_2 \ldots, b_k$ such that all $\binom{k}{2}$ pairwise sums are in $A$. We further let $h_k(n)$ be the analogous function where we require the $b_i$ to be positive integers. We note that the $b_i$ in the above definition need not be in $A$ themselves.
 
-Estimating $g_k(n)$ is Erdős problem #866 (https://www.erdosproblems.com/866) and note that the $b_i$ in the above definition need not be in $A$ themselves.
+Since at most one of the $b_i$ can be non-positive (as otherwise we have a negative sum), we note that, in general,
 
-Choi, Erdős, and Szemerédi already proved the following estimates (where $C_4, c_5, C_5, c_6, C_6$ are all absolute positive constants):
+$h_{k-1}(n) ≤ g_k(n) \le h_k(n)$ for all $k$ and $n$.
+
+Estimating $g_k(n)$ is Erdős problem #866 (https://www.erdosproblems.com/866) for which Choi, Erdős, and Szemerédi already claimed the following estimates (where $C_4, c_5, C_5, c_6, C_6$ are all absolute positive constants):
 
 $g_3(n) = 2$ for all $n \ge 4$.
 $g_4(n) \le C_4$.
@@ -12,9 +14,16 @@ $c_6 \sqrt{n} \le g_6(n) \le C_6 \sqrt{n}$.
 
 Choi, S. L. G. and Erdős, P. and Szemerédi, E., Some additive and multiplicative problems in number theory. Acta Arith., 37--50 (1975).
 
-I should add however that their lower bounds on $g_3(n)$ and $g_5(n)$ (unwittingly?) assume that the $b_i$ are positive, and they do not work otherwise. In fact, without the positivity assumption we actually have $g_3(n) = 1$ for all $n \ge 3$. In any case, I got interested in trying to extract explicit values for these constants from their proofs, and in particular obtained $C_4 \le 2032$ and $C_5 \le 10^9$.
+However, they (inadvertently?) actually proved these bounds for $h_k(n)$ instead of $g_k(n)$, rendering their lower bounds for $g_3(n)$ and $g_5(n)$ incorrect as stated.
 
-Below you can find formalizations of various bounds of this type, gotten with the help of Aristotle from Harmonic (aristotle-harmonic@harmonic.fun). In the proofs I used an explicit upper bound on the size of Sidon sequences by O'Bryant, so his result is also included in the formalization.
+Below you can find formalizations of the following bounds:
+
+$h_3(n) = 2$ for all $n \ge 4$.
+$g_3(n) = 1$ for all $n \ge 3$.
+$g_4(n) \le 2032$.
+$g_5(n) \le 10^9 \log n$ for all $n \ge 2$.
+
+These formalizations were obtained with the help of Aristotle from Harmonic (aristotle-harmonic@harmonic.fun). In the proofs I also had to use an explicit upper bound on the size of Sidon sequences by O'Bryant, so his result is included in the formalization as well.
 
 O'Bryant, K. On the Size of Finite Sidon Sets. Ukr. Math. J. 76, 1352–1368 (2025).
 
@@ -55,7 +64,8 @@ def HasPairwiseSums (k : ℕ) (A : Finset ℤ) : Prop :=
   ∃ (s : Finset ℤ), s.card = k ∧ ∀ x ∈ s, ∀ y ∈ s, x ≠ y → x + y ∈ A
 
 def HasPositivePairwiseSums (k : ℕ) (A : Finset ℕ) : Prop :=
-  ∃ (s : Finset ℕ), s.card = k ∧ ∀ x ∈ s, ∀ y ∈ s, x ≠ y → x + y ∈ A
+  ∃ (s : Finset ℕ), s.card = k ∧ (∀ x ∈ s, 0 < x) ∧
+    ∀ x ∈ s, ∀ y ∈ s, x ≠ y → x + y ∈ A
 
 def PropertyP (n k m : ℕ) : Prop :=
   ∀ A : Finset ℤ, A ⊆ Sn n → A.card ≥ n + m → HasPairwiseSums k A
@@ -74,7 +84,7 @@ h k n is the smallest m such that PropertyQ n k m holds.
 noncomputable def h (k n : ℕ) : ℕ := sInf {m | PropertyQ n k m}
 
 /-
-Easy lower bounds on g 3 n and h 3 n.
+Easy lower bound on g 3 n.
 -/
 lemma g_3_ge_1 (n : ℕ) : ¬ PropertyP n 3 0 := by
   -- Consider the set of all odd integers in $S_n$. It has $n$ elements.
@@ -86,9 +96,60 @@ lemma g_3_ge_1 (n : ℕ) : ¬ PropertyP n 3 0 := by
   intro hP; obtain ⟨ s, hs₁, hs₂ ⟩ := hP A hA₁ ( by linarith ) ; rcases Finset.card_eq_three.mp hs₁ with ⟨ a, b, c, ha, hb, hc, hab, hbc, hca ⟩ ; simp_all +decide ;
   grind +ring
 
+/-
+Counterexample set consisting of 2 and all odd numbers in Tn.
+-/
+def CounterexampleParity (n : ℕ) : Finset ℕ := {2} ∪ ((Tn n).filter Odd)
+
+/-
+Properties of CounterexampleParity: subset of Tn and size n+1.
+-/
+lemma CounterexampleParity_properties (n : ℕ) (hn : n ≥ 1) :
+  CounterexampleParity n ⊆ Tn n ∧ (CounterexampleParity n).card = n + 1 := by
+  simp +decide [ CounterexampleParity, Tn ];
+  rw [ Finset.card_eq_of_bijective ];
+  refine' ⟨ _, rfl ⟩;
+  exact Finset.insert_subset_iff.mpr ⟨ Finset.mem_Icc.mpr ⟨ by linarith, by linarith ⟩, Finset.filter_subset _ _ ⟩;
+  use fun i hi => 2 * i + 1;
+  · exact fun a ha => by rcases Finset.mem_filter.mp ha with ⟨ ha₁, ha₂ ⟩ ; obtain ⟨ k, rfl ⟩ := ha₂; exact ⟨ k, by linarith [ Finset.mem_Icc.mp ha₁ ], rfl ⟩ ;
+  · exact fun i hi => Finset.mem_filter.mpr ⟨ Finset.mem_Icc.mpr ⟨ by linarith, by linarith ⟩, by simp +decide ⟩;
+  · aesop
+
+/-
+If the only even element in A is 2, then A cannot have positive pairwise sums for k=3.
+-/
+lemma no_s_3_if_only_even_is_2 (A : Finset ℕ) (h_even : ∀ x ∈ A, Even x → x = 2) :
+  ¬ HasPositivePairwiseSums 3 A := by
+  rintro ⟨ s, hs ⟩;
+  rcases Finset.card_eq_three.mp hs.1 with ⟨ x, y, z, hx, hy, hz, hs ⟩ ; simp_all +decide;
+  grind +ring
+
+/-
+The only even element in CounterexampleParity is 2.
+-/
+lemma CounterexampleParity_even_is_2 (n : ℕ) (x : ℕ) (hx : x ∈ CounterexampleParity n) (heven : Even x) : x = 2 := by
+  have h_even_contradiction : ∀ x ∈ CounterexampleParity n, Even x → x = 2 := by
+    intro x hx heven
+    have h_filter : x ∈ ((Tn n).filter Odd) ∨ x = 2 := by
+      unfold CounterexampleParity at hx; aesop;
+    grind;
+  exact h_even_contradiction x hx heven
+
+/-
+CounterexampleParity fails the pairwise sum condition for k=3.
+-/
+lemma CounterexampleParity_fails (n : ℕ) :
+  ¬ HasPositivePairwiseSums 3 (CounterexampleParity n) := by
+  apply no_s_3_if_only_even_is_2;
+  exact fun x a a_1 => CounterexampleParity_even_is_2 n x a a_1
+
+/-
+Easy lower bound on h 3 n.
+-/
 lemma h_3_ge_2 (n : ℕ) (hn : n ≥ 1) : ¬ PropertyQ n 3 1 := by
   -- Consider the set of all odd integers in $S_n$ and add 2. It has $n+1$ elements.
-  sorry
+  simp [PropertyQ];
+  use CounterexampleParity n, CounterexampleParity_properties n hn |>.1, CounterexampleParity_properties n hn |>.2.ge, CounterexampleParity_fails n
 
 /-
 HasPairwiseSums 3 A is equivalent to the existence of three distinct elements in A whose sum is even.
@@ -118,6 +179,9 @@ lemma card_odd_even_in_Sn (n : ℕ) : ((Sn n).filter Odd).card = n ∧ ((Sn n).f
   · exact fun i hi => ⟨ ⟨ by linarith, by linarith ⟩, even_iff_two_dvd.mpr ⟨ i + 1, by ring ⟩ ⟩;
   · aesop
 
+/-
+Easy upper bound on g 3 n for n ≥ 3.
+-/
 lemma g_3_le_1 (n : ℕ) (h : n ≥ 3) : PropertyP n 3 1 := by
   intro A hA hA';
   -- Let `E` be the set of even numbers in `A`, and `O` be the set of odd numbers in `A`.
@@ -2434,29 +2498,33 @@ If $n \ge 4$ and $A \subseteq \{1, 2, \ldots, 2n\}$ is any set with $|A| \ge n +
 theorem pairwise_sums_of_three_positive_elements_fake (n : ℕ) (hn : n ≥ 4) (A : Finset ℕ)
     (hA_subset : A ⊆ Finset.Icc 1 (2 * n)) (hA_card : A.card ≥ n + 2) :
     ∃ b₁ b₂ b₃ : ℕ, b₁ ≠ b₂ ∧ b₁ ≠ b₃ ∧ b₂ ≠ b₃ ∧
-    (b₁ + b₂) ∈ A ∧ (b₁ + b₃) ∈ A ∧ (b₂ + b₃) ∈ A := by
-      -- Let $2m+1$ be the smallest odd integer $\ge 3$ in $A$.
+    (b₁ + b₂) ∈ A ∧ (b₁ + b₃) ∈ A ∧ (b₂ + b₃) ∈ A ∧ b₁ > 0 ∧ b₂ > 0 ∧ b₃ > 0 := by
       obtain ⟨m, hm⟩ : ∃ m : ℕ, (2 * m + 1 ∈ A ∧ m ≥ 1) ∧ (∀ k ∈ A, k % 2 = 1 → k ≥ 2 * m + 1 ∨ k = 1) := by
         by_cases h_odd : ∃ k ∈ A, k % 2 = 1 ∧ k ≥ 3;
         · obtain ⟨k₀, hk₀⟩ : ∃ k₀ ∈ A, k₀ % 2 = 1 ∧ k₀ ≥ 3 ∧ ∀ k ∈ A, k % 2 = 1 → k ≥ 3 → k₀ ≤ k := by
             exact ⟨ Nat.find h_odd, Nat.find_spec h_odd |>.1, Nat.find_spec h_odd |>.2.1, Nat.find_spec h_odd |>.2.2, fun k hk hk' hk'' => Nat.find_min' h_odd ⟨ hk, hk', hk'' ⟩ ⟩;
           use k₀ / 2;
           grind;
-        · -- If there are no odd integers in $A$ greater than or equal to 3, then $A$ must be a subset of $\{1, 2, 4, 6, \ldots, 2n\}$.
-          have h_subset : A ⊆ {1} ∪ Finset.filter (fun x => x % 2 = 0) (Finset.Icc 1 (2 * n)) := by
+        · have h_subset : A ⊆ {1} ∪ Finset.filter (fun x => x % 2 = 0) (Finset.Icc 1 (2 * n)) := by
             grind;
           have := Finset.card_le_card h_subset; simp_all +arith +decide ;
           rw [ show Finset.filter ( fun x => x % 2 = 0 ) ( Finset.Icc 1 ( 2 * n ) ) = Finset.image ( fun x => 2 * x ) ( Finset.Icc 1 n ) from ?_, Finset.card_image_of_injective ] at this <;> norm_num [ Function.Injective ] at * ; linarith [ Nat.div_mul_le_self ( 2 * n ) 2 ] ;
-          -- To prove equality of finite sets, we show each set is a subset of the other.
           apply Finset.ext
           intro x
           simp [Finset.mem_image];
           exact ⟨ fun hx => ⟨ x / 2, ⟨ by linarith [ Nat.mod_add_div x 2 ], by linarith [ Nat.mod_add_div x 2 ] ⟩, by linarith [ Nat.mod_add_div x 2 ] ⟩, by rintro ⟨ a, ⟨ ha₁, ha₂ ⟩, rfl ⟩ ; exact ⟨ ⟨ by linarith, by linarith ⟩, by norm_num ⟩ ⟩;
       by_cases h_exists_j : ∃ j ∈ Finset.Icc (m + 2) (2 * n - (m + 1)), m + j ∈ A ∧ m + j + 1 ∈ A;
       · norm_num +zetaDelta at *;
-        obtain ⟨ j, hj₁, hj₂, hj₃ ⟩ := h_exists_j; exact ⟨ m, m + 1, by linarith, j, by linarith, by linarith, by ring_nf at *; aesop ⟩ ;
-      · -- Since $S_2$ contains no consecutive integers, we can apply `even_subset_structure`.
-        have h_even_subset : 4 ∈ A ∧ 6 ∈ A ∧ 8 ∈ A := by
+        obtain ⟨ j, hj₁, hj₂, hj₃ ⟩ := h_exists_j
+        have hj_lo : m + 2 ≤ j := hj₁.1
+        exact ⟨ m, m + 1, by linarith, j, by linarith, by linarith,
+          by convert hm.1.1 using 1; ring,
+          hj₂,
+          by convert hj₃ using 1; ring,
+          by linarith [hm.1.2],
+          by omega,
+          by omega ⟩
+      · have h_even_subset : 4 ∈ A ∧ 6 ∈ A ∧ 8 ∈ A := by
           apply even_subset_structure n m hn A hA_subset hA_card hm.1.2 hm.1.1 hm.2;
           intros x y hx hy hxy
           by_contra h_contra
@@ -2464,7 +2532,7 @@ theorem pairwise_sums_of_three_positive_elements_fake (n : ℕ) (hn : n ≥ 4) (
             linarith;
           simp_all +decide [ Finset.mem_inter ];
           exact h_exists_j ( x - m ) ( by omega ) ( by omega ) ( by convert hx.1 using 1; omega ) ( by convert hy.1 using 1; omega );
-        exact ⟨ 1, 3, 5, by decide, by decide, by decide, by aesop ⟩
+        exact ⟨ 1, 3, 5, by decide, by decide, by decide, by aesop, by aesop, by aesop, by omega, by omega, by omega ⟩
 
 /-
 If $A \subseteq \{1, 2, \ldots, 2n\}$ is any set with $|A| \ge n + 2032$ elements, then distinct integers $b_1, b_2, b_3, b_4$ exist with $b_i + b_j \in A$ for $1 \le i < j \le 4$. That is, $g_4(n) ≤ 2032$.
@@ -2547,10 +2615,19 @@ theorem pairwise_sums_of_three_elements (n : ℕ) (hn : n ≥ 3) : g 3 n = 1 := 
     exact ⟨ g_3_ge_1 n, Set.Nonempty.ne_empty ⟨ 1, g_3_le_1 n hn ⟩ ⟩
 
 /-
-$h_3(n) = 2$ for all $n ≥ 4$. We use h_3_ge_2 and pairwise_sums_of_three_positive_elements_fake
+$h_3(n) = 2$ for all $n ≥ 4$.
 -/
 theorem pairwise_sums_of_three_positive_elements (n : ℕ) (hn : n ≥ 4) : h 3 n = 2 := by
-  sorry
+  have h_def : ∀ m, m < 2 → ¬PropertyQ n 3 m := by
+    intro m hm h;
+    exact h_3_ge_2 n ( by linarith ) ( by exact fun A hA hA' => h A hA ( by linarith ) );
+  have h_two : PropertyQ n 3 2 := by
+    intro A hA_sub hA_card
+    obtain ⟨b₁, b₂, b₃, hb₁b₂, hb₁b₃, hb₂b₃, hb₁, hb₂, hb₃⟩ : ∃ b₁ b₂ b₃ : ℕ, b₁ ≠ b₂ ∧ b₁ ≠ b₃ ∧ b₂ ≠ b₃ ∧ (b₁ + b₂) ∈ A ∧ (b₁ + b₃) ∈ A ∧ (b₂ + b₃) ∈ A ∧ b₁ > 0 ∧ b₂ > 0 ∧ b₃ > 0 := pairwise_sums_of_three_positive_elements_fake n hn A hA_sub hA_card
+    use {b₁, b₂, b₃};
+    simp_all +decide [ Finset.subset_iff ];
+    exact ⟨ fun _ => by simpa only [ add_comm ] using hb₁, fun _ => by simpa only [ add_comm ] using hb₂, fun _ => by simpa only [ add_comm ] using hb₃.1 ⟩;
+  exact le_antisymm ( Nat.sInf_le h_two ) ( le_csInf ⟨ 2, h_two ⟩ fun m hm => not_lt.1 fun contra => h_def m contra hm )
 
 /-
 $g_4(n) ≤ 2032$.
@@ -2586,4 +2663,3 @@ theorem theorem_pairwise_sums_of_five_elements (n : ℕ) (hn : n ≥ 2) : g 5 n 
 #print axioms pairwise_sums_of_three_positive_elements
 #print axioms theorem_pairwise_sums_of_four_elements
 #print axioms theorem_pairwise_sums_of_five_elements
-
