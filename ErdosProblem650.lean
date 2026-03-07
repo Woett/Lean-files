@@ -1,5 +1,5 @@
 /-
-Yixin He, Yanyang Li and Quanyu Tang used ChatGPT 5.4 in order to prove that for every positive integer $m$ there exists a positive integer $N$, a set $A \subset \{1, 2, \ldots, N\}$ and an interval $I \subset [1, \infty)$ with $|I| = 2N$ such that the maximum number of disjoint pairs $(a, b)$ with $a \in A$, $b \in I$ and $a | b$ for all $i$ is at most $2 \lceil \sqrt{m} \rceil$. This solves Erdős Problem #650 (https://www.erdosproblems.com/650).
+Yixin He, Yanyang Li and Quanyu Tang used ChatGPT 5.4 Pro in order to prove that for every positive integer $m$ there exists a positive integer $N$, a set $A \subset \{1, 2, \ldots, N\}$ and an interval $I \subset [1, \infty)$ with $|I| = 2N$ such that the maximum number of disjoint pairs $(a, b)$ with $a \in A$, $b \in I$ and $a | b$ for all $i$ is at most $2 \lceil \sqrt{m} \rceil$. This solves Erdős Problem #650 (https://www.erdosproblems.com/650).
 
 https://github.com/QuanyuTang/erdos-problem-650/blob/main/On_Erdos_Problem_650.pdf
 
