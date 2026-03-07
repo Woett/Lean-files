@@ -1,5 +1,5 @@
 /-
-For an infinite set $S$ of positive integers define $S(x) = |S \cap [1, x]|$. We then say that infinite sets of positive integers $A$ and $B$ are exact additive complements if every large enough integer can be written as $a+b$ with $a \in A$, $b \in B$ and such that $\frac{A(x) B(x)}{x}$ converges to $1$ if $x$ goes to infinity. Erdős and Danzer conjectured that $A(x) B(x) - x$ goes to infinity with $x$ for any two exact additive complements $A$ and $B$ (see https://www.erdosproblems.com/785), and this was proven by Sárközy and Szemerédi.
+For a set $S$ of positive integers define $S(x) = |S \cap [1, x]|$. We then say that sets of positive integers $A$ and $B$ are exact additive complements if every large enough integer can be written as $a+b$ with $a \in A$, $b \in B$ and such that $\frac{A(x) B(x)}{x}$ converges to $1$ if $x$ goes to infinity. Erdős and Danzer conjectured that $A(x) B(x) - x$ goes to infinity with $x$ for any two exact additive complements $A$ and $B$ that are both infinite (see https://www.erdosproblems.com/785), and this was proven by Sárközy and Szemerédi.
 
 András Sárközy and Endre Szemerédi, On a problem in additive number theory. Acta Math. Hungar. (1994), 237-245.
 
@@ -2297,3 +2297,4 @@ theorem corollary_erdos_785 (A B : Set ℕ) (h_inf_A : A.Infinite) (h_inf_B : B.
         · convert lemma_r_mul_A_div_t_tendsto_zero B A h_inf_B h_inf_A ( lemma_exact_complements_symm A B h_hyp ) using 1
 
 #print axioms corollary_erdos_785
+
