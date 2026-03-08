@@ -1,5 +1,7 @@
 /-
-Yixin He, Yanyang Li and Quanyu Tang used ChatGPT 5.4 Pro in order to prove that for every positive integer $m$ there exists a positive integer $N$, a set $A \subset \{1, 2, \ldots, N\}$ of size $m$ and an interval $I \subset [1, \infty)$ with $|I| = 2N$ such that the maximum number of fully disjoint pairs $(a, b)$ with $a \in A$, $b \in I$ and $a | b$ is at most $2 \lceil \sqrt{m} \rceil$. This solves Erdős Problem #650 (https://www.erdosproblems.com/650).
+Yixin He, Yanyang Li and Quanyu Tang used ChatGPT 5.4 Pro in order to prove that for every positive integer $m$ there exists a positive integer $N$, a set $A \subset \{1, 2, \ldots, N\}$ of size $m$ and an interval $I = (x, x + 2N) \subset [1, \infty)$ such that the maximum number of fully disjoint pairs $(a, b)$ with $a \in A$, $b \in I$ and $a | b$ is at most $2 \lceil \sqrt{m} \rceil$. Moreover, this bound is tight. That is, for every set $A \subset \{1, 2, \ldots, N\}$ of size $m$ and every interval $I = (x, x + 2N) \subset [1, \infty)$ one can find at least $2 \lceil \sqrt{m} \rceil$ fully disjoint pairs $(a, b)$ with $a \in A$, $b \in I$ and $a | b$.
+
+These bounds solve Erdős Problem #650 (https://www.erdosproblems.com/650), and the write-up can be found here:
 
 https://github.com/QuanyuTang/erdos-problem-650/blob/main/On_Erdos_Problem_650.pdf
 
@@ -28,6 +30,37 @@ set_option relaxedAutoImplicit false
 set_option autoImplicit false
 
 noncomputable section
+
+/-
+A set of pairs $M$ is a matching if each pair $(a, b) \in M$ satisfies $a \in A$, $b \in I$, $a \mid b$, and no two pairs share an element.
+-/
+def is_matching (A : Finset ℕ) (I : Set ℝ) (M : Finset (ℕ × ℤ)) : Prop :=
+  (∀ p ∈ M, p.1 ∈ A ∧ (p.2 : ℝ) ∈ I ∧ (p.1 : ℤ) ∣ p.2) ∧
+  (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2)
+
+/-
+The maximum matching size is the largest integer $k$ such that there exists a matching of size $k$.
+-/
+noncomputable def max_matching_size (A : Finset ℕ) (I : Set ℝ) : ℕ :=
+  sSup {k | ∃ M, is_matching A I M ∧ M.card = k}
+
+/-
+Property(m, k) holds if for every configuration of size m, there exists a matching of size at least k.
+-/
+def Property (m k : ℕ) : Prop :=
+  ∀ (A : Finset ℕ) (x : ℝ),
+    A.card = m →
+    (∀ a ∈ A, a > 0) →
+    ∀ (hA : A.Nonempty),
+    let N := A.max' hA
+    let I := Set.Ioo x (x + 2 * N)
+    max_matching_size A I ≥ k
+
+/-
+f(m) is the largest integer k such that every configuration of size m has a matching of size at least k.
+-/
+noncomputable def f (m : ℕ) : ℕ :=
+  sSup {k | Property m k}
 
 /-
 $\gcd(\lcm(a, b), c) = \lcm(\gcd(a, c), \gcd(b, c))$ for natural numbers.
@@ -498,26 +531,671 @@ theorem erdos_650_upper_bound_st (s t : ℕ) (hs : s ≥ 1) (ht : t ≥ 1) :
   · convert erdos_650_upper_bound_st_main s t ( Nat.lt_of_le_of_ne hs ( Ne.symm ( by tauto ) ) ) ( Nat.lt_of_le_of_ne ht ( Ne.symm ( by tauto ) ) ) using 1
 
 /-
-The upper bound for Problem #650 holds for any $m \ge 1$.
+If a bipartite graph with |U| ≥ 4 satisfies the condition that for every nonempty subset S of U, the size of its neighborhood is at least ⌈2√|S|⌉, then there exists a matching of size at least ⌈2√|U|⌉.
 -/
-theorem erdos_650_upper_bound (m : ℕ) (hm : m ≥ 1) :
-    ∃ (N : ℕ) (A : Finset ℕ) (I : Set ℕ),
-      A.card = m ∧
-      (∀ a ∈ A, 1 ≤ a ∧ a ≤ N) ∧
-      (∃ x y, I = Set.Ioc x y ∧ y - x = 2 * N) ∧
-      (∀ (M : Finset (ℕ × ℕ)),
-        (∀ p ∈ M, p.1 ∈ A ∧ p.2 ∈ I ∧ p.1 ∣ p.2) →
-        (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) →
-        M.card ≤ 2 * Nat.ceil (Real.sqrt m)) := by
-  -- Let $n = \lceil \sqrt{m} \rceil$.
-  set n := Nat.ceil (Real.sqrt m) with hn_def
-  have hn : n ≥ 1 := by
-    exact Nat.ceil_pos.mpr <| Real.sqrt_pos.mpr <| Nat.cast_pos.mpr hm;
-  -- Apply `erdos_650_upper_bound_st` with $s = t = n$.
-  obtain ⟨N, A_big, I, hA_big, hI, hM⟩ := erdos_650_upper_bound_st n n (by linarith) (by linarith);
-  -- Choose a subset $A \subseteq A_{big}$ with $|A| = m$.
-  obtain ⟨A, hA⟩ : ∃ A : Finset ℕ, A ⊆ A_big ∧ A.card = m := by
-    exact Finset.exists_subset_card_eq ( by nlinarith [ show m ≤ n * n by have := Nat.le_ceil ( Real.sqrt m ) ; rw [ Real.sqrt_le_iff ] at this ; norm_cast at * ; nlinarith ] );
-  exact ⟨ N, A, I, hA.2, fun a ha => hI a ( hA.1 ha ), hM.1, fun M hM₁ hM₂ => by linarith [ hM.2 M ( fun p hp => ⟨ hA.1 ( hM₁ p hp |>.1 ), hM₁ p hp |>.2.1, hM₁ p hp |>.2.2 ⟩ ) hM₂ ] ⟩
+lemma matching_size_from_growth_condition (U V : Finset ℕ) (R : ℕ → ℕ → Prop) [DecidableRel R]
+    (h_card : U.card ≥ 4)
+    (h_growth : ∀ S ⊆ U, S.Nonempty → (S.biUnion (fun u => V.filter (R u))).card ≥ Nat.ceil (2 * Real.sqrt (S.card : ℝ))) :
+    ∃ (M : Finset (ℕ × ℕ)),
+      (∀ p ∈ M, p.1 ∈ U ∧ p.2 ∈ V ∧ R p.1 p.2) ∧
+      (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧
+      M.card ≥ Nat.ceil (2 * Real.sqrt (U.card : ℝ)) := by
+        -- Construct a new bipartite graph $G'$ by adding $d$ dummy vertices to $V$, each connected to all vertices in $U$.
+        set d := U.card - Nat.ceil (2 * Real.sqrt (U.card : ℝ))
+        set V' := V ∪ Finset.image (fun i => V.sup id + i + 1) (Finset.range d) with hV';
+        -- By Hall's Marriage Theorem, there exists a matching in $G'$ covering $U$.
+        obtain ⟨M', hM'⟩ : ∃ M' : Finset (ℕ × ℕ), (∀ p ∈ M', p.1 ∈ U ∧ p.2 ∈ V' ∧ (if p.2 ∈ V then R p.1 p.2 else True)) ∧ (∀ p q, p ∈ M' → q ∈ M' → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧ M'.card = U.card := by
+          have h_hall : ∀ S ⊆ U, S.Nonempty → (Finset.biUnion S (fun u => Finset.filter (fun v => if v ∈ V then R u v else True) V')).card ≥ S.card := by
+            intros S hS_sub hS_nonempty
+            have h_neighborhood : (Finset.biUnion S (fun u => Finset.filter (fun v => if v ∈ V then R u v else True) V')).card ≥ (Finset.biUnion S (fun u => Finset.filter (R u) V)).card + d := by
+              have h_neighborhood : (Finset.biUnion S (fun u => Finset.filter (fun v => if v ∈ V then R u v else True) V')).card ≥ (Finset.biUnion S (fun u => Finset.filter (R u) V)).card + (Finset.biUnion S (fun u => Finset.filter (fun v => v ∉ V) V')).card := by
+                rw [ ← Finset.card_union_of_disjoint ];
+                · refine Finset.card_mono ?_;
+                  simp +decide [ Finset.subset_iff ];
+                  grind +ring;
+                · simp +contextual [ Finset.disjoint_left ];
+              refine le_trans ?_ h_neighborhood;
+              refine' add_le_add_left ( le_trans _ ( Finset.card_mono <| show Finset.image ( fun i => V.sup id + i + 1 ) ( Finset.range d ) ⊆ S.biUnion ( fun u => { v ∈ V' | v∉V } ) from _ ) ) _;
+              · rw [ Finset.card_image_of_injective ] <;> norm_num [ Function.Injective ];
+              · simp +decide [ Finset.subset_iff ];
+                exact fun a ha => ⟨ hS_nonempty, Finset.mem_union_right _ <| Finset.mem_image_of_mem _ <| Finset.mem_range.mpr ha, fun h => not_lt_of_ge ( Finset.le_sup ( f := id ) h ) <| Nat.lt_succ_of_le <| Nat.le_add_right _ _ ⟩;
+            have h_ceil_ge_card : Nat.ceil (2 * Real.sqrt (S.card : ℝ)) + U.card - Nat.ceil (2 * Real.sqrt (U.card : ℝ)) ≥ S.card := by
+              have h_ceil_ge_card : Nat.ceil (2 * Real.sqrt (U.card : ℝ)) ≤ Nat.ceil (2 * Real.sqrt (S.card : ℝ)) + U.card - S.card := by
+                refine Nat.ceil_le.mpr ?_;
+                rw [ Nat.cast_sub ] <;> norm_num;
+                · have := Nat.le_ceil ( 2 * Real.sqrt S.card );
+                  nlinarith only [ this, show ( S.card : ℝ ) ≤ U.card by exact_mod_cast Finset.card_le_card hS_sub, Real.mul_self_sqrt ( Nat.cast_nonneg S.card ), Real.mul_self_sqrt ( Nat.cast_nonneg U.card ), Real.sqrt_nonneg S.card, Real.sqrt_nonneg U.card, show ( ⌈2 * Real.sqrt S.card⌉₊ : ℝ ) ≥ 2 by exact_mod_cast Nat.succ_le_of_lt ( Nat.lt_ceil.mpr ( by norm_num; nlinarith only [ show ( S.card : ℝ ) ≥ 1 by exact_mod_cast Finset.card_pos.mpr hS_nonempty, Real.sqrt_nonneg S.card, Real.sq_sqrt ( Nat.cast_nonneg S.card ) ] ) ) ];
+                · exact le_add_of_nonneg_of_le ( Nat.zero_le _ ) ( Finset.card_le_card hS_sub )
+              exact le_tsub_of_add_le_left ( by linarith [ Nat.sub_add_cancel ( show S.card ≤ ⌈2 * Real.sqrt S.card⌉₊ + U.card from by linarith [ show S.card ≤ U.card from Finset.card_le_card hS_sub ] ) ] );
+            exact le_trans h_ceil_ge_card ( by rw [ Nat.add_sub_assoc ( show ⌈2 * Real.sqrt U.card⌉₊ ≤ U.card from Nat.ceil_le.mpr <| by nlinarith only [ Real.mul_self_sqrt <| Nat.cast_nonneg U.card, show ( U.card :ℝ ) ≥ 4 by norm_cast ] ) ] ; linarith [ h_growth S hS_sub hS_nonempty ] );
+          have h_hall : ∀ S ⊆ U, S.Nonempty → (Finset.biUnion S (fun u => Finset.filter (fun v => if v ∈ V then R u v else True) V')).card ≥ S.card := by
+            assumption
+          have h_hall_theorem : ∀ (G : ℕ → Finset ℕ), (∀ S ⊆ U, S.Nonempty → (Finset.biUnion S G).card ≥ S.card) → ∃ M : Finset (ℕ × ℕ), (∀ p ∈ M, p.1 ∈ U ∧ p.2 ∈ G p.1) ∧ (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧ M.card = U.card := by
+            intros G hG
+            obtain ⟨f, hf⟩ : ∃ f : ℕ → ℕ, (∀ u ∈ U, f u ∈ G u) ∧ (∀ u v, u ∈ U → v ∈ U → u ≠ v → f u ≠ f v) := by
+              have h_hall_theorem : ∀ (G : ℕ → Finset ℕ), (∀ S ⊆ U, S.Nonempty → (Finset.biUnion S G).card ≥ S.card) → ∃ f : ℕ → ℕ, (∀ u ∈ U, f u ∈ G u) ∧ (∀ u v, u ∈ U → v ∈ U → u ≠ v → f u ≠ f v) := by
+                intros G hG
+                have h_hall : ∀ S ⊆ U, S.Nonempty → (Finset.biUnion S G).card ≥ S.card := hG
+                have := Finset.all_card_le_biUnion_card_iff_exists_injective ( fun u : U => G u );
+                obtain ⟨ f, hf₁, hf₂ ⟩ := this.mp ( fun s => by
+                  by_cases hs : s.Nonempty <;> simp_all +decide [Function.Injective];
+                  convert h_hall ( s.image Subtype.val ) _ _ using 1 <;> simp_all +decide [ Finset.subset_iff ];
+                  · rw [ Finset.card_image_of_injective _ Subtype.coe_injective ];
+                  · congr! 1;
+                    ext; simp [Finset.mem_biUnion, Finset.mem_image] );
+                use fun u => if hu : u ∈ U then f ⟨ u, hu ⟩ else 0;
+                simp_all +decide [ Function.Injective ];
+                exact fun u v hu hv huv => fun h => huv <| hf₁ u hu v hv h;
+              exact h_hall_theorem G hG;
+            use Finset.image (fun u => (u, f u)) U;
+            simp +zetaDelta at *;
+            exact ⟨ fun u hu => ⟨ hu, hf.1 u hu ⟩, by aesop, by rw [ Finset.card_image_of_injOn fun u hu v hv huv => by aesop ] ⟩;
+          specialize h_hall_theorem (fun u => Finset.filter (fun v => if v ∈ V then R u v else True) V') h_hall;
+          exact ⟨ h_hall_theorem.choose, fun p hp => ⟨ h_hall_theorem.choose_spec.1 p hp |>.1, Finset.mem_filter.mp ( h_hall_theorem.choose_spec.1 p hp |>.2 ) |>.1, Finset.mem_filter.mp ( h_hall_theorem.choose_spec.1 p hp |>.2 ) |>.2 ⟩, h_hall_theorem.choose_spec.2.1, h_hall_theorem.choose_spec.2.2 ⟩;
+        -- Let $M$ be the subset of $M'$ consisting of edges where the second element is in $V$.
+        set M := M'.filter (fun p => p.2 ∈ V) with hM;
+        -- We need to show that $M.card \geq \lceil 2\sqrt{U.card} \rceil$.
+        have hM_card : M.card ≥ U.card - d := by
+          have hM_card : (M' \ M).card ≤ d := by
+            have hM'_not_M : (M' \ M).image Prod.snd ⊆ Finset.image (fun i => V.sup id + i + 1) (Finset.range d) := by
+              grind;
+            have := Finset.card_le_card hM'_not_M; simp_all +decide [ Finset.card_image_of_injective, Function.Injective ] ;
+            rwa [ Finset.card_image_of_injOn ] at this ; intro a ha b hb ; specialize hM' ; have := hM'.2.1 _ _ _ _ ( Finset.mem_sdiff.mp ha |>.1 ) ( Finset.mem_sdiff.mp hb |>.1 ) ; aesop;
+          grind;
+        -- Therefore, $M.card \geq \lceil 2\sqrt{U.card} \rceil$.
+        have hM_card_final : M.card ≥ Nat.ceil (2 * Real.sqrt (U.card : ℝ)) := by
+          exact le_trans ( by rw [ Nat.sub_sub_self ( show ⌈2 * Real.sqrt U.card⌉₊ ≤ U.card from Nat.ceil_le.mpr <| by nlinarith only [ Real.mul_self_sqrt <| Nat.cast_nonneg U.card, show ( U.card :ℝ ) ≥ 4 by norm_cast ] ) ] ) hM_card;
+        exact ⟨ M, fun p hp => by have := hM'.1 p ( Finset.mem_filter.mp hp |>.1 ) ; aesop, fun p q hp hq hpq => hM'.2.1 p q ( Finset.mem_filter.mp hp |>.1 ) ( Finset.mem_filter.mp hq |>.1 ) hpq, hM_card_final ⟩
 
-#print axioms erdos_650_upper_bound
+/-
+For any positive integer a <= N and real x not a multiple of N, there is a multiple m of a such that m is in (x, x+N] and m+a is in (x+N, x+2N).
+-/
+lemma exists_crossing_multiple (N : ℕ) (x : ℝ) (a : ℕ)
+    (ha_pos : a > 0)
+    (ha_le_N : a ≤ N)
+    (hx_not_int_N : ∀ k : ℤ, x ≠ k * N) :
+    ∃ m : ℤ, (a : ℤ) ∣ m ∧
+             (x < m ∧ m ≤ x + N) ∧
+             (x + N < m + a ∧ m + a < x + 2 * N) := by
+               -- Let $m = \lfloor x/a \rfloor \cdot a + a$. Then $m$ is a multiple of $a$ and $x < m \le x + a \le x + N$.
+               obtain ⟨m, hm⟩ : ∃ m : ℤ, (a : ℤ) ∣ m ∧ x < m ∧ m ≤ x + N := by
+                 refine' ⟨ a * ⌊x / a⌋ + a, _, _, _ ⟩ <;> norm_num [ ha_pos ];
+                 · nlinarith [ Int.lt_floor_add_one ( x / a ), show ( a : ℝ ) > 0 by positivity, mul_div_cancel₀ x ( by positivity : ( a : ℝ ) ≠ 0 ) ];
+                 · nlinarith [ Int.floor_le ( x / a ), show ( a : ℝ ) ≤ N by norm_cast, mul_div_cancel₀ x ( by positivity : ( a : ℝ ) ≠ 0 ) ];
+               obtain ⟨hm₁, hm₂, hm₃⟩ : (a : ℤ) ∣ m ∧ x < m ∧ m ≤ x + N := hm;
+               -- Let $m$ be the largest multiple of $a$ in $(x, x+N]$.
+               obtain ⟨m, hm⟩ : ∃ m : ℤ, (a : ℤ) ∣ m ∧ x < m ∧ m ≤ x + N ∧ ∀ n : ℤ, (a : ℤ) ∣ n → x < n → n ≤ x + N → n ≤ m := by
+                 have hm_max : ∃ m ∈ {n : ℤ | (a : ℤ) ∣ n ∧ x < n ∧ n ≤ x + N}, ∀ n ∈ {n : ℤ | (a : ℤ) ∣ n ∧ x < n ∧ n ≤ x + N}, n ≤ m := by
+                   apply_rules [ Int.exists_greatest_of_bdd ];
+                   · exact ⟨ ⌊x + N⌋, fun z hz => Int.le_floor.2 hz.2.2 ⟩;
+                   · exact ⟨ m, hm₁, hm₂, hm₃ ⟩;
+                 aesop;
+               refine' ⟨ m, hm.1, ⟨ hm.2.1, hm.2.2.1 ⟩, _, _ ⟩;
+               · contrapose! hm;
+                 exact fun h₁ h₂ h₃ => ⟨ m + a, by simpa using h₁.add ( dvd_refl _ ), by push_cast; linarith, by push_cast; linarith, by linarith ⟩;
+               · -- Since $x$ is not a multiple of $N$, $x + 2N$ is not a multiple of $a$ if $a = N$.
+                 by_cases ha_eq_N : a = N;
+                 · contrapose! hx_not_int_N;
+                   obtain ⟨ k, hk ⟩ := hm.1; use k - 1; push_cast [ * ] at *; linarith;
+                 · linarith [ show ( a : ℝ ) < N by exact_mod_cast lt_of_le_of_ne ha_le_N ha_eq_N ]
+
+/-
+For a nonempty set A of positive integers with max N, and an interval I=(x, x+2N) where x is not a multiple of N, the divisibility graph satisfies the condition that the neighborhood size of any subset S is at least 2*sqrt(|S|).
+-/
+lemma divisibility_graph_growth (A : Finset ℕ) (N : ℕ) (x : ℝ)
+    (hA_nonempty : A.Nonempty)
+    (hA_pos : ∀ a ∈ A, a > 0)
+    (hN : N = A.max' hA_nonempty)
+    (hx_not_int_N : ∀ k : ℤ, x ≠ k * N) :
+    let I := Set.Ioo x (x + 2 * N)
+    let V : Finset ℤ := (Finset.Ico (Int.floor x + 1) (Int.ceil (x + 2 * N))).filter (fun n => (n : ℝ) ∈ I)
+    let R := fun (a : ℕ) (b : ℤ) => (a : ℤ) ∣ b
+    ∀ S ⊆ A, S.Nonempty → (S.biUnion (fun a => V.filter (R a))).card ≥ Nat.ceil (2 * Real.sqrt (S.card : ℝ)) := by
+      intro I V R S hS hS_nonempty
+      have h_map : ∃ f : ℕ → ℤ × ℤ, (∀ a ∈ S, (a : ℤ) ∣ (f a).1 ∧ (a : ℤ) ∣ (f a).2 ∧ (x < (f a).1 ∧ (f a).1 ≤ x + N) ∧ (x + N < (f a).2 ∧ (f a).2 < x + 2 * N)) ∧ (∀ a b, a ∈ S → b ∈ S → a ≠ b → f a ≠ f b) := by
+        have h_map : ∀ a ∈ S, ∃ m : ℤ, (a : ℤ) ∣ m ∧ (x < m ∧ m ≤ x + N) ∧ (x + N < m + a ∧ m + a < x + 2 * N) := by
+          intro a ha
+          apply exists_crossing_multiple N x a (hA_pos a (hS ha)) (by
+          exact hN ▸ Finset.le_max' _ _ ( hS ha )) hx_not_int_N;
+        choose! f hf using h_map;
+        use fun a => ( f a, f a + a ) ; aesop;
+      obtain ⟨ f, hf1, hf2 ⟩ := h_map;
+      -- Let $\Gamma_-(S) = \bigcup_{a \in S} \{v \in B_- \mid a \mid v\}$ and $\Gamma_+(S) = \bigcup_{a \in S} \{v \in B_+ \mid a \mid v\}$.
+      set Γ_minus := Finset.biUnion S (fun a => Finset.filter (fun v => (a : ℤ) ∣ v) (Finset.filter (fun v => v ≤ x + N) V))
+      set Γ_plus := Finset.biUnion S (fun a => Finset.filter (fun v => (a : ℤ) ∣ v) (Finset.filter (fun v => v > x + N) V));
+      -- By definition of $f$, we know that $|S| \leq |\Gamma_-(S)| \cdot |\Gamma_+(S)|$.
+      have h_card : S.card ≤ Γ_minus.card * Γ_plus.card := by
+        have h_card : S.card ≤ (Finset.image (fun a => (f a).1) S).card * (Finset.image (fun a => (f a).2) S).card := by
+          have h_card : S.card ≤ (Finset.image (fun a => ((f a).1, (f a).2)) S).card := by
+            rw [ Finset.card_image_of_injOn fun a ha b hb hab => by contrapose! hab; aesop ];
+          exact h_card.trans ( by rw [ ← Finset.card_product ] ; exact Finset.card_le_card <| Finset.image_subset_iff.mpr fun a ha => Finset.mem_product.mpr ⟨ Finset.mem_image_of_mem _ ha, Finset.mem_image_of_mem _ ha ⟩ );
+        refine le_trans h_card <| Nat.mul_le_mul ?_ ?_;
+        · refine Finset.card_le_card ?_;
+          simp +zetaDelta at *;
+          simp +decide [ Finset.subset_iff ];
+          exact fun a ha => ⟨ a, ha, ⟨ ⟨ ⟨ Int.le_of_lt_add_one <| by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hf1 a ha, Int.floor_le x, Int.lt_floor_add_one x ], Int.le_of_lt_add_one <| by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hf1 a ha, Int.le_ceil ( x + 2 * N ), Int.ceil_lt_add_one ( x + 2 * N ) ] ⟩, hf1 a ha |>.2.2.1.1, by linarith [ hf1 a ha, Int.le_ceil ( x + 2 * N ), Int.ceil_lt_add_one ( x + 2 * N ) ] ⟩, hf1 a ha |>.2.2.1.2 ⟩, hf1 a ha |>.1 ⟩;
+        · refine Finset.card_le_card ?_;
+          simp +zetaDelta at *;
+          simp +decide [ Finset.subset_iff ];
+          exact fun a ha => ⟨ a, ha, ⟨ ⟨ ⟨ Int.le_of_lt_add_one <| by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hf1 a ha, Int.floor_le x, Int.lt_floor_add_one x ], Int.le_of_lt_add_one <| by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hf1 a ha, Int.le_ceil ( x + 2 * N ), Int.ceil_lt_add_one ( x + 2 * N ) ] ⟩, by linarith [ hf1 a ha ], by linarith [ hf1 a ha ] ⟩, by linarith [ hf1 a ha ] ⟩, by simpa using hf1 a ha |>.2.1 ⟩;
+      -- Since $\Gamma_-(S)$ and $\Gamma_+(S)$ are disjoint subsets of $\Gamma(S)$, we have $|\Gamma(S)| \geq |\Gamma_-(S)| + |\Gamma_+(S)|$.
+      have h_card_union : (Finset.biUnion S (fun a => Finset.filter (R a) V)).card ≥ Γ_minus.card + Γ_plus.card := by
+        rw [ ← Finset.card_union_of_disjoint ];
+        · refine Finset.card_le_card ?_;
+          grind;
+        · simp +zetaDelta at *;
+          simp +contextual [ Finset.disjoint_left ];
+      refine Nat.ceil_le.mpr ?_;
+      nlinarith only [ show ( S.card : ℝ ) ≤ Γ_minus.card * Γ_plus.card by exact_mod_cast h_card, show ( Γ_minus.card + Γ_plus.card : ℝ ) ≤ ( S.biUnion fun a => Finset.filter ( R a ) V ).card by exact_mod_cast h_card_union, sq_nonneg ( Γ_minus.card - Γ_plus.card : ℝ ), Real.mul_self_sqrt ( Nat.cast_nonneg S.card ) ]
+
+/-
+Generalization of the matching size lemma to arbitrary finite types.
+-/
+lemma matching_size_general {α β : Type} [DecidableEq α] [DecidableEq β] (U : Finset α) (V : Finset β) (R : α → β → Prop) [DecidableRel R]
+    (h_card : U.card ≥ 4)
+    (h_growth : ∀ S ⊆ U, S.Nonempty → (S.biUnion (fun u => V.filter (R u))).card ≥ Nat.ceil (2 * Real.sqrt (S.card : ℝ))) :
+    ∃ (M : Finset (α × β)),
+      (∀ p ∈ M, p.1 ∈ U ∧ p.2 ∈ V ∧ R p.1 p.2) ∧
+      (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧
+      M.card ≥ Nat.ceil (2 * Real.sqrt (U.card : ℝ)) := by
+        -- Define the function f that maps elements of U to ℕ.
+        obtain ⟨f, hf⟩ : ∃ f : α → ℕ, (∀ u ∈ U, f u ∈ Finset.range U.card) ∧ (∀ u v : α, u ∈ U → v ∈ U → u ≠ v → f u ≠ f v) := by
+          -- Since $U$ is finite, we can define a bijection $f : U \to \{0, 1, ..., U.card - 1\}$.
+          obtain ⟨f, hf⟩ : ∃ f : U ≃ Fin U.card, True := by
+            exact ⟨ Fintype.equivOfCardEq <| by simp +decide, trivial ⟩;
+          refine' ⟨ fun u => if hu : u ∈ U then f ⟨ u, hu ⟩ else 0, _, _ ⟩ <;> simp +contextual [ Finset.mem_range ];
+          exact fun u v hu hv huv => fun h => huv <| by simpa [ Fin.ext_iff ] using f.injective <| Fin.ext h;
+        -- Define the function g that maps elements of V to ℕ.
+        obtain ⟨g, hg⟩ : ∃ g : β → ℕ, (∀ v ∈ V, g v ∈ Finset.range V.card) ∧ (∀ v w : β, v ∈ V → w ∈ V → v ≠ w → g v ≠ g w) := by
+          have h_equiv : Nonempty (V ≃ Fin V.card) := by
+            exact ⟨ Fintype.equivOfCardEq <| by simp +decide ⟩;
+          obtain ⟨ g ⟩ := h_equiv;
+          exact ⟨ fun v => if hv : v ∈ V then g ⟨ v, hv ⟩ |> Fin.val else 0, fun v hv => by simp +decide [ hv ], fun v w hv hw h => by simpa [ hv, hw ] using fun h' => h <| by simpa [ hv, hw ] using g.injective <| Fin.ext h' ⟩;
+        -- Define the new relation R' on ℕ × ℕ.
+        set R' : ℕ → ℕ → Prop := fun u v => ∃ u' ∈ U, ∃ v' ∈ V, f u' = u ∧ g v' = v ∧ R u' v';
+        -- Apply the matching size lemma to the new relation R'.
+        obtain ⟨M', hM'⟩ : ∃ M' : Finset (ℕ × ℕ),
+          (∀ p ∈ M', p.1 ∈ Finset.image f U ∧ p.2 ∈ Finset.image g V ∧ R' p.1 p.2) ∧
+          (∀ p q : ℕ × ℕ, p ∈ M' → q ∈ M' → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧
+          M'.card ≥ Nat.ceil (2 * Real.sqrt (Finset.card (Finset.image f U))) := by
+            convert matching_size_from_growth_condition ( Finset.image f U ) ( Finset.image g V ) R' _ _ using 1;
+            · rw [ Finset.card_image_of_injOn fun u hu v hv huv => by contrapose! huv; exact hf.2 u v hu hv huv ] ; linarith;
+            · intro S hS₁ hS₂; specialize h_growth ( Finset.filter ( fun u => f u ∈ S ) U ) ; simp_all +decide [ Finset.subset_iff ] ;
+              convert h_growth _ using 1;
+              · rw [ show S = Finset.image f ( Finset.filter ( fun u => f u ∈ S ) U ) from ?_, Finset.card_image_of_injOn ];
+                · congr! 3;
+                  congr! 1;
+                  ext; aesop;
+                · exact fun x hx y hy hxy => Classical.not_not.1 fun h => hf.2 x y ( Finset.mem_filter.mp hx |>.1 ) ( Finset.mem_filter.mp hy |>.1 ) h hxy;
+                · grind;
+              · rw [ show ( S.biUnion fun u => Finset.filter ( R' u ) ( Finset.image g V ) ) = Finset.image ( fun v => g v ) ( Finset.biUnion ( Finset.filter ( fun u => f u ∈ S ) U ) fun u => Finset.filter ( R u ) V ) from ?_, Finset.card_image_of_injOn ];
+                · exact fun x hx y hy hxy => Classical.not_not.1 fun h => hg.2 x y ( by aesop ) ( by aesop ) h hxy;
+                · ext; simp [R'];
+                  grind;
+              · exact Exists.elim hS₂ fun x hx => Exists.elim ( hS₁ hx ) fun u hu => ⟨ u, by aesop ⟩;
+        -- Define the new matching M in terms of the original sets U and V.
+        obtain ⟨M, hM⟩ : ∃ M : Finset (α × β), (∀ p ∈ M, p.1 ∈ U ∧ p.2 ∈ V ∧ R p.1 p.2) ∧ (∀ p q : α × β, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧ M.card = M'.card := by
+          choose! u hu v hv huv using fun p hp => hM'.1 p hp |>.2.2;
+          use Finset.image (fun p => (u p.1 p.2, v p.1 p.2)) (Finset.attach M');
+          simp +zetaDelta at *;
+          refine' ⟨ _, _, _ ⟩;
+          · grind +ring;
+          · grind +ring;
+          · rw [ Finset.card_image_of_injOn ];
+            · rw [ Finset.card_attach ];
+            · intro p hp q hq h_eq; have := huv _ _ p.2; have := huv _ _ q.2; aesop;
+        use M;
+        exact ⟨ hM.1, hM.2.1, hM.2.2.symm ▸ hM'.2.2.trans' ( by rw [ Finset.card_image_of_injOn fun u hu v hv huv => by contrapose! huv; exact hf.2 u v hu hv huv ] ) ⟩
+
+/-
+If x is not a multiple of N, then there exists a matching of size at least ⌈2√m⌉.
+-/
+lemma erdos_650_lower_bound_case1 (m : ℕ) (hm : m ≥ 4)
+    (A : Finset ℕ) (N : ℕ) (hA_card : A.card = m) (hA_pos : ∀ a ∈ A, a > 0) (hN : N = A.max' (by
+    exact Finset.card_pos.mp ( by linarith )))
+    (x : ℝ) (hx_not_int_N : ∀ k : ℤ, x ≠ k * N) :
+    let I := Set.Ioo x (x + 2 * N)
+    ∃ (M : Finset (ℕ × ℤ)),
+      (∀ p ∈ M, p.1 ∈ A ∧ (p.2 : ℝ) ∈ I ∧ (p.1 : ℤ) ∣ p.2) ∧
+      (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧
+      M.card ≥ Nat.ceil (2 * Real.sqrt m) := by
+        all_goals generalize_proofs at *;
+        obtain ⟨ M, hM ⟩ := matching_size_general A ( Finset.filter ( fun n : ℤ => ( n : ℝ ) ∈ Set.Ioo x ( x + 2 * N ) ) ( Finset.Ico ( Int.floor x + 1 ) ( Int.ceil ( x + 2 * N ) ) ) ) ( fun a b => ( a : ℤ ) ∣ b ) ( by linarith ) ( by
+          intros S hS_sub hS_nonempty
+          apply divisibility_graph_growth A N x (by
+          assumption) (by
+          assumption) (by
+          exact hN) (by
+          assumption) S hS_sub hS_nonempty );
+        exact ⟨ M, fun p hp => ⟨ hM.1 p hp |>.1, by simpa using hM.1 p hp |>.2.1 |> fun h => Finset.mem_filter.mp h |>.2, hM.1 p hp |>.2.2 ⟩, hM.2.1, by simpa [ hA_card ] using hM.2.2 ⟩
+
+/-
+For m >= 4, ceil(2*sqrt(m)) <= ceil(2*sqrt(m-1)) + 1.
+-/
+lemma ceil_sqrt_inequality (m : ℕ) (hm : m ≥ 4) :
+    Nat.ceil (2 * Real.sqrt m) ≤ Nat.ceil (2 * Real.sqrt (m - 1)) + 1 := by
+      have h_diff : 2 * Real.sqrt m - 2 * Real.sqrt (m - 1) < 1 := by
+        nlinarith only [ show ( m : ℝ ) ≥ 4 by norm_cast, Real.sqrt_nonneg ( m : ℝ ), Real.sq_sqrt ( show ( m : ℝ ) ≥ 0 by positivity ), Real.sqrt_nonneg ( m - 1 : ℝ ), Real.sq_sqrt ( show ( m - 1 : ℝ ) ≥ 0 by norm_num; linarith ), mul_pos ( Real.sqrt_pos.mpr ( show ( m : ℝ ) > 0 by positivity ) ) ( Real.sqrt_pos.mpr ( show ( m - 1 : ℝ ) > 0 by norm_num; linarith ) ) ];
+      exact Nat.ceil_le.mpr ( by norm_num; linarith [ Nat.le_ceil ( 2 * Real.sqrt ( m - 1 ) ) ] )
+
+/-
+If there is an injective map from $S$ to pairs of multiples in disjoint sets $V_-$ and $V_+$, then the total number of multiples is at least $\lceil 2\sqrt{|S|} \rceil$.
+-/
+lemma bipartite_growth_general {α : Type*} [DecidableEq α]
+    (S : Finset ℕ) (V_minus V_plus : Finset ℤ)
+    (h_disjoint : Disjoint V_minus V_plus)
+    (f : ℕ → ℤ × ℤ)
+    (h_map : ∀ a ∈ S, let (u, v) := f a; u ∈ V_minus ∧ v ∈ V_plus ∧ (a : ℤ) ∣ u ∧ (a : ℤ) ∣ v)
+    (h_inj : ∀ a ∈ S, ∀ b ∈ S, f a = f b → a = b) :
+    let V := V_minus ∪ V_plus
+    let R := fun (a : ℕ) (b : ℤ) => (a : ℤ) ∣ b
+    (S.biUnion (fun a => V.filter (R a))).card ≥ Nat.ceil (2 * Real.sqrt (S.card : ℝ)) := by
+      -- Let $\Gamma_-(S) = \bigcup_{a \in S} \{b \in V_- : a \mid b\}$ and $\Gamma_+(S) = \bigcup_{a \in S} \{b \in V_+ : a \mid b\}$.
+      set Gamma_minus := S.biUnion (fun a => V_minus.filter (fun b => (a : ℤ) ∣ b))
+      set Gamma_plus := S.biUnion (fun a => V_plus.filter (fun b => (a : ℤ) ∣ b));
+      -- Since $f$ is injective, $|S| \leq |\Gamma_-(S)| \cdot |\Gamma_+(S)|$.
+      have h_card_prod : (S.card : ℝ) ≤ (Gamma_minus.card : ℝ) * (Gamma_plus.card : ℝ) := by
+        norm_cast;
+        have h_card : S.card ≤ (Gamma_minus ×ˢ Gamma_plus).card := by
+          have h_card : Finset.card (Finset.image f S) ≤ Finset.card (Gamma_minus ×ˢ Gamma_plus) := by
+            refine Finset.card_le_card ?_;
+            grind +ring;
+          rwa [ Finset.card_image_of_injOn h_inj ] at h_card;
+        rwa [ Finset.card_product ] at h_card;
+      -- Since $V_-$ and $V_+$ are disjoint, the union is disjoint, so the size is $x+y$.
+      have h_card_union : (S.biUnion (fun a => (V_minus ∪ V_plus).filter (fun b => (a : ℤ) ∣ b))).card = Gamma_minus.card + Gamma_plus.card := by
+        rw [ ← Finset.card_union_of_disjoint ];
+        · congr with x ; aesop;
+        · exact Finset.disjoint_left.mpr fun x hx_minus hx_plus => Finset.disjoint_left.mp h_disjoint ( Finset.mem_biUnion.mp hx_minus |> Classical.choose_spec |> And.right |> Finset.mem_filter.mp |> And.left ) ( Finset.mem_biUnion.mp hx_plus |> Classical.choose_spec |> And.right |> Finset.mem_filter.mp |> And.left );
+      simp +zetaDelta at *;
+      nlinarith [ sq_nonneg ( Gamma_minus.card - Gamma_plus.card : ℝ ), Real.mul_self_sqrt ( Nat.cast_nonneg S.card ), show ( Gamma_minus.card : ℝ ) + Gamma_plus.card = ( S.biUnion fun a => { b ∈ V_minus ∪ V_plus | ( a : ℤ ) ∣ b } ).card from mod_cast h_card_union.symm ]
+
+/-
+The better pair function maps $a$ to a pair of multiples in $B_- \times B_+$.
+-/
+def better_pair_func (N : ℕ) (k : ℤ) (a : ℕ) : ℤ × ℤ :=
+  let x_int := k * (N : ℤ)
+  if (x_int + N) % a = 0 then
+    if 2 * a < N ∧ (x_int + N) % (2 * a) ≠ 0 then
+      (x_int + N - 2 * a, x_int + N + 2 * a)
+    else
+      (x_int + N - a, x_int + N + a)
+  else
+    let u := (x_int + N) / a * a
+    (u, u + a)
+
+lemma better_pair_in_parts (N : ℕ) (k : ℤ) (a : ℕ)
+    (ha_pos : a > 0)
+    (ha_lt_N : a < N) :
+    let (u, v) := better_pair_func N k a
+    let x_int := k * (N : ℤ)
+    let B_minus := Finset.Ico (x_int + 1) (x_int + N)
+    let B_plus := Finset.Ico (x_int + N + 1) (x_int + 2 * N)
+    u ∈ B_minus ∧ v ∈ B_plus ∧ (a : ℤ) ∣ u ∧ (a : ℤ) ∣ v := by
+      unfold better_pair_func; by_cases h : ( k * N + N ) % a = 0 <;> simp +decide [ h ] ;
+      · split_ifs <;> simp_all +decide [ dvd_add_right, dvd_sub_right ];
+        · exact ⟨ by linarith, by linarith, by linarith ⟩;
+        · exact ⟨ by linarith, ha_pos, by linarith ⟩;
+      · constructor;
+        · constructor <;> cases lt_or_gt_of_ne h <;> nlinarith [ Int.mul_ediv_add_emod ( k * N + N ) a, Int.emod_nonneg ( k * N + N ) ( by positivity : ( a : ℤ ) ≠ 0 ), Int.emod_lt_of_pos ( k * N + N ) ( by positivity : ( a : ℤ ) > 0 ) ];
+        · constructor <;> nlinarith [ Int.mul_ediv_add_emod ( k * N + N ) a, Int.emod_nonneg ( k * N + N ) ( by positivity : ( a : ℤ ) ≠ 0 ), Int.emod_lt_of_pos ( k * N + N ) ( by positivity : ( a : ℤ ) > 0 ) ]
+
+/-
+The better pair function is injective on $S$.
+-/
+lemma better_pair_injectivity (N : ℕ) (k : ℤ) (S : Finset ℕ)
+    (hS_sub : S ⊆ Finset.Icc 1 (N - 1))
+    (hS_pos : ∀ a ∈ S, a > 0) :
+    ∀ a b, a ∈ S → b ∈ S → better_pair_func N k a = better_pair_func N k b → a = b := by
+      intro a b ha hb hab
+      unfold better_pair_func at hab
+      by_contra h_contra
+      generalize_proofs at *; (
+      by_cases ha' : ( k * N + N ) % a = 0 <;> by_cases hb' : ( k * N + N ) % b = 0 <;> simp +decide [ ha', hb' ] at hab ⊢ <;> try omega;
+      · split_ifs at hab <;> simp_all +decide ;
+      · split_ifs at hab <;> simp_all +decide ; (
+        -- From the equations $k * N + N - 2 * a = (k * N + N) / b * b$ and $k * N + N + 2 * a = (k * N + N) / b * b + b$, we can derive that $b = 4 * a$.
+        have hb_eq_4a : b = 4 * a := by
+          linarith [ hS_pos a ha, hS_pos b hb ] ;
+        generalize_proofs at *; (
+        simp_all +decide ;
+        exact ‹2 * a < N ∧ ¬2 * ( a : ℤ ) ∣ k * N + N›.2 ( by exact ⟨ ( k * N + N ) / ( 4 * a ) * 2 + 1, by linarith ⟩ ) ;));
+        -- From the equations $k * N + N - a = (k * N + N) / b * b$ and $k * N + N + a = (k * N + N) / b * b + b$, we can derive that $b = 2a$.
+        have hb_eq_2a : b = 2 * a := by
+          linarith [ hS_pos a ha, hS_pos b hb ]
+        generalize_proofs at *; (
+        simp_all +decide [ Finset.subset_iff ];
+        exact absurd ( hS_sub hb ) ( by omega ) ;);
+      · split_ifs at hab <;> simp_all +decide ;
+        · -- From the equations, we can derive that $a = 4b$.
+          have h_eq : a = 4 * b := by
+            grind
+          generalize_proofs at *; (
+          -- Since $b \mid k * N + N$ and $4b \nmid k * N + N$, it follows that $2b \mid k * N + N$.
+          have h_div : (2 * b : ℤ) ∣ k * N + N := by
+            exact ⟨ ( k * N + N ) / ( 4 * b ) * 2 + 1, by push_cast [ h_eq ] at *; linarith ⟩ ;
+          generalize_proofs at *; (
+          aesop));
+        · -- From the equations, we can derive that $a = 2b$.
+          have h_eq : a = 2 * b := by
+            grind +ring
+          generalize_proofs at *; (
+          simp_all +decide [ Finset.subset_iff ];
+          exact absurd ( hS_sub ha ) ( by omega )))
+
+/-
+The divisibility graph growth condition holds in Case 2.
+-/
+lemma divisibility_graph_growth_case2 (m : ℕ) (hm : m ≥ 4)
+    (A : Finset ℕ) (N : ℕ) (hA_card : A.card = m) (hA_pos : ∀ a ∈ A, a > 0)
+    (hN : N = A.max' (by exact Finset.card_pos.mp (by linarith)))
+    (x : ℝ) (hx_int_N : ∃ k : ℤ, x = k * N) :
+    let I := Set.Ioo x (x + 2 * N)
+    let b0 : ℤ := Int.floor (x + N)
+    let A0 : Finset ℕ := A.erase N
+    let V_all : Finset ℤ := Finset.Ico (Int.floor x + 1) (Int.ceil (x + 2 * N))
+    let V_in_I : Finset ℤ := V_all.filter (fun n => (n : ℝ) ∈ I)
+    let V0 : Finset ℤ := V_in_I.erase b0
+    let R := fun (a : ℕ) (b : ℤ) => (a : ℤ) ∣ b
+    ∀ S ⊆ A0, S.Nonempty → (S.biUnion (fun a => V0.filter (R a))).card ≥ Nat.ceil (2 * Real.sqrt (S.card : ℝ)) := by
+      obtain ⟨ k, hk ⟩ := hx_int_N;
+      -- Apply the bipartite_growth_general lemma to the better_pair_func.
+      have h_bipartite_growth : ∀ S ⊆ A.erase N, S.Nonempty → (S.biUnion (fun a => (Finset.Ico (k * N + 1) (k * N + N) ∪ Finset.Ico (k * N + N + 1) (k * N + 2 * N)).filter (fun n => (a : ℤ) ∣ n))).card ≥ Nat.ceil (2 * Real.sqrt (S.card : ℝ)) := by
+        intros S hS_sub hS_nonempty
+        have h_bipartite_growth : ∃ f : ℕ → ℤ × ℤ,
+          (∀ a ∈ S, let (u, v) := f a; u ∈ Finset.Ico (k * N + 1) (k * N + N) ∧ v ∈ Finset.Ico (k * N + N + 1) (k * N + 2 * N) ∧ (a : ℤ) ∣ u ∧ (a : ℤ) ∣ v) ∧
+          (∀ a ∈ S, ∀ b ∈ S, f a = f b → a = b) := by
+            refine' ⟨ better_pair_func N k, _, _ ⟩;
+            · intro a ha
+              apply better_pair_in_parts N k a (hA_pos a (Finset.mem_of_mem_erase (hS_sub ha))) (by
+              exact lt_of_le_of_ne ( hN.symm ▸ Finset.le_max' _ _ ( hS_sub ha |> Finset.mem_of_mem_erase ) ) fun h => by have := hS_sub ha; aesop;);
+            · intros a ha b hb hab;
+              apply better_pair_injectivity N k S (fun x hx => by
+                exact Finset.mem_Icc.mpr ⟨ hA_pos x ( Finset.mem_of_mem_erase ( hS_sub hx ) ), Nat.le_sub_one_of_lt ( lt_of_le_of_ne ( hN.symm ▸ Finset.le_max' _ _ ( Finset.mem_of_mem_erase ( hS_sub hx ) ) ) ( by intro t; have := hS_sub hx; aesop ) ) ⟩) (fun x hx => by
+                exact hA_pos x ( Finset.mem_of_mem_erase ( hS_sub hx ) )) a b ha hb hab;
+        obtain ⟨ f, hf1, hf2 ⟩ := h_bipartite_growth;
+        convert bipartite_growth_general S ( Finset.Ico ( k * N + 1 ) ( k * N + N ) ) ( Finset.Ico ( k * N + N + 1 ) ( k * N + 2 * N ) ) _ f _ _ using 1;
+        exact ℕ;
+        · infer_instance;
+        · exact Finset.disjoint_left.mpr fun x hx₁ hx₂ => by linarith [ Finset.mem_Ico.mp hx₁, Finset.mem_Ico.mp hx₂ ] ;
+        · exact hf1;
+        · assumption;
+      convert h_bipartite_growth using 6;
+      ext; simp [hk];
+      intro h; norm_cast; norm_num [ Int.floor_eq_iff, Int.ceil_eq_iff ] ;
+      rw [ show ⌊ ( k : ℝ ) * N⌋ = k * N by exact_mod_cast Int.floor_intCast _, show ⌈ ( k : ℝ ) * N + 2 * N⌉ = k * N + 2 * N by exact_mod_cast Int.ceil_intCast _ ] ; omega;
+
+/-
+If $m=4$ and $x$ is a multiple of $N$, there exists a matching of size 4.
+-/
+lemma erdos_650_lower_bound_case2_m4 (A : Finset ℕ) (N : ℕ)
+    (hA_card : A.card = 4) (hA_pos : ∀ a ∈ A, a > 0)
+    (hN : N = A.max' (by exact Finset.card_pos.mp (by linarith)))
+    (x : ℝ) (hx_int_N : ∃ k : ℤ, x = k * N) :
+    let I := Set.Ioo x (x + 2 * N)
+    ∃ (M : Finset (ℕ × ℤ)),
+      (∀ p ∈ M, p.1 ∈ A ∧ (p.2 : ℝ) ∈ I ∧ (p.1 : ℤ) ∣ p.2) ∧
+      (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧
+      M.card ≥ 4 := by
+        obtain ⟨ k, hk ⟩ := hx_int_N
+        generalize_proofs at *;
+        -- Let $b_0 = x+N$.
+        set b0 : ℤ := k * N + N;
+        -- Let $A_0 = A \setminus \{N\}$. $|A_0| = 3$.
+        set A0 : Finset ℕ := A.erase N;
+        -- Let $V_0 = (I \cap \mathbb{Z}) \setminus \{b_0\}$.
+        set V0 : Finset ℤ := (Finset.Ico (Int.floor x + 1) (Int.ceil (x + 2 * N))).filter (fun n => (n : ℝ) ∈ Set.Ioo x (x + 2 * N)) \ {b0};
+        -- By `divisibility_graph_growth_case2`, for any $S \subseteq A0$, $|\Gamma_0(S)| \ge \lceil 2\sqrt{|S|} \rceil$.
+        have h_div_growth : ∀ S ⊆ A0, S.Nonempty → (S.biUnion (fun a => V0.filter (fun v => (a : ℤ) ∣ v))).card ≥ Nat.ceil (2 * Real.sqrt S.card) := by
+          convert divisibility_graph_growth_case2 4 ( by norm_num ) A N hA_card hA_pos hN x ⟨ k, hk ⟩ using 1;
+          simp +zetaDelta at *;
+          congr! 3;
+          congr! 3;
+          ext; simp [Finset.mem_erase, Finset.mem_sdiff];
+          intro h; rw [ hk ] ; norm_num [ show ⌊ ( k : ℝ ) * N⌋ = k * N from Int.floor_eq_iff.mpr ⟨ by norm_num, by norm_num ⟩ ] ; aesop;
+        -- By Hall's theorem, there exists a matching $M_0$ of size 3 in $A_0 \times V_0$.
+        obtain ⟨M0, hM0⟩ : ∃ M0 : Finset (ℕ × ℤ), (∀ p ∈ M0, p.1 ∈ A0 ∧ p.2 ∈ V0 ∧ (p.1 : ℤ) ∣ p.2) ∧ (∀ p q, p ∈ M0 → q ∈ M0 → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧ M0.card = 3 := by
+          have h_hall : ∀ S ⊆ A0, S.Nonempty → (S.biUnion (fun a => V0.filter (fun v => (a : ℤ) ∣ v))).card ≥ S.card := by
+            intro S hS_sub hS_nonempty
+            specialize h_div_growth S hS_sub hS_nonempty
+            have h_card_ge : Nat.ceil (2 * Real.sqrt S.card) ≥ S.card := by
+              have h_card_le : S.card ≤ 3 := by
+                exact le_trans ( Finset.card_le_card hS_sub ) ( by rw [ Finset.card_erase_of_mem ( hN.symm ▸ Finset.max'_mem _ _ ) ] ; norm_num [ hA_card ] );
+              interval_cases _ : S.card <;> norm_num;
+              · exact Nat.succ_le_of_lt ( Nat.lt_ceil.mpr ( by norm_num; nlinarith [ Real.sqrt_nonneg 2, Real.sq_sqrt zero_le_two ] ) );
+              · exact Nat.succ_le_of_lt ( Nat.lt_ceil.mpr ( by norm_num; nlinarith only [ Real.sqrt_nonneg 3, Real.sq_sqrt ( show 0 ≤ 3 by norm_num ) ] ) )
+            exact le_trans h_card_ge h_div_growth;
+          have h_hall : ∃ f : ℕ → ℤ, (∀ a ∈ A0, (a : ℤ) ∣ f a) ∧ (∀ a b, a ∈ A0 → b ∈ A0 → a ≠ b → f a ≠ f b) ∧ (∀ a ∈ A0, f a ∈ V0) := by
+            have h_hall : ∀ (G : A0 → Finset ℤ), (∀ a, G a ⊆ V0) → (∀ S : Finset A0, S.Nonempty → (S.biUnion (fun a => G a)).card ≥ S.card) → ∃ f : A0 → ℤ, (∀ a, f a ∈ G a) ∧ (∀ a b, a ≠ b → f a ≠ f b) := by
+              intros G hG_sub hG_growth
+              have h_hall : ∃ f : A0 → ℤ, (∀ a, f a ∈ G a) ∧ (∀ a b, a ≠ b → f a ≠ f b) := by
+                have h_hall : ∀ S : Finset A0, S.Nonempty → (S.biUnion (fun a => G a)).card ≥ S.card := hG_growth
+                have := Finset.all_card_le_biUnion_card_iff_exists_injective G; simp_all +decide ;
+                exact this.mp ( fun s => if hs : s.Nonempty then h_hall s hs else by aesop ) |> fun ⟨ f, hf₁, hf₂ ⟩ => ⟨ f, hf₂, fun a ha b hb hab => hf₁.ne <| by simpa [ Subtype.ext_iff ] using hab ⟩ ;
+              exact h_hall;
+            specialize h_hall (fun a => V0.filter (fun v => (a.val : ℤ) ∣ v)) (by
+            exact fun a => Finset.filter_subset _ _) (by
+            intro S hS_nonempty
+            specialize ‹∀ S ⊆ A0, S.Nonempty → (S.biUnion fun a => {v ∈ V0 | ↑a ∣ v}).card ≥ S.card› (S.image Subtype.val) (by
+            exact Finset.image_subset_iff.mpr fun x hx => x.2) (by
+            exact ⟨ _, Finset.mem_image_of_mem _ hS_nonempty.choose_spec ⟩);
+            convert h_hall using 1;
+            · congr! 1;
+              ext; simp [Finset.mem_biUnion, Finset.mem_image];
+            · rw [ Finset.card_image_of_injective _ Subtype.coe_injective ]);
+            obtain ⟨ f, hf1, hf2 ⟩ := h_hall; use fun a => if ha : a ∈ A0 then f ⟨ a, ha ⟩ else 0; simp_all +decide [ Finset.subset_iff ] ;
+          obtain ⟨ f, hf1, hf2, hf3 ⟩ := h_hall; use Finset.image ( fun a => ( a, f a ) ) A0; simp_all +decide [ Finset.card_image_of_injOn ] ;
+          constructor;
+          · bound;
+          · rw [ Finset.card_erase_of_mem ( hN.symm ▸ Finset.max'_mem _ _ ), hA_card ];
+        refine' ⟨ Insert.insert ( N, b0 ) M0, _, _, _ ⟩ <;> norm_num at *;
+        · refine' ⟨ ⟨ _, _, _ ⟩, _ ⟩;
+          · exact hN.symm ▸ Finset.max'_mem _ _;
+          · simp +zetaDelta at *;
+            constructor <;> linarith [ show ( N : ℝ ) > 0 from Nat.cast_pos.mpr ( hA_pos _ ( hN.symm ▸ Finset.max'_mem _ _ ) ) ];
+          · exact ⟨ k + 1, by ring ⟩;
+          · intro a b hab; specialize hM0; have := hM0.1 a b hab; aesop;
+        · grind +ring;
+        · grind +ring
+
+/-
+If $m \ge 5$ and $x$ is a multiple of $N$, there exists a matching of size at least $\lceil 2\sqrt{m} \rceil$.
+-/
+lemma erdos_650_lower_bound_case2_ge5 (m : ℕ) (hm : m ≥ 5)
+    (A : Finset ℕ) (N : ℕ) (hA_card : A.card = m) (hA_pos : ∀ a ∈ A, a > 0)
+    (hN : N = A.max' (by exact Finset.card_pos.mp (by linarith)))
+    (x : ℝ) (hx_int_N : ∃ k : ℤ, x = k * N) :
+    let I := Set.Ioo x (x + 2 * N)
+    ∃ (M : Finset (ℕ × ℤ)),
+      (∀ p ∈ M, p.1 ∈ A ∧ (p.2 : ℝ) ∈ I ∧ (p.1 : ℤ) ∣ p.2) ∧
+      (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧
+      M.card ≥ Nat.ceil (2 * Real.sqrt m) := by
+        obtain ⟨k, hk⟩ : ∃ k : ℤ, x = k * N := hx_int_N
+        set A0 := A.erase N
+        set N0 := A0.max' (by
+        exact Finset.card_pos.mp ( by rw [ Finset.card_erase_of_mem ( hN.symm ▸ Finset.max'_mem _ _ ), hA_card ] ; omega ))
+        generalize_proofs at *;
+        -- Let $b_0 = x + N$.
+        set b0 := k * N + N;
+        -- By Lemma `divisibility_graph_growth_case2`, for any $S \subseteq A0$, $|\Gamma_0(S)| \ge \lceil 2\sqrt{|S|} \rceil$.
+        have h_growth : ∀ S ⊆ A0, S.Nonempty → (S.biUnion (fun a => (Finset.Ico (Int.floor x + 1) (Int.ceil (x + 2 * N))).filter (fun n => (n : ℝ) ∈ Set.Ioo x (x + 2 * N) ∧ (a : ℤ) ∣ n) |> Finset.filter (fun n => n ≠ b0))).card ≥ Nat.ceil (2 * Real.sqrt (S.card : ℝ)) := by
+          convert divisibility_graph_growth_case2 m ( by linarith ) A N hA_card hA_pos hN x ⟨ k, hk ⟩ using 1;
+          simp +zetaDelta at *;
+          congr! 7;
+          ext; simp [hk];
+          norm_num [ show ⌊ ( k : ℝ ) * N⌋ = k * N by exact_mod_cast Int.floor_intCast _, show ⌈ ( k : ℝ ) * N + 2 * N⌉ = k * N + 2 * N by exact_mod_cast Int.ceil_intCast _ ] ; ring_nf;
+          tauto;
+        -- By Lemma `matching_size_general`, there exists a matching $M_0$ in $A_0 \times V_0$ of size $\ge \lceil 2\sqrt{m-1} \rceil$.
+        obtain ⟨M0, hM0⟩ : ∃ M0 : Finset (ℕ × ℤ),
+          (∀ p ∈ M0, p.1 ∈ A0 ∧ (p.2 : ℝ) ∈ Set.Ioo x (x + 2 * N) ∧ (p.1 : ℤ) ∣ p.2 ∧ p.2 ≠ b0) ∧
+          (∀ p q, p ∈ M0 → q ∈ M0 → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧
+          M0.card ≥ Nat.ceil (2 * Real.sqrt (A0.card : ℝ)) := by
+            convert matching_size_general A0 ( Finset.filter ( fun n : ℤ => ( n : ℝ ) ∈ Set.Ioo x ( x + 2 * N ) ∧ ( n : ℤ ) ≠ b0 ) ( Finset.Ico ( Int.floor x + 1 ) ( Int.ceil ( x + 2 * N ) ) ) ) ( fun a b => ( a : ℤ ) ∣ b ) _ _ using 1;
+            · ext; simp [Finset.mem_filter, Finset.mem_Ico];
+              intro h1 h2; constructor <;> intro h3 a b hab <;> specialize h3 a b hab <;> simp_all +decide [Int.lt_ceil] ;
+              exact Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ Int.floor_le ( ( k : ℝ ) * A.max' ‹_› ), Int.lt_floor_add_one ( ( k : ℝ ) * A.max' ‹_› ) ] );
+            · rw [ Finset.card_erase_of_mem ( hN ▸ Finset.max'_mem _ _ ) ] ; omega;
+            · convert h_growth using 6 ; aesop;
+        refine' ⟨ Insert.insert ( N, b0 ) M0, _, _, _ ⟩ <;> simp_all +decide [ Finset.subset_iff ];
+        · simp +zetaDelta at *;
+          refine' ⟨ ⟨ Finset.max'_mem _ _, _, _ ⟩, _ ⟩ <;> norm_cast at * <;> simp_all +decide [ two_mul ];
+          · exact hA_pos _ ( Finset.max'_mem _ _ );
+          · exact fun a b hab => ⟨ hM0.1 a b hab |>.1.2, hM0.1 a b hab |>.2.1 ⟩;
+        · grind;
+        · rw [ Finset.card_insert_of_notMem ];
+          · rw [ show A0.card = m - 1 from ?_ ] at hM0;
+            · have := ceil_sqrt_inequality m ( by linarith );
+              rcases m with ( _ | _ | m ) <;> norm_num at *;
+              exact this.trans ( add_le_add_right ( Nat.cast_le.mpr <| Nat.ceil_le.mpr <| by linarith ) _ );
+            · rw [ Finset.card_erase_of_mem ( hN.symm ▸ Finset.max'_mem _ _ ), hA_card ];
+          · grind +ring
+
+/-
+Case 2 of the lower bound: if x is a multiple of N, we have a matching of size at least ceil(2*sqrt(m)).
+-/
+lemma erdos_650_lower_bound_case2_proven (m : ℕ) (hm : m ≥ 4)
+    (A : Finset ℕ) (N : ℕ) (hA_card : A.card = m) (hA_pos : ∀ a ∈ A, a > 0)
+    (hN : N = A.max' (by exact Finset.card_pos.mp (by linarith)))
+    (x : ℝ) (hx_int_N : ∃ k : ℤ, x = k * N) :
+    let I := Set.Ioo x (x + 2 * N)
+    ∃ (M : Finset (ℕ × ℤ)),
+      (∀ p ∈ M, p.1 ∈ A ∧ (p.2 : ℝ) ∈ I ∧ (p.1 : ℤ) ∣ p.2) ∧
+      (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧
+      M.card ≥ Nat.ceil (2 * Real.sqrt m) := by
+  by_cases hm4 : m = 4
+  · obtain ⟨M, hM⟩ := erdos_650_lower_bound_case2_m4 A N (by rwa [hm4] at hA_card) hA_pos hN x hx_int_N
+    refine ⟨M, hM.1, hM.2.1, ?_⟩
+    rw [hm4]
+    norm_num
+    exact hM.2.2
+  · have hm_ge_5 : m ≥ 5 := by
+      omega
+    exact erdos_650_lower_bound_case2_ge5 m hm_ge_5 A N hA_card hA_pos hN x hx_int_N
+
+/-
+For any $m \ge 4$, any set $A$ of size $m$, and any $x$, the interval $I=(x, x+2a_m)$ contains a matching of size at least $\lceil 2\sqrt m \rceil$.
+-/
+theorem erdos_650_lower_bound (m : ℕ) (hm : m ≥ 4)
+    (A : Finset ℕ) (N : ℕ) (hA_card : A.card = m) (hA_pos : ∀ a ∈ A, a > 0)
+    (hN : N = A.max' (by exact Finset.card_pos.mp (by linarith)))
+    (x : ℝ) :
+    let I := Set.Ioo x (x + 2 * N)
+    ∃ (M : Finset (ℕ × ℤ)),
+      (∀ p ∈ M, p.1 ∈ A ∧ (p.2 : ℝ) ∈ I ∧ (p.1 : ℤ) ∣ p.2) ∧
+      (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) ∧
+      M.card ≥ Nat.ceil (2 * Real.sqrt m) := by
+        by_cases hx_int_N : ∃ k : ℤ, x = k * N;
+        · exact
+          let I := Set.Ioo x (x + 2 * ↑N);
+          erdos_650_lower_bound_case2_proven m hm A N hA_card hA_pos hN x hx_int_N;
+        · convert erdos_650_lower_bound_case1 m hm A N hA_card hA_pos hN x _ using 1;
+          exact fun k hk => hx_int_N ⟨ k, hk ⟩
+
+/-
+If every matching has size at most k, then the maximum matching size is at most k.
+-/
+lemma max_matching_size_le (A : Finset ℕ) (I : Set ℝ) (k : ℕ) :
+    (∀ M, is_matching A I M → M.card ≤ k) → max_matching_size A I ≤ k := by
+      intro h; exact csSup_le' fun x hx => by obtain ⟨ M, hM₁, rfl ⟩ := hx; exact h M hM₁;
+
+/-
+For any $m \ge 4$, if $n = \lceil 2\sqrt{m} \rceil$, there exist $s, t$ such that $s+t=n$ and $st \ge m$.
+-/
+lemma exists_st_decomposition (m : ℕ) :
+    let n := Nat.ceil (2 * Real.sqrt m)
+    ∃ s t : ℕ, s + t = n ∧ s * t ≥ m := by
+      use ⌈2 * Real.sqrt m⌉₊ / 2, ⌈2 * Real.sqrt m⌉₊ - ⌈2 * Real.sqrt m⌉₊ / 2, by
+        rw [ Nat.add_sub_of_le ( Nat.div_le_self _ _ ) ], by
+        -- By definition of $n$, we know that $n^2 \geq 4m$.
+        have hn_sq_ge_4m : (Nat.ceil (2 * Real.sqrt m))^2 ≥ 4 * m := by
+          exact_mod_cast ( by nlinarith [ Nat.le_ceil ( 2 * Real.sqrt m ), Real.sqrt_nonneg m, Real.sq_sqrt ( Nat.cast_nonneg m ) ] : ( 4 : ℝ ) * m ≤ ⌈2 * Real.sqrt m⌉₊ ^ 2 );
+        nlinarith [ Nat.sub_add_cancel ( show ⌈2 * Real.sqrt m⌉₊ / 2 ≤ ⌈2 * Real.sqrt m⌉₊ from Nat.div_le_self _ _ ), Nat.div_mul_le_self ( ⌈2 * Real.sqrt m⌉₊ ) 2, Nat.div_add_mod ( ⌈2 * Real.sqrt m⌉₊ ) 2, Nat.mod_lt ( ⌈2 * Real.sqrt m⌉₊ ) two_pos ] ;;
+
+/-
+There exists a configuration of size m where the maximum matching size is at most ceil(2*sqrt(m)).
+-/
+lemma erdos_650_upper_bound_tight (m : ℕ) (hm : m ≥ 4) :
+    ∃ (A : Finset ℕ) (x : ℝ),
+      A.card = m ∧
+      (∀ a ∈ A, a > 0) ∧
+      ∃ (hA : A.Nonempty),
+      let N := A.max' hA
+      let I := Set.Ioo x (x + 2 * N)
+      max_matching_size A I ≤ Nat.ceil (2 * Real.sqrt m) := by
+        -- By `exists_st_decomposition`, there exist $s, t$ such that $s+t=n$ and $st \geq m$.
+        obtain ⟨s, t, hs_t⟩ : ∃ s t : ℕ, s + t = Nat.ceil (2 * Real.sqrt m) ∧ s * t ≥ m := by
+          exact exists_st_decomposition m;
+        -- By `erdos_650_upper_bound_st`, there exists a set $A_{st}$ of size $st$ and an interval $I_{st} = (x_{st}, x_{st}+2N_{st}]$ (in $\mathbb{N}$) such that every matching in $A_{st} \times I_{st}$ has size $\le s+t = n$.
+        obtain ⟨N, A_st, I_st, hA_st_card, hA_st_pos, hI_st⟩ : ∃ N : ℕ, ∃ A_st : Finset ℕ, ∃ I_st : Set ℕ,
+          A_st.card = s * t ∧ (∀ a ∈ A_st, 1 ≤ a ∧ a ≤ N) ∧
+          (∃ x y : ℕ, I_st = Set.Ioc x y ∧ y - x = 2 * N) ∧
+          (∀ M : Finset (ℕ × ℕ),
+            (∀ p ∈ M, p.1 ∈ A_st ∧ p.2 ∈ I_st ∧ p.1 ∣ p.2) →
+            (∀ p q, p ∈ M → q ∈ M → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) →
+            M.card ≤ s + t) := by
+              have := erdos_650_upper_bound_st s t; (
+              exact this ( by nlinarith ) ( by nlinarith ) |> fun ⟨ N, A, I, hA_card, hA_pos, hI, hM ⟩ => ⟨ N, A, I, hA_card, hA_pos, hI, hM ⟩ ;);
+        obtain ⟨A, hA⟩ : ∃ A : Finset ℕ, A ⊆ A_st ∧ A.card = m ∧ (∀ a ∈ A, 1 ≤ a) := by
+          exact Exists.elim ( Finset.exists_subset_card_eq ( by linarith ) ) fun A hA => ⟨ A, hA.1, hA.2, fun a ha => hA_st_pos a ( hA.1 ha ) |>.1 ⟩;
+        obtain ⟨x, y, hI_st_eq, hI_st_len⟩ : ∃ x y : ℕ, I_st = Set.Ioc x y ∧ y - x = 2 * N := hI_st.left
+        use A, x
+        simp [hA];
+        refine' ⟨ fun a ha => hA.2.2 a ha, _, _ ⟩
+        all_goals generalize_proofs at *;
+        · exact Finset.card_pos.mp ( by linarith );
+        · refine' max_matching_size_le _ _ _ _;
+          intro M hM
+          obtain ⟨hM_subset, hM_card⟩ := hM
+          have hM_subset_I_st : ∀ p ∈ M, p.2 ∈ Set.Ioc (x : ℤ) (x + 2 * N) := by
+            intro p hp
+            obtain ⟨hpA, hpI, hp_div⟩ := hM_subset p hp
+            have hpI_subset : (p.2 : ℝ) ∈ Set.Ioo (x : ℝ) (x + 2 * N) := by
+              exact ⟨ hpI.1, hpI.2.trans_le <| by norm_cast; linarith [ hA_st_pos _ <| hA.1 <| Finset.max'_mem A ‹_› ] ⟩
+            generalize_proofs at *;
+            exact ⟨ mod_cast hpI_subset.1, mod_cast hpI_subset.2.le ⟩
+          generalize_proofs at *;
+          have hM_subset_I_st : ∃ M' : Finset (ℕ × ℕ), M'.card = M.card ∧ (∀ p ∈ M', p.1 ∈ A_st ∧ p.2 ∈ I_st ∧ p.1 ∣ p.2) ∧ (∀ p q, p ∈ M' → q ∈ M' → p ≠ q → p.1 ≠ q.1 ∧ p.2 ≠ q.2) := by
+            use M.image (fun p => (p.1, Int.toNat p.2));
+            rw [ Finset.card_image_of_injOn ] <;> norm_num [ Function.Injective ];
+            · constructor <;> intros <;> subst_vars <;> norm_num at *;
+              · rename_i a b hab
+                generalize_proofs at *; (
+                have := hM_subset _ _ hab; specialize hM_subset_I_st _ _ hab; norm_cast at *; simp_all +decide ;
+                exact ⟨ hA.1 this.1, by linarith [ Nat.sub_add_cancel ( show x ≤ y from le_of_lt ( Nat.lt_of_sub_ne_zero ( by linarith ) ) ) ], by simpa [ ← Int.natCast_dvd_natCast, Int.toNat_of_nonneg ( by linarith : 0 ≤ b ) ] using hM_subset _ _ hab |>.2.2 ⟩ ;);
+              · grind +ring;
+            · intro p hp q hq; specialize hM_card p q hp hq; aesop;
+          generalize_proofs at *; (
+          exact hM_subset_I_st.choose_spec.1 ▸ hI_st.2 _ hM_subset_I_st.choose_spec.2.1 hM_subset_I_st.choose_spec.2.2 |> le_trans <| by linarith;)
+
+/-
+The function f(m) is equal to ceil(2*sqrt(m)).
+-/
+theorem erdos_650_main (m : ℕ) (hm : m ≥ 4) : f m = Nat.ceil (2 * Real.sqrt m) := by
+  refine' le_antisymm _ _;
+  · -- By definition of $f$, we know that for any $k$ such that $Property m k$ holds, $k \leq \lceil 2 \sqrt{m} \rceil$.
+    have h_upper_bound : ∀ k, Property m k → k ≤ Nat.ceil (2 * Real.sqrt m) := by
+      intro k hk
+      obtain ⟨A, x, hA_card, hA_pos, hA_nonempty, h_max_matching⟩ := erdos_650_upper_bound_tight m hm
+      have h_k_le : k ≤ max_matching_size A (Set.Ioo x (x + 2 * (A.max' hA_nonempty))) := by
+        exact hk A x hA_card hA_pos hA_nonempty
+      have h_max_le : max_matching_size A (Set.Ioo x (x + 2 * (A.max' hA_nonempty))) ≤ Nat.ceil (2 * Real.sqrt m) := by
+        exact h_max_matching
+      linarith [h_k_le, h_max_le];
+    exact csSup_le' h_upper_bound;
+  · refine' le_csSup _ _;
+    · use Nat.ceil ( 2 * Real.sqrt m );
+      intro k hk;
+      obtain ⟨ A, x, hA_card, hA_pos, hA_nonempty, hmax ⟩ := erdos_650_upper_bound_tight m hm;
+      exact le_trans ( hk A x hA_card hA_pos hA_nonempty ) hmax;
+    · intro A x hA hA_pos hA_nonempty;
+      apply_rules [ le_csSup ];
+      · exact ⟨ _, fun k hk => by rcases hk with ⟨ M, hM₁, rfl ⟩ ; exact Finset.card_le_card ( show M ⊆ A ×ˢ ( Finset.Ico ( ⌊x⌋ + 1 ) ( ⌈x + 2 * ↑ ( A.max' hA_nonempty ) ⌉ ) ) from fun p hp => Finset.mem_product.mpr ⟨ hM₁.1 p hp |>.1, Finset.mem_Ico.mpr ⟨ by exact Int.floor_lt.mpr ( by linarith [ hM₁.1 p hp |>.2.1.1 ] ), by exact Int.lt_ceil.mpr ( by linarith [ hM₁.1 p hp |>.2.1.2 ] ) ⟩ ⟩ ) ⟩;
+      · convert erdos_650_lower_bound m hm A ( A.max' hA_nonempty ) hA hA_pos ( rfl ) x using 1;
+        constructor <;> intro hM
+        all_goals generalize_proofs at *;
+        · exact ⟨ hM.choose, hM.choose_spec.1.1, hM.choose_spec.1.2, hM.choose_spec.2.ge ⟩;
+        · obtain ⟨ M, hM₁, hM₂, hM₃ ⟩ := hM;
+          obtain ⟨ M', hM' ⟩ := Finset.exists_subset_card_eq hM₃;
+          exact ⟨ M', ⟨ fun p hp => hM₁ p ( hM'.1 hp ), fun p q hp hq hpq => hM₂ p q ( hM'.1 hp ) ( hM'.1 hq ) hpq ⟩, hM'.2 ⟩
+
+#print axioms erdos_650_main
