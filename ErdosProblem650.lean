@@ -1168,9 +1168,9 @@ lemma erdos_650_upper_bound_tight (m : ℕ) (hm : m ≥ 4) :
           exact hM_subset_I_st.choose_spec.1 ▸ hI_st.2 _ hM_subset_I_st.choose_spec.2.1 hM_subset_I_st.choose_spec.2.2 |> le_trans <| by linarith;)
 
 /-
-The function f(m) is equal to ceil(2*sqrt(m)).
+The function f(m) is equal to ceil(2*sqrt(m)) for all m ≥ 4.
 -/
-theorem erdos_650_main (m : ℕ) (hm : m ≥ 4) : f m = Nat.ceil (2 * Real.sqrt m) := by
+theorem erdos_650_mge4 (m : ℕ) (hm : m ≥ 4) : f m = Nat.ceil (2 * Real.sqrt m) := by
   refine' le_antisymm _ _;
   · -- By definition of $f$, we know that for any $k$ such that $Property m k$ holds, $k \leq \lceil 2 \sqrt{m} \rceil$.
     have h_upper_bound : ∀ k, Property m k → k ≤ Nat.ceil (2 * Real.sqrt m) := by
@@ -1350,10 +1350,13 @@ lemma exists_matching_of_size_eq_card_of_le_3 (A : Finset ℕ) (x : ℝ)
     grind;
   · exact exists_matching_card_3 A x hA hA_pos h_card
 
+/-
+For all positive integers $m$ we have $f(m) = \min(m, \ceil(2\sqrt{m})$.
+-/
 theorem erdos_650 (m : ℕ) (hm : m ≥ 1) : f m = Nat.min m (Nat.ceil (2 * Real.sqrt m)) := by
-  -- For $m \geq 4$, we have $f(m) = \lceil 2\sqrt{m} \rceil$ by `erdos_650_main`.
+  -- For $m \geq 4$, we have $f(m) = \lceil 2\sqrt{m} \rceil$ by `erdos_650_mge4`.
   have h_ge_4 : m ≥ 4 → f m = Nat.ceil (2 * Real.sqrt m) := by
-    exact fun a => erdos_650_main m a;
+    exact fun a => erdos_650_mge4 m a;
   -- For $m < 4$, we need to show that $f(m) = m$.
   have h_lt_4 : m < 4 → f m = m := by
     intro hm_lt_4
