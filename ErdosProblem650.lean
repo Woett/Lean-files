@@ -1,5 +1,5 @@
 /-
-Yixin He, Yanyang Li and Quanyu Tang used ChatGPT 5.4 Pro in order to prove that for every positive integer $m$ there exists a positive integer $N$, a set $A \subset \{1, 2, \ldots, N\}$ of size $m$ and an interval $I = (x, x + 2N) \subset (1, \infty)$ such that the maximum number of fully disjoint pairs $(a, b)$ with $a \in A$, $b \in I$ and $a | b$ is at most $\lceil 2 \sqrt{m} \rceil$. Moreover, this bound is tight. That is, for every set $A \subset \{1, 2, \ldots, N\}$ of size $m \ge 4$ and every interval $I = (x, x + 2N) \subset (1, \infty)$ one can find at least $\lceil 2 \sqrt{m} \rceil$ fully disjoint pairs $(a, b)$ with $a \in A$, $b \in I$ and $a | b$.
+Yixin He, Yanyang Li and Quanyu Tang used ChatGPT 5.4 Pro in order to prove that for every positive integer $m$ there exists a positive integer $N$, a set $A \subset \{1, 2, \ldots, N\}$ of size $m$ and an interval $I = (x, x + 2N) \subset (1, \infty)$ such that the maximum number of fully disjoint pairs $(a, b)$ with $a \in A$, $b \in I$ and $a | b$ is at most $\lceil 2 \sqrt{m} \rceil$. Moreover, this bound is tight. That is, for every set $A \subset \{1, 2, \ldots, N\}$ of size $m ≥ 4$ and every interval $I = (x, x + 2N) \subset (1, \infty)$ one can find at least $\lceil 2 \sqrt{m} \rceil$ fully disjoint pairs $(a, b)$ with $a \in A$, $b \in I$ and $a | b$.
 
 These bounds solve Erdős Problem #650 (https://www.erdosproblems.com/650), and the write-up can be found here:
 
@@ -1198,4 +1198,202 @@ theorem erdos_650_main (m : ℕ) (hm : m ≥ 4) : f m = Nat.ceil (2 * Real.sqrt 
           obtain ⟨ M', hM' ⟩ := Finset.exists_subset_card_eq hM₃;
           exact ⟨ M', ⟨ fun p hp => hM₁ p ( hM'.1 hp ), fun p q hp hq hpq => hM₂ p q ( hM'.1 hp ) ( hM'.1 hq ) hpq ⟩, hM'.2 ⟩
 
-#print axioms erdos_650_main
+/-
+If an interval has length $L > nk$, then it contains at least $n$ multiples of $k$.
+-/
+lemma count_multiples (k : ℕ) (x L : ℝ) (hk : k > 0) (n : ℕ) (hL : L > n * k) :
+    ∃ S : Finset ℤ, S.card = n ∧ ∀ m ∈ S, (k : ℤ) ∣ m ∧ x < m ∧ m < x + L := by
+  -- Let $q = \lfloor x/k \rfloor + 1$.
+  set q := Int.floor (x / k) + 1 with hq_def
+  use Finset.image (fun i : ℕ => q * k + i * k) (Finset.range n);
+  rw [ Finset.card_image_of_injective ] <;> norm_num [ Function.Injective, hk.ne' ];
+  intro a ha; constructor <;> push_cast [ hq_def ] <;> nlinarith [ Int.floor_le ( x / k ), Int.lt_floor_add_one ( x / k ), show ( a : ℝ ) + 1 ≤ n by norm_cast, show ( k : ℝ ) ≥ 1 by norm_cast, mul_div_cancel₀ x ( by positivity : ( k : ℝ ) ≠ 0 ) ] ;
+
+/-
+Given three sets $S_a, S_b, S_c$ with $|S_a| \ge 2, |S_b| \ge 2, |S_c| \ge 1$, we can pick distinct elements $a \in S_a, b \in S_b, c \in S_c$ unless $S_a = S_b$, $S_c \subseteq S_a$, and $|S_a| = 2$.
+-/
+lemma exists_distinct_representatives_of_sets {α : Type*} [DecidableEq α]
+    (S_a S_b S_c : Finset α)
+    (ha : S_a.card ≥ 2) (hb : S_b.card ≥ 2) (hc : S_c.card ≥ 1) :
+    (∃ a ∈ S_a, ∃ b ∈ S_b, ∃ c ∈ S_c, a ≠ b ∧ a ≠ c ∧ b ≠ c) ∨
+    (S_a = S_b ∧ S_c ⊆ S_a ∧ S_a.card = 2) := by
+  by_cases h : S_a = S_b <;> by_cases h' : S_c ⊆ S_a <;> simp_all +decide;
+  · by_cases h'' : S_b.card = 2;
+    · exact Or.inr h'';
+    · obtain ⟨ a, ha, b, hb, hab ⟩ := Finset.two_lt_card.1 ( lt_of_le_of_ne hb ( Ne.symm h'' ) );
+      grind +ring;
+  · obtain ⟨ c, hc ⟩ := Finset.not_subset.mp h';
+    obtain ⟨ a, ha, b, hb, hab ⟩ := Finset.one_lt_card.1 hb; use a, by aesop, b, by aesop, c; aesop;
+  · obtain ⟨ c, hc ⟩ := hc;
+    by_cases h'' : ∀ a ∈ S_a, a = c ∨ a ∈ S_b;
+    · obtain ⟨ a, ha, b, hb, hab ⟩ : ∃ a ∈ S_a, ∃ b ∈ S_b, a ≠ b ∧ a ≠ c := by
+        obtain ⟨ a, ha ⟩ := Finset.exists_mem_ne ( lt_of_lt_of_le ( by decide ) ha ) c;
+        exact ⟨ a, ha.1, by obtain ⟨ b, hb ⟩ := Finset.exists_mem_ne ( lt_of_lt_of_le ( by decide ) hb ) a; use b; aesop ⟩;
+      grind;
+    · push_neg at h'';
+      obtain ⟨ a, ha₁, ha₂, ha₃ ⟩ := h''; obtain ⟨ b, hb₁, hb₂ ⟩ := Finset.exists_mem_ne ( lt_of_lt_of_le ( by decide ) hb ) c; use a, ha₁, b, hb₁, c, hc; aesop;
+  · obtain ⟨ c, hc ⟩ := hc.exists_mem; simp_all +decide [ Finset.subset_iff ] ;
+    obtain ⟨ x, hx, hx' ⟩ := h';
+    obtain ⟨ y, hy ⟩ := Finset.exists_mem_ne ( by linarith ) x;
+    obtain ⟨ z, hz ⟩ := Finset.exists_mem_ne ( by linarith : 1 < Finset.card S_a ) y; use z, hz.1, y, hy.1, x, hx; aesop;
+
+/-
+If $3a \ge 2c$ and $a < b < c$, then $\text{lcm}(a, b) > 2c$.
+-/
+lemma lcm_gt_two_c (a b c : ℕ) (ha : 3 * a ≥ 2 * c) (hab : a < b) (hbc : b < c) :
+    Nat.lcm a b > 2 * c := by
+  -- We have $\text{lcm}(a, b) \ge \frac{ab}{b-a}$.
+  have h_lcm_lower_bound : Nat.lcm a b ≥ a * b / (b - a) := by
+    refine Nat.div_le_div_left ?_ ?_ <;> norm_num [ Nat.gcd_dvd_left, Nat.gcd_dvd_right ];
+    · exact Nat.le_of_dvd ( Nat.sub_pos_of_lt hab ) ( Nat.dvd_sub ( Nat.gcd_dvd_right _ _ ) ( Nat.gcd_dvd_left _ _ ) );
+    · exact Or.inr ( pos_of_gt hab );
+  refine lt_of_lt_of_le ?_ h_lcm_lower_bound;
+  rw [ Nat.lt_iff_add_one_le, Nat.le_div_iff_mul_le ];
+  · nlinarith only [ Nat.sub_add_cancel hab.le, ha, hab, hbc ];
+  · exact Nat.sub_pos_of_lt hab
+
+lemma exists_matching_card_3 (A : Finset ℕ) (x : ℝ)
+    (hA : A.Nonempty) (hA_pos : ∀ a ∈ A, a > 0) (h_card : A.card = 3) :
+    let N := A.max' hA
+    let I := Set.Ioo x (x + 2 * N)
+    ∃ M, is_matching A I M ∧ M.card = 3 := by
+  obtain ⟨a, b, c, ha, hb, hc, habc⟩ : ∃ a b c : ℕ, a < b ∧ b < c ∧ a ∈ A ∧ b ∈ A ∧ c ∈ A ∧ A = {a, b, c} := by
+    obtain ⟨a, b, c, ha, hb, hc, habc⟩ : ∃ a b c : ℕ, a ∈ A ∧ b ∈ A ∧ c ∈ A ∧ a < b ∧ b < c ∧ A = {a, b, c} := by
+      obtain ⟨ a, b, c, h ⟩ := Finset.card_eq_three.mp h_card;
+      cases lt_or_gt_of_ne h.1 <;> cases lt_or_gt_of_ne h.2.1 <;> cases lt_or_gt_of_ne h.2.2.1 <;> simp +decide [ * ] at *;
+      all_goals simp_all +decide [ Finset.Subset.antisymm_iff, Finset.subset_iff ] ;
+    exact ⟨ a, b, c, habc.1, habc.2.1, ha, hb, hc, habc.2.2 ⟩;
+  -- Let $S_a, S_b, S_c$ be the sets of multiples of $a, b, c$ in $I$.
+  set N := c
+  set I := Set.Ioo x (x + 2 * N)
+  set S_a := Finset.filter (fun m => (a : ℤ) ∣ m ∧ x < m ∧ m < x + 2 * N) (Finset.Ico (Int.floor x + 1) (Int.ceil (x + 2 * N)))
+  set S_b := Finset.filter (fun m => (b : ℤ) ∣ m ∧ x < m ∧ m < x + 2 * N) (Finset.Ico (Int.floor x + 1) (Int.ceil (x + 2 * N)))
+  set S_c := Finset.filter (fun m => (c : ℤ) ∣ m ∧ x < m ∧ m < x + 2 * N) (Finset.Ico (Int.floor x + 1) (Int.ceil (x + 2 * N)));
+  -- By `count_multiples`, $|S_c| \ge 1$, $|S_b| \ge 2$, and $|S_a| \ge 2$.
+  have hS_c : S_c.card ≥ 1 := by
+    -- By `count_multiples`, $|S_c| \ge 1$.
+    have hS_c : ∃ m : ℤ, (c : ℤ) ∣ m ∧ x < m ∧ m < x + 2 * N := by
+      refine' ⟨ c * ⌊x / c⌋ + c, _, _, _ ⟩ <;> norm_num;
+      · nlinarith [ Int.lt_floor_add_one ( x / c ), show ( c : ℝ ) > 0 by norm_cast; linarith, mul_div_cancel₀ x ( show ( c : ℝ ) ≠ 0 by norm_cast; linarith ) ];
+      · nlinarith [ Int.floor_le ( x / c ), Int.lt_floor_add_one ( x / c ), show ( c : ℝ ) > 0 by norm_cast; linarith [ hA_pos _ habc.2.1 ], mul_div_cancel₀ x ( show ( c : ℝ ) ≠ 0 by norm_cast; linarith [ hA_pos _ habc.2.1 ] ) ];
+    obtain ⟨ m, hm₁, hm₂, hm₃ ⟩ := hS_c; exact Finset.card_pos.mpr ⟨ m, Finset.mem_filter.mpr ⟨ Finset.mem_Ico.mpr ⟨ by exact Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ Int.floor_le x, Int.lt_floor_add_one x ] ), by exact Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ Int.le_ceil ( x + 2 * c ) ] ) ⟩, hm₁, hm₂, hm₃ ⟩ ⟩ ;
+  have hS_b : S_b.card ≥ 2 := by
+    have hS_b : ∃ S : Finset ℤ, S.card = 2 ∧ ∀ m ∈ S, (b : ℤ) ∣ m ∧ x < m ∧ m < x + 2 * N := by
+      apply count_multiples b x (2 * N) (by
+      linarith [ hA_pos b habc.1 ]) 2 (by
+      exact mul_lt_mul_of_pos_left ( mod_cast hb ) zero_lt_two);
+    obtain ⟨ S, hS₁, hS₂ ⟩ := hS_b; refine' le_trans _ ( Finset.card_mono <| show S ⊆ S_b from _ ) ; aesop;
+    exact fun m hm => Finset.mem_filter.mpr ⟨ Finset.mem_Ico.mpr ⟨ by exact Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hS₂ m hm, Int.floor_le x, Int.lt_floor_add_one x ] ), by exact Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hS₂ m hm, Int.le_ceil ( x + 2 * N ), Int.ceil_lt_add_one ( x + 2 * N ) ] ) ⟩, hS₂ m hm ⟩
+  have hS_a : S_a.card ≥ 2 := by
+    have h_card_interval : ∃ S : Finset ℤ, S.card = 2 ∧ ∀ m ∈ S, (a : ℤ) ∣ m ∧ x < m ∧ m < x + 2 * (N : ℝ) := by
+      apply_rules [ count_multiples ];
+      exact mul_lt_mul_of_pos_left ( mod_cast by linarith ) zero_lt_two;
+    obtain ⟨ S, hS₁, hS₂ ⟩ := h_card_interval; exact hS₁ ▸ Finset.card_le_card fun m hm => Finset.mem_filter.mpr ⟨ Finset.mem_Ico.mpr ⟨ by exact Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hS₂ m hm, Int.floor_le x, Int.lt_floor_add_one x ] ), by exact Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hS₂ m hm, Int.le_ceil ( x + 2 * ( N : ℝ ) ), Int.ceil_lt_add_one ( x + 2 * ( N : ℝ ) ) ] ) ⟩, hS₂ m hm ⟩ ;
+  -- By `exists_distinct_representatives_of_sets`, either we have a matching (distinct representatives), or we are in the bad case: $S_a = S_b$, $S_c \subseteq S_a$, and $|S_a| = 2$.
+  by_cases h_bad_case : S_a = S_b ∧ S_c ⊆ S_a ∧ S_a.card = 2;
+  · -- If $2c > 3a$, then by `count_multiples`, $|S_a| \ge 3$, contradiction.
+    by_cases h_case : 2 * c > 3 * a;
+    · have hS_a_card : S_a.card ≥ 3 := by
+        have hS_a_card : ∃ S : Finset ℤ, S.card = 3 ∧ ∀ m ∈ S, (a : ℤ) ∣ m ∧ x < m ∧ m < x + 2 * c := by
+          convert count_multiples a x ( 2 * c ) ( hA_pos a hc ) 3 _ using 1 ; norm_num [ h_case ];
+          norm_cast;
+        obtain ⟨ S, hS₁, hS₂ ⟩ := hS_a_card; exact hS₁ ▸ Finset.card_le_card ( fun m hm => Finset.mem_filter.mpr ⟨ Finset.mem_Ico.mpr ⟨ by exact Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hS₂ m hm, Int.floor_le x, Int.lt_floor_add_one x ] ), by exact Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ hS₂ m hm, Int.le_ceil ( x + 2 * c ), Int.ceil_lt_add_one ( x + 2 * c ) ] ) ⟩, hS₂ m hm ⟩ ) ;
+      linarith;
+    · -- By `lcm_gt_two_c`, $\text{lcm}(a, b) > 2c$.
+      have h_lcm_gt_two_c : Nat.lcm a b > 2 * c := by
+        apply lcm_gt_two_c a b c (by linarith) ha hb;
+      -- Since $S_a = S_b$, any element $u \in S_a$ is a multiple of both $a$ and $b$, hence a multiple of $\text{lcm}(a, b)$.
+      have h_lcm_div : ∀ u ∈ S_a, (Nat.lcm a b : ℤ) ∣ u := by
+        simp +zetaDelta at *;
+        intro u hu₁ hu₂ hu₃ hu₄ hu₅; have := h_bad_case.1.symm; simp_all +decide [ Finset.ext_iff ] ;
+        exact Int.coe_lcm_dvd hu₃ ( this u hu₁ hu₂ hu₄ hu₅ |>.2 hu₃ );
+      -- Since $|S_a| = 2$, let $S_a = \{u, v\}$ with $u \ne v$.
+      obtain ⟨u, v, hu, hv, huv⟩ : ∃ u v : ℤ, u ∈ S_a ∧ v ∈ S_a ∧ u ≠ v ∧ S_a = {u, v} := by
+        rw [ Finset.card_eq_two ] at h_bad_case; obtain ⟨ u, v, hu, hv ⟩ := h_bad_case.2.2; use u, v; aesop;
+      -- Since $u$ and $v$ are multiples of $\text{lcm}(a, b)$, we have $|u - v| \ge \text{lcm}(a, b)$.
+      have h_diff_ge_lcm : |u - v| ≥ Nat.lcm a b := by
+        exact Int.le_of_dvd ( abs_pos.mpr ( sub_ne_zero.mpr huv.1 ) ) ( by simpa using dvd_sub ( h_lcm_div u hu ) ( h_lcm_div v hv ) );
+      -- Since $u$ and $v$ are in $I$, we have $|u - v| < 2c$.
+      have h_diff_lt_two_c : |u - v| < 2 * c := by
+        simp +zetaDelta at *;
+        exact abs_sub_lt_iff.mpr ⟨ by exact_mod_cast ( by linarith : ( u : ℝ ) - v < 2 * c ), by exact_mod_cast ( by linarith : ( v : ℝ ) - u < 2 * c ) ⟩;
+      linarith;
+  · obtain ⟨a', ha', b', hb', c', hc', habc'⟩ : ∃ a' ∈ S_a, ∃ b' ∈ S_b, ∃ c' ∈ S_c, a' ≠ b' ∧ a' ≠ c' ∧ b' ≠ c' := by
+      exact ( exists_distinct_representatives_of_sets S_a S_b S_c hS_a hS_b hS_c ) |> fun h => h.resolve_right fun h' => h_bad_case ⟨ h'.1, h'.2.1, h'.2.2 ⟩;
+    refine' ⟨ { ( a, a' ), ( b, b' ), ( c, c' ) }, _, _ ⟩ <;> simp_all +decide [ is_matching ];
+    grind
+
+lemma exists_matching_of_size_eq_card_of_le_3 (A : Finset ℕ) (x : ℝ)
+    (hA : A.Nonempty) (hA_pos : ∀ a ∈ A, a > 0) (h_card : A.card ≤ 3) :
+    let N := A.max' hA
+    let I := Set.Ioo x (x + 2 * N)
+    ∃ M, is_matching A I M ∧ M.card = A.card := by
+  interval_cases h_card : A.card <;> simp_all +decide;
+  · exact absurd ‹A = ∅› hA.ne_empty;
+  · obtain ⟨ a, ha ⟩ := Finset.card_eq_one.mp ‹_›;
+    -- Since $a$ is positive and the interval $(x, x + 2a)$ has length $2a$, there must be at least one multiple of $a$ in this interval.
+    obtain ⟨m, hm⟩ : ∃ m : ℤ, (a : ℝ) * m ∈ Set.Ioo x (x + 2 * a) := by
+      exact ⟨ ⌊x / a⌋ + 1, by push_cast; nlinarith [ Int.lt_floor_add_one ( x / a ), show ( a : ℝ ) > 0 from mod_cast hA_pos a ( ha.symm ▸ Finset.mem_singleton_self _ ), mul_div_cancel₀ x ( show ( a : ℝ ) ≠ 0 from mod_cast ne_of_gt ( hA_pos a ( ha.symm ▸ Finset.mem_singleton_self _ ) ) ) ], by push_cast; nlinarith [ Int.floor_le ( x / a ), show ( a : ℝ ) > 0 from mod_cast hA_pos a ( ha.symm ▸ Finset.mem_singleton_self _ ), mul_div_cancel₀ x ( show ( a : ℝ ) ≠ 0 from mod_cast ne_of_gt ( hA_pos a ( ha.symm ▸ Finset.mem_singleton_self _ ) ) ) ] ⟩;
+    use {(a, m * a)};
+    simp_all +decide [ Finset.max', is_matching ];
+    constructor <;> linarith;
+  · obtain ⟨a, b, hab⟩ : ∃ a b, a ∈ A ∧ b ∈ A ∧ a < b ∧ A = {a, b} := by
+      have := Finset.card_eq_two.mp ‹_›; obtain ⟨ a, b, hab ⟩ := this; cases lt_trichotomy a b <;> aesop;
+    obtain ⟨S_a, hS_a⟩ : ∃ S_a : Finset ℤ, S_a.card = 2 ∧ ∀ m ∈ S_a, (a : ℤ) ∣ m ∧ x < m ∧ m < x + 2 * b := by
+      have := @count_multiples a x ( 2 * b ) ?_ 2 ?_ <;> aesop;
+    obtain ⟨S_b, hS_b⟩ : ∃ S_b : Finset ℤ, S_b.card = 1 ∧ ∀ m ∈ S_b, (b : ℤ) ∣ m ∧ x < m ∧ m < x + 2 * b := by
+      have := count_multiples b x ( 2 * b ) ( by linarith [ hA_pos b hab.2.1 ] ) 1 ; aesop;
+    obtain ⟨m_a, hm_a⟩ : ∃ m_a ∈ S_a, ∃ m_b ∈ S_b, m_a ≠ m_b := by
+      by_contra h_contra; push_neg at h_contra; (
+      obtain ⟨ m, hm ⟩ := Finset.card_eq_one.mp hS_b.1; obtain ⟨ n, hn ⟩ := Finset.card_eq_two.mp hS_a.1; aesop;);
+    obtain ⟨ m_b, hm_b, hne ⟩ := hm_a.2; use { ( a, m_a ), ( b, m_b ) } ; simp_all +decide [ is_matching ] ;
+    grind;
+  · exact exists_matching_card_3 A x hA hA_pos h_card
+
+theorem erdos_650 (m : ℕ) (hm : m ≥ 1) : f m = Nat.min m (Nat.ceil (2 * Real.sqrt m)) := by
+  -- For $m \geq 4$, we have $f(m) = \lceil 2\sqrt{m} \rceil$ by `erdos_650_main`.
+  have h_ge_4 : m ≥ 4 → f m = Nat.ceil (2 * Real.sqrt m) := by
+    exact fun a => erdos_650_main m a;
+  -- For $m < 4$, we need to show that $f(m) = m$.
+  have h_lt_4 : m < 4 → f m = m := by
+    intro hm_lt_4
+    have h_le_m : f m ≤ m := by
+      refine' csSup_le _ _ <;> norm_num +zetaDelta at *;
+      · use 0; simp [Property];
+      · intro b hb
+        specialize hb (Finset.Icc 1 m) 0
+        simp at hb
+        generalize_proofs at *; (
+        refine' le_trans ( hb ( fun a ha₁ ha₂ => ha₁ ) hm ) _;
+        refine' csSup_le _ _ <;> norm_num +zetaDelta at *;
+        · exact ⟨ 0, ⟨ ∅, by unfold is_matching; aesop ⟩ ⟩;
+        · intro a ha; have := Finset.card_le_card ( show a.image Prod.fst ⊆ Finset.Icc 1 m from Finset.image_subset_iff.mpr fun x hx => ha.1 x hx |>.1 ) ; simp_all +decide ;
+          rwa [ Finset.card_image_of_injOn fun x hx y hy hxy => by have := ha.2 x y hx hy; aesop ] at this;)
+    have h_ge_m : f m ≥ m := by
+      refine' le_csSup _ _ <;> norm_num +zetaDelta at *;
+      · -- Since for any configuration $A$ of size $m$ and any $x$, the maximum matching size is at most $m$, we have $k \leq m$ for all $k$ in the set.
+        have h_le_m : ∀ k, Property m k → k ≤ m := by
+          intro k hk
+          specialize hk (Finset.Icc 1 m) 0
+          generalize_proofs at *; (
+          refine' le_trans ( hk ( by norm_num ) ( fun a ha => by linarith [ Finset.mem_Icc.mp ha ] ) ( Finset.nonempty_Icc.mpr hm ) ) _;
+          refine' max_matching_size_le _ _ _ _ ; norm_num +zetaDelta at *;
+          intro M hM; have := Finset.card_le_card ( show M.image Prod.fst ⊆ Finset.Icc 1 m from Finset.image_subset_iff.mpr fun p hp => hM.1 p hp |>.1 ) ; simp_all +decide ;
+          rwa [ Finset.card_image_of_injOn fun x hx y hy hxy => by have := hM.2 x y hx hy; aesop ] at this;)
+        generalize_proofs at *; (exact ⟨m, fun k hk => h_le_m k hk⟩;);
+      · intro A x hA hA_pos hA_nonempty
+        set N := A.max' hA_nonempty
+        set I := Set.Ioo x (x + 2 * N)
+        have h_exists_matching : ∃ M : Finset (ℕ × ℤ), is_matching A I M ∧ M.card = m := by
+          have := exists_matching_of_size_eq_card_of_le_3 A x hA_nonempty hA_pos ( by linarith ) ; aesop;
+        exact (by
+        obtain ⟨ M, hM₁, hM₂ ⟩ := h_exists_matching; exact le_trans ( by linarith ) ( le_csSup ⟨ A.card, fun k hk => by obtain ⟨ M, hM₁, rfl ⟩ := hk; exact Finset.card_le_card ( show M.image Prod.fst ⊆ A from Finset.image_subset_iff.mpr fun p hp => hM₁.1 p hp |>.1 ) |> fun h => h.trans' ( by rw [ Finset.card_image_of_injOn ] ; exact fun p hp q hq hpq => by have := hM₁.2 p q hp hq; aesop ) ⟩ ⟨ M, hM₁, rfl ⟩ ) ;)
+    exact le_antisymm h_le_m h_ge_m;
+  cases le_or_gt m 3 <;> simp_all +decide [ Nat.min ];
+  · interval_cases m <;> norm_num [ h_lt_4 ] at *;
+    · exact Nat.succ_le_of_lt ( Nat.lt_ceil.mpr ( by norm_num; nlinarith [ Real.sqrt_nonneg 2, Real.sq_sqrt zero_le_two ] ) );
+    · exact Nat.succ_le_of_lt ( Nat.lt_ceil.mpr ( by norm_num; nlinarith [ Real.sqrt_nonneg 3, Real.sq_sqrt ( show 0 ≤ 3 by norm_num ) ] ) );
+  · rw [ h_ge_4 ‹_›, min_eq_right ];
+    exact Nat.ceil_le.mpr ( by nlinarith only [ show ( m : ℝ ) ≥ 4 by norm_cast, Real.mul_self_sqrt ( Nat.cast_nonneg m ) ] )
+
+#print axioms erdos_650
