@@ -1351,7 +1351,7 @@ lemma exists_matching_of_size_eq_card_of_le_3 (A : Finset ℕ) (x : ℝ)
   · exact exists_matching_card_3 A x hA hA_pos h_card
 
 /-
-For all positive integers $m$ we have $f(m) = \min(m, \ceil(2\sqrt{m})$.
+For all positive integers $m$ we have $f(m) = \min(m, ⌈ 2\sqrt{m} ⌉)$.
 -/
 theorem erdos_650 (m : ℕ) (hm : m ≥ 1) : f m = Nat.min m (Nat.ceil (2 * Real.sqrt m)) := by
   -- For $m \geq 4$, we have $f(m) = \lceil 2\sqrt{m} \rceil$ by `erdos_650_mge4`.
