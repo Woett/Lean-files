@@ -1,13 +1,13 @@
 /-
-Solving Erdős Problem #355 (https://www.erdosproblems.com/355), Vjekoslav Kovač and I proved that there exists a lacunary sequence of positive integers whose reciprocal sums represent all rational numbers in an interval. 
+Solving Erdős Problem #355 (https://www.erdosproblems.com/355), Vjekoslav Kovač and I proved that there exists a lacunary sequence of positive integers whose reciprocal sums represent all rational numbers in an interval.
 
 W. van Doorn and V. Kovač, Lacunary sequences whose reciprocal sums represent all rationals in an interval. arXiv:2509.24971 (2025).
 
-Below you can find a formalization of the main results of our paper, obtained by Aristotle from Harmonic (aristotle-harmonic@harmonic.fun). 
+Below you can find a formalization of the main results of our paper, obtained by Aristotle from Harmonic (aristotle-harmonic@harmonic.fun).
 
 More precisely, for a parameter $λ > 1$, let us say that a sequence $A = \{a_1 < a_2 < \cdots\}$ of positive integers is $\lambda$-lacunary if $a_{i+1} \ge λ a_i$ for all $i$. Let's further define $P(A^{-1})}$ to be the set of all rationals that can be written as a finite sum of reciprocals of elements in $A$, and define $R(λ)$ to be the least upper bound on the length $\beta - \alpha$ of an interval $(\alpha, \beta)$ for which there exists a $λ$-lacunary sequence of positive integers $A$ such that $P(A^{-1})$ contains all rational numbers from $(\alpha, \beta)$. Then at the end of the Lean-file below the following four theorems are proven.
 
-Theorem 1. For all $λ \in (1, 2)$ there exists a $λ$-lacunary sequence $A = \{a_1 < a_2 < \cdots\}$ of positive integers with $\frac{a_{i+1}}{a_i} \to 2$ such that $P(A^{-1})$ contains every rational in the interval $[0, 2]$. 
+Theorem 1. For all $λ \in (1, 2)$ there exists a $λ$-lacunary sequence $A = \{a_1 < a_2 < \cdots\}$ of positive integers with $\frac{a_{i+1}}{a_i} \to 2$ such that $P(A^{-1})$ contains every rational in the interval $[0, 2]$.
 
 Theorem 2. For all $λ \in (1, 2)$ we have $R(λ) = \sum_{i=1}^{\infty} \frac{1}{b_i}$.
 
@@ -15,7 +15,7 @@ Theorem 3. For all $Λ \ge 2$ and all $λ$ with $1 < λ < Λ/(Λ-1)$, there exis
 
 Theorem 4. If $A$ is a set of positive integers with $2A ⊆ A$ and such that $A$ contains a multiple of each odd integer, then $P(A^{-1})$ contains every positive rational smaller than $\sum_{a \in A} \frac{1}{a}$.
 
-At the very end of the file you can find the statement of Erdős Problem #355 taken from the Formal Conjectures project by Google DeepMind, which we also prove. 
+At the very end of the file you can find the statement of Erdős Problem #355 taken from the Formal Conjectures project by Google DeepMind, which we also prove.
 
 https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjectures/ErdosProblems/355.lean
 
@@ -46,11 +46,11 @@ noncomputable section
 open Set Filter Topology
 open scoped BigOperators
 
-/- 
+/-
 Basic definitions of e.g. lacunarity, the function $R(λ)$, and the assumption on $S$ for Theorem 4. These definitions are sufficient in order to understand the statements of our results at the end.
 -/
 
-/- 
+/-
 For a parameter $λ  > 1$, we say that a sequence $n_1, n_2, \ldots$ is $λ$-lacunary if $n_{i+1} \ge λ n_i$ for all $i ≥ 1$. It is simply said to be lacunary if it is $λ$-lacunary for some $λ > 1$.
 -/
 def IsLambdaLacunary (lambda : ℝ) (seq : ℕ → ℝ) : Prop :=
@@ -59,7 +59,7 @@ def IsLambdaLacunary (lambda : ℝ) (seq : ℕ → ℝ) : Prop :=
 def IsLacunary (a : ℕ → ℕ) : Prop :=
   ∃ lambda_val > 1, ∀ i ≥ 1, (a (i + 1) : ℝ) / a i ≥ lambda_val
 
-/- 
+/-
 Given a sequence, SubsetSums is the set of finite sums of elements of the sequence.
 -/
 def SubsetSums (seq : ℕ → ℝ) : Set ℝ :=
@@ -89,8 +89,8 @@ Definition of the target interval $[0, \sum f_i)$ which is $[0, \infty)$ if the 
 noncomputable def TargetInterval (f : ℕ → ℝ) : Set ℝ :=
   if Summable f then Set.Ico 0 (∑' i, f i) else Set.Ici 0
 
-/- 
-The set $S$ $x_m$-densely fills in the segment $[a, b]$, i.e., it divides this segment into sub-intervals of length at most $x_m$. 
+/-
+The set $S$ $x_m$-densely fills in the segment $[a, b]$, i.e., it divides this segment into sub-intervals of length at most $x_m$.
 -/
 def DenselyFills (S : Set ℝ) (a b δ : ℝ) : Prop :=
   S ⊆ Icc a b ∧ a ∈ S ∧ b ∈ S ∧
@@ -3804,8 +3804,10 @@ Statement taken from the Formal Conjectures project.
 -/
 theorem erdos_355 :
     ∃ A : ℕ → ℕ, IsLacunary A ∧ ∃ u v : ℝ, u < v ∧ ∀ q : ℚ, ↑q ∈ Set.Ioo u v →
-      q ∈ {∑ a ∈ A', (1 / a : ℚ) | (A' : Finset ℕ) (_ : A'.toSet ⊆ Set.range A)} := by 
-      obtain ⟨A, hA⟩ : ∃ A : ℕ → ℕ, IsLacunary A ∧ (∀ q : ℚ, 0 ≤ q → q ≤ 1 → ∃ A' : Finset ℕ, (∀ a ∈ A', a ∈ Set.range A) ∧ (∑ a ∈ A', (1 : ℚ) / a) = q) := by
+      q ∈ {∑ a ∈ A', (1 / a : ℚ) | (A' : Finset ℕ) (_ : A'.toSet ⊆ Set.range A)} := by
+        -- Let's choose any sequence $A$ that satisfies the conditions.
+        obtain ⟨A, hA⟩ : ∃ A : ℕ → ℕ, IsLacunary A ∧ (∀ q : ℚ, 0 ≤ q → q ≤ 1 → ∃ A' : Finset ℕ, (∀ a ∈ A', a ∈ Set.range A) ∧ (∑ a ∈ A', (1 : ℚ) / a) = q) := by
+          obtain ⟨A, hA⟩ : ∃ A : ℕ → ℕ, IsLacunary A ∧ (∀ q : ℚ, 0 ≤ q → q ≤ 1 → ∃ A' : Finset ℕ, (∀ a ∈ A', a ∈ Set.range A) ∧ (∑ a ∈ A', (1 : ℚ) / a) = q) := by
             have := Theorem_1 1.5 ⟨by norm_num, by norm_num⟩
             obtain ⟨ n, hn ⟩ := this
             generalize_proofs at *; (
@@ -3830,5 +3832,4 @@ theorem erdos_355 :
 #print axioms Theorem_2
 #print axioms Theorem_3
 #print axioms Theorem_4
-
 #print axioms erdos_355
