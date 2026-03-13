@@ -3806,7 +3806,7 @@ theorem erdos_355 :
     ∃ A : ℕ → ℕ, IsLacunary A ∧ ∃ u v : ℝ, u < v ∧ ∀ q : ℚ, ↑q ∈ Set.Ioo u v →
       q ∈ {∑ a ∈ A', (1 / a : ℚ) | (A' : Finset ℕ) (_ : A'.toSet ⊆ Set.range A)} := by 
       obtain ⟨A, hA⟩ : ∃ A : ℕ → ℕ, IsLacunary A ∧ (∀ q : ℚ, 0 ≤ q → q ≤ 1 → ∃ A' : Finset ℕ, (∀ a ∈ A', a ∈ Set.range A) ∧ (∑ a ∈ A', (1 : ℚ) / a) = q) := by
-            have := thm01 1.5 ⟨by norm_num, by norm_num⟩
+            have := Theorem_1 1.5 ⟨by norm_num, by norm_num⟩
             obtain ⟨ n, hn ⟩ := this
             generalize_proofs at *; (
             refine' ⟨ n, _, _ ⟩ <;> simp_all +decide [ IsLacunary, IsLambdaLacunary ];
@@ -3830,4 +3830,5 @@ theorem erdos_355 :
 #print axioms Theorem_2
 #print axioms Theorem_3
 #print axioms Theorem_4
+
 #print axioms erdos_355
