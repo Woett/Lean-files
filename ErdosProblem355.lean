@@ -5,7 +5,7 @@ W. van Doorn and V. Kovač, Lacunary sequences whose reciprocal sums represent a
 
 Below you can find a formalization of the main results of our paper, obtained by Aristotle from Harmonic (aristotle-harmonic@harmonic.fun).
 
-More precisely, for a parameter $λ > 1$, let us say that a sequence $A = \{a_1 < a_2 < \cdots\}$ of positive integers is $\lambda$-lacunary if $a_{i+1} \ge λ a_i$ for all $i$. Let's further define $P(A^{-1})}$ to be the set of all rationals that can be written as a finite sum of reciprocals of elements in $A$, and define $R(λ)$ to be the least upper bound on the length $\beta - \alpha$ of an interval $(\alpha, \beta)$ for which there exists a $λ$-lacunary sequence of positive integers $A$ such that $P(A^{-1})$ contains all rational numbers from $(\alpha, \beta)$. Then at the end of the Lean-file below the following four theorems are proven.
+More precisely, for a parameter $λ > 1$, let us say that a sequence $A = \{a_1 < a_2 < \cdots\}$ of positive integers is $λ$-lacunary if $a_{i+1} \ge λ a_i$ for all $i$. Let's further define $P(A^{-1})}$ to be the set of all rationals that can be written as a finite sum of reciprocals of elements in $A$, and define $R(λ)$ to be the least upper bound on the length $\beta - \alpha$ of an interval $(\alpha, \beta)$ for which there exists a $λ$-lacunary sequence of positive integers $A$ such that $P(A^{-1})$ contains all rational numbers from $(\alpha, \beta)$. Then at the end of the Lean-file below the following four theorems are proven.
 
 Theorem 1. For all $λ \in (1, 2)$ there exists a $λ$-lacunary sequence $A = \{a_1 < a_2 < \cdots\}$ of positive integers with $\frac{a_{i+1}}{a_i} \to 2$ such that $P(A^{-1})$ contains every rational in the interval $[0, 2]$.
 
