@@ -1,5 +1,5 @@
 /-
-Bhowmick managed to construct a set of $n$ points in $\mathbb{R}^2$ such that $\lfloor \frac{n}{4} \rfloor$ distances occur at least $n$ times.
+Bhowmick managed to construct a set of $n$ points in $\mathbb{R}^2$ such that $\lfloor \frac{n}{4} \rfloor$ distances occur at least $n+1$ times.
 
 K. Bhowmick, A problem of Erdős about rich distances. arXiv:2407.01174 (2024).
 
