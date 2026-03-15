@@ -221,12 +221,6 @@ lemma rotate_around_isometry (c : ℂ) (θ : ℝ) : Isometry (rotate_around c θ
   rw [ show x * Complex.exp ( θ * Complex.I ) - Complex.exp ( θ * Complex.I ) * y = ( x - y ) * Complex.exp ( θ * Complex.I ) by ring, norm_mul, Complex.norm_exp ] ; norm_num
 
 /-
-Rotation around a point `c` by angle `θ` preserves distances.
--/
-lemma rotate_around_dist (c : ℂ) (θ : ℝ) (x y : ℂ) : dist (rotate_around c θ x) (rotate_around c θ y) = dist x y := by
-  convert ( rotate_around_isometry c θ ).dist_eq x y using 1
-
-/-
 Rotation around a point `c` fixes `c`.
 -/
 lemma rotate_around_self (c : ℂ) (θ : ℝ) : rotate_around c θ c = c := by
@@ -474,36 +468,6 @@ lemma erdos756_even (m : ℕ) (hm : m ≥ 2) :
         use P, hP_card, hS_exists.choose, hS_exists.choose_spec.left, hS_exists.choose_spec.right.left, hS_exists.choose_spec.right.right
 
 /-
-The cardinality of the union of a regular `(m+1)`-gon and its reflection across an edge is `2m`.
--/
-lemma erdos_even_card (m : ℕ) (hm : m ≥ 2) :
-  let P := regular_polygon (m + 1)
-  let R := reflect_over 1 (zeta (m + 1))
-  (P ∪ P.image R).card = 2 * m := by
-    -- The intersection of $P$ and $R(P)$ is $\{u, v\}$, so $5$ points.
-    have h_inter : (regular_polygon (m + 1)) ∩ (Finset.image (reflect_over 1 (zeta (m + 1))) (regular_polygon (m + 1))) = {1, zeta (m + 1)} := by
-      convert regular_polygon_reflection_inter m hm using 1;
-    -- Since the reflection is an isometry, the cardinality of the image of P under R is equal to the cardinality of P.
-    have h_card_image : (Finset.image (reflect_over 1 (zeta (m + 1))) (regular_polygon (m + 1))).card = (regular_polygon (m + 1)).card := by
-      apply Finset.card_image_of_injOn;
-      intro x hx y hy hxy;
-      have h_reflect_eq : Isometry (reflect_over 1 (zeta (m + 1))) := by
-        apply reflect_over_isometry; norm_num [ zeta ];
-        rw [ eq_comm, Complex.exp_eq_one_iff ];
-        field_simp;
-        exact fun ⟨ n, hn ⟩ => by rcases n with ⟨ _ | _ | n ⟩ <;> norm_num [ Complex.ext_iff ] at hn <;> nlinarith;
-      exact h_reflect_eq.injective hxy;
-    have h_card_union : (Finset.image (reflect_over 1 (zeta (m + 1))) (regular_polygon (m + 1))).card + (regular_polygon (m + 1)).card - (Finset.image (reflect_over 1 (zeta (m + 1))) (regular_polygon (m + 1)) ∩ regular_polygon (m + 1)).card = 2 * m := by
-      rw [ show Finset.image ( reflect_over 1 ( zeta ( m + 1 ) ) ) ( regular_polygon ( m + 1 ) ) ∩ regular_polygon ( m + 1 ) = { 1, zeta ( m + 1 ) } from ?_, Finset.card_insert_of_notMem, Finset.card_singleton ] <;> norm_num [ h_card_image, regular_polygon_card ] ; ring_nf;
-      · rw [ Nat.add_sub_cancel_left ];
-      · norm_num [ zeta ];
-        rw [ eq_comm, Complex.exp_eq_one_iff ];
-        field_simp;
-        exact fun ⟨ n, hn ⟩ => by rcases n with ⟨ _ | _ | n ⟩ <;> norm_num [ Complex.ext_iff ] at hn <;> nlinarith;
-      · rw [ Finset.inter_comm, h_inter ];
-    grind +ring
-
-/-
 For all $n \in \mathbb{N}$, there exists a set of $n$ points such that $\left\lfloor\frac{n}{4}\right\rfloor$ distances occur at least $n+1$ times.
 -/
 theorem erdos756 (n : ℕ) :
@@ -521,3 +485,5 @@ theorem erdos756 (n : ℕ) :
           · interval_cases k <;> simp_all +decide;
             · exact ⟨ { 0 }, by norm_num ⟩;
             · exact ⟨ { 0, 1, 2 }, by norm_num ⟩
+
+#print axioms erdos756
