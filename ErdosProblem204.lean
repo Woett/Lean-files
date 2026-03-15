@@ -466,7 +466,6 @@ lemma case_1a_sum_bound (n : ℕ) (h_n_gt_1 : n > 1)
         · exact absurd ( ‹n.minFac = s ∨ n < n.minFac›.resolve_left ( by linarith ) ) ( not_lt_of_ge ( Nat.minFac_le h_n_gt_1.le ) );
         · unfold sum_divisors_reciprocal; norm_num; nlinarith [ inv_mul_cancel₀ ( by positivity : ( n.minFac : ℚ ) ≠ 0 ), ( by norm_cast : ( 3 : ℚ ) ≤ n.minFac ) ] ;
 
-
 /-
 If $n$ is even and in Case 1, then $n=2$ or $n=2q^k$ for some odd prime $q$.
 -/
