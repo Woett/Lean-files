@@ -223,64 +223,27 @@ lemma Zk_tendsto_atTop (X a M b : ℤ) (r s : ℕ) (md : ℤ)
   · rw [ Filter.tendsto_atTop_atTop ] at *;
     intro b; rcases h_W_inf b with ⟨ i, hi ⟩ ; exact ⟨ ⌈i⌉₊, fun n hin => Int.le_floor.2 <| mod_cast hi n <| Nat.le_of_ceil_le hin ⟩ ;
 
-lemma covering (X a L M b : ℤ) (r s : ℕ) (md : ℤ)
-    (ha : 0 < a) (hmd : 2 ≤ md)
-    (hLM : L ≤ M) (hM : 0 < M)
-    (ineq1a : 0 ≤ b * ↑r * (md - 1) - b * ↑s + a * (M - L))
-    (ineq1b : 0 ≤ b * ↑s * (md - 1) + a * (M - L))
-    (hZ0 : Zk X a M b r s md 0 > b * ((r : ℤ) + 0 * (s : ℤ)))
-    (n : ℤ)
-    (hn : (md - 1) * X - a * (M - L) ≤ (md - 1) * n) :
-    ∃ k, (md - 1) * (Yk X a L b r s md k) - a * (M - L) ≤ (md - 1) * n ∧
-         (md - 1) * n ≤ (md - 1) * (Zk X a M b r s md k) + a * (M - L) := by
-  have hZ_inf : Filter.Tendsto (fun k => (md - 1) * Zk X a M b r s md k + a * (M - L)) Filter.atTop Filter.atTop := by
-    apply Filter.Tendsto.atTop_add _ tendsto_const_nhds
-    rw [Filter.tendsto_atTop_atTop]
-    intro N
-    have hZt := Zk_tendsto_atTop X a M b r s md ha hmd hM hZ0
-    rw [Filter.tendsto_atTop_atTop] at hZt
-    obtain ⟨K, hK⟩ := hZt (max 0 N)
-    refine ⟨K, fun k hk => ?_⟩
-    have h := hK k hk
-    have h0 : 0 ≤ Zk X a M b r s md k := by linarith [le_max_left 0 N]
-    have hN : N ≤ Zk X a M b r s md k := by linarith [le_max_right 0 N]
-    calc N ≤ Zk X a M b r s md k := hN
-      _ = 1 * Zk X a M b r s md k := (one_mul _).symm
-      _ ≤ (md - 1) * Zk X a M b r s md k := by exact mul_le_mul_of_nonneg_right (by linarith) h0
-  have h_exists_k : ∃ k, (md - 1) * n ≤ (md - 1) * Zk X a M b r s md k + a * (M - L) ∧ ∀ j < k, (md - 1) * n > (md - 1) * Zk X a M b r s md j + a * (M - L) := by
-    obtain ⟨ k, hk ⟩ := Filter.eventually_atTop.mp ( hZ_inf.eventually_ge_atTop ( ( md - 1 ) * n ) );
-    exact ⟨ Nat.find ( ⟨ k, hk k le_rfl ⟩ : ∃ k, ( md - 1 ) * n ≤ ( md - 1 ) * Zk X a M b r s md k + a * ( M - L ) ), Nat.find_spec ( ⟨ k, hk k le_rfl ⟩ : ∃ k, ( md - 1 ) * n ≤ ( md - 1 ) * Zk X a M b r s md k + a * ( M - L ) ), fun j hj => not_le.1 fun h => Nat.find_min ( ⟨ k, hk k le_rfl ⟩ : ∃ k, ( md - 1 ) * n ≤ ( md - 1 ) * Zk X a M b r s md k + a * ( M - L ) ) hj h ⟩;
-  obtain ⟨ k, hk₁, hk₂ ⟩ := h_exists_k; use k; induction' k with k ih <;> simp_all +decide ;
-  · convert hn using 1;
-  · have := hk₂ k le_rfl; have := Yk_succ_le_Zk X a L M b r s md hmd hLM ineq1a ineq1b k; nlinarith;
-
-/-
-If ⌊a*(M-L)/(m^d-1)⌋ ≤ T and m^d ≥ 2, then a*(M-L) ≤ (m^d-1)*T + (m^d-2).
--/
+/-- If ⌈a*(M-L)/(m^d-1)⌉ - 1 ≤ T and m^d ≥ 2, then a*(M-L) ≤ (m^d-1)*(T+1). -/
 lemma tolerance_int_bound (a L M : ℤ) (m : ℕ) (d : ℕ)
     (hmd : 2 ≤ (m : ℤ) ^ d) (T : ℤ)
-    (ht : ⌊(a : ℚ) * ((M : ℚ) - (L : ℚ)) / ((↑m : ℚ) ^ d - 1)⌋ ≤ T) :
-    a * (M - L) ≤ ((m : ℤ) ^ d - 1) * T + ((m : ℤ) ^ d - 2) := by
-  rw [ Int.floor_le_iff ] at ht;
-  rw [ div_lt_iff₀ ] at ht <;> norm_cast at *;
-  · norm_num [ Int.subNatNat_eq_coe ] at * ; linarith;
-  · rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith
+    (ht : ⌈(a : ℚ) * ((M : ℚ) - (L : ℚ)) / ((↑m : ℚ) ^ d - 1)⌉ - 1 ≤ T) :
+    a * (M - L) ≤ ((m : ℤ) ^ d - 1) * (T + 1) := by
+      contrapose! ht with h;
+      rw [ lt_sub_iff_add_lt, Int.lt_ceil ];
+      rw [ lt_div_iff₀ ] <;> norm_cast at * ; linarith;
+      rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith
 
-/-
-If m^d * z ≤ a*(M-L) + T and ⌊baseTol⌋ ≤ T and m^d ≥ 2, then z ≤ T.
--/
+/-- If m^d * z ≤ a*(M-L) + T and ⌈baseTol⌉ - 1 ≤ T and m^d ≥ 2, then z ≤ T. -/
 lemma mul_bound_to_T_bound (a L M : ℤ) (m : ℕ) (d : ℕ)
     (hmd : 2 ≤ (m : ℤ) ^ d) (T : ℤ)
-    (ht : ⌊(a : ℚ) * ((M : ℚ) - (L : ℚ)) / ((↑m : ℚ) ^ d - 1)⌋ ≤ T)
+    (ht : ⌈(a : ℚ) * ((M : ℚ) - (L : ℚ)) / ((↑m : ℚ) ^ d - 1)⌉ - 1 ≤ T)
     (z : ℤ) (hz : (m : ℤ) ^ d * z ≤ a * (M - L) + T) :
     z ≤ T := by
-  -- By tolerance_int_bound, we know that $a * (M - L) \leq (m ^ d - 1) * T + (m ^ d - 2)$.
-  have h_bound : a * (M - L) ≤ (m ^ d - 1) * T + (m ^ d - 2) := by
+  have h_bound : a * (M - L) ≤ (m ^ d - 1) * (T + 1) := by
     exact tolerance_int_bound a L M m d hmd T ht
-  generalize_proofs at *;
-  nlinarith [pow_two_nonneg (m ^ d - 2 : ℤ)] ;
+  nlinarith ;
 
-set_option maxHeartbeats 800000 in
+set_option maxHeartbeats 250000 in
 lemma induction_lemma
     (a : ℤ) (ha : 0 < a)
     (b : ℤ)
@@ -301,7 +264,7 @@ lemma induction_lemma
     (prop6 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Q ((getA α i) ∪ mFinset m B))
     (L : ℤ) (hL : ∀ α ∈ S, ∀ i, L ≤ sumPow (getA α i) d)
     (M : ℤ) (hM : ∀ α ∈ S, ∀ i, sumPow (getA α i) d ≤ M)
-    (T : ℤ) (ht : ⌊a * (M - L) / ((↑m : ℚ) ^ d - 1)⌋ ≤ T)
+    (T : ℤ) (ht : ⌈a * (M - L) / ((↑m : ℚ) ^ d - 1)⌉ - 1 ≤ T)
     (r : ℕ)
     (X : ℤ)
     (base : ∀ α ∈ S, ∀ n : ℤ,
@@ -370,7 +333,7 @@ lemma induction_lemma
         rw [ ← prop4 α hα i ];
       · exact prop5 α hα i B hBQ
 
-/-- If the expression (b+j)r(md-1) - (b+j)s + a(M-L) is non-negative at j=l₁ and j=l₂,
+/-- If the expression (b+j)r(m^d-1) - (b+j)s + a(M-L) is non-negative at j=l₁ and j=l₂,
     then it is non-negative for all j between l₁ and l₂. -/
 lemma eq1a_widening (a L M : ℤ) (r s : ℕ) (md : ℤ)
     (l₁ l₂ : ℤ)
@@ -443,33 +406,33 @@ lemma base_case_shift
   · nlinarith [ mul_le_mul_of_nonneg_right hj2 ( Nat.cast_nonneg r_w ) ];
   · convert hn3 using 1 ; ring
 
-lemma covering_to_T_lower (a L M : ℤ) (m : ℕ) (d : ℕ)
-    (hmd : 1 < (m : ℤ) ^ d)
-    (T : ℤ) (ht : ⌊(a : ℚ) * ((M : ℚ) - (L : ℚ)) / (m ^ d - 1)⌋ ≤ T)
-    (P n : ℤ)
-    (h : ((m : ℤ) ^ d - 1) * P - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n) :
-    P - T ≤ n := by
-  -- By dividing both sides of the inequality h by (m^d - 1), we obtain P - n ≤ a*(M-L)/(m^d - 1).
-  have h_div : (P - n : ℚ) ≤ a * (M - L) / ((m : ℚ) ^ d - 1) := by
-    rw [ le_div_iff₀ ] <;> norm_cast at * ; linarith;
-    rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith;
-  exact Int.le_of_lt_add_one <| by rw [ ← @Int.cast_lt ℚ ] ; push_cast; linarith [ Int.floor_le ( ( a : ℚ ) * ( M - L ) / ( m ^ d - 1 ) ), Int.lt_floor_add_one ( ( a : ℚ ) * ( M - L ) / ( m ^ d - 1 ) ), show ( T : ℚ ) ≥ ⌊ ( a : ℚ ) * ( M - L ) / ( m ^ d - 1 ) ⌋ by exact_mod_cast ht ] ;
+lemma covering_with_T_bounds (X a L M b : ℤ) (r s : ℕ) (md : ℤ)
+    (ha : 0 < a) (hmd : 2 ≤ md)
+    (hLM : L ≤ M)
+    (hM : 0 < M)
+    (ineq1a : 0 ≤ b * ↑r * (md - 1) - b * ↑s + a * (M - L))
+    (ineq1b : 0 ≤ b * ↑s * (md - 1) + a * (M - L))
+    (hZ0 : Zk X a M b r s md 0 > b * ((↑r : ℤ) + 0 * (↑s : ℤ)))
+    (T : ℤ) (hT_nn : 0 ≤ T)
+    (n : ℤ)
+    (hn' : X - T ≤ n) :
+    ∃ k, Yk X a L b r s md k - T ≤ n ∧
+         n ≤ Zk X a M b r s md k + T := by
+           by_contra h₂;
+           -- By the properties of the sequences $Y_k$ and $Z_k$, we know that $Z_k$ is strictly increasing and unbounded.
+           have hZ_unbounded : Filter.Tendsto (fun k => Zk X a M b r s md k) Filter.atTop Filter.atTop := by
+             apply_rules [ Zk_tendsto_atTop ];
+           -- Since $Z_k$ is strictly increasing and unbounded, there exists some $k$ such that $Z_k > n + T$.
+           obtain ⟨k, hk⟩ : ∃ k, Zk X a M b r s md k > n + T := by
+             exact ( hZ_unbounded.eventually_gt_atTop ( n + T ) ) |> fun h => h.exists;
+           induction' k with k ih <;> simp_all +decide [ Zk ];
+           · specialize h₂ 0 ; simp_all +decide [ Zk ];
+             linarith [ h₂ ( by exact Int.le_def.mpr hn' ) ];
+           · contrapose! h₂;
+             use k + 1;
+             constructor <;> nlinarith [ show Yk X a L b r s md ( k + 1 ) ≤ Zk X a M b r s md k from Yk_succ_le_Zk X a L M b r s md hmd hLM ineq1a ineq1b k, show Zk X a M b r s md ( k + 1 ) = md * Zk X a M b r s md k + a * M - Uk b r s md k from rfl ]
 
-lemma covering_to_T_upper (a L M : ℤ) (m : ℕ) (d : ℕ)
-    (hmd : 1 < (m : ℤ) ^ d)
-    (T : ℤ) (ht : ⌊(a : ℚ) * ((M : ℚ) - (L : ℚ)) / (m ^ d - 1)⌋ ≤ T)
-    (Q n : ℤ)
-    (h : ((m : ℤ) ^ d - 1) * n ≤ ((m : ℤ) ^ d - 1) * Q + a * (M - L)) :
-    n ≤ Q + T := by
-  contrapose! ht;
-  refine' lt_of_lt_of_le ( show T < n - Q by linarith ) _;
-  refine' Int.le_floor.2 _;
-  rw [ le_div_iff₀ ] <;> norm_cast at * ; linarith;
-  rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith
-
-/-
-First metatheorem.
--/
+/-- First metatheorem. -/
 theorem meta_theorem
     (a : ℤ) (ha : 0 < a)
     (b : ℤ)
@@ -483,14 +446,14 @@ theorem meta_theorem
     (getA : ℚ → Fin (m ^ d) → Finset ℕ)
     (prop_pos : ∀ α ∈ S, ∀ i, ∀ x ∈ getA α i, 0 < x)
     (prop1 : ∀ α ∈ S, ∀ i, getβ α i ∈ S)
-    (prop2 : ∀ α ∈ S, ∀ i : Fin (m ^ d), sumPow (getA α i) d % (m ^ d) = i.val)
+    (prop2 : ∀ α ∈ S, ∀ i, sumPow (getA α i) d % (m ^ d) = i)
     (prop3 : ∀ α ∈ S, ∀ i, (getA α i).card = s)
     (prop4 : ∀ α ∈ S, ∀ i, α = sumRecip (getA α i) + getβ α i / m)
     (prop5 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Disjoint (getA α i) (mFinset m B))
     (prop6 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Q ((getA α i) ∪ mFinset m B))
     (L : ℤ) (hL : ∀ α ∈ S, ∀ i, L ≤ sumPow (getA α i) d)
     (M : ℤ) (hM : ∀ α ∈ S, ∀ i, sumPow (getA α i) d ≤ M)
-    (T : ℤ) (ht : ⌊a * (M - L) / ((m : ℚ) ^ d - 1)⌋ ≤ T)
+    (T : ℤ) (ht : ⌈a * (M - L) / ((m : ℚ) ^ d - 1)⌉ - 1 ≤ T)
     (r : ℕ)
     (X : ℤ) (hX : 0 ≤ X)
     (ineq1a : 0 ≤ b * r * (m ^ d - 1) - b * s + a * (M - L))
@@ -509,9 +472,12 @@ theorem meta_theorem
   have hmc_ge : (2 : ℤ) ≤ (m : ℤ) ^ d := by
     have : 2 ≤ m ^ d := le_trans hm (Nat.le_self_pow hd.ne' m)
     exact_mod_cast this
-  have hLM : L ≤ M := by
-      let i0 : Fin (m ^ d) := ⟨0, by positivity⟩
-      specialize hL α hα i0; specialize hM α hα i0; linarith
+  have hLM : L < M := by
+    by_contra hLM_eq;
+    have h_sumPow_eq_L : ∀ i : Fin (m ^ d), sumPow (getA α i) d = L := by
+      exact fun i => by linarith [ hL α hα i, hM α hα i ] ;
+    have := prop2 α hα ⟨ 0, by positivity ⟩ ; have := prop2 α hα ⟨ 1, by linarith ⟩ ; simp_all +decide ;
+    cases ‹ ( m : ℤ ) ^ d ∣ L › ; aesop
   have hM_pos : (0 : ℤ) < M := by
       have h1lt : 1 < m ^ d := by linarith [Nat.le_self_pow hd.ne' m]
       let i1 : Fin (m ^ d) := ⟨1, h1lt⟩
@@ -528,16 +494,9 @@ theorem meta_theorem
       linarith
   have hM1 : (1 : ℤ) ≤ M := by linarith
   have hT_nonneg : 0 ≤ T := by
-    apply le_trans _ ht
-    apply Int.floor_nonneg.mpr
-    apply div_nonneg
-    · exact_mod_cast mul_nonneg ha.le (sub_nonneg.mpr hLM)
-    · have : (1 : ℚ) ≤ (m : ℚ) ^ d := by
-        exact_mod_cast Nat.one_le_pow d m (by linarith)
-      linarith
+    exact le_trans ( sub_nonneg_of_le <| Int.ceil_pos.mpr <| div_pos ( mul_pos ( Int.cast_pos.mpr ha ) <| sub_pos.mpr <| mod_cast hLM ) <| sub_pos.mpr <| mod_cast hmd_gt1 ) ht
   by_cases h_cov : ((m : ℤ) ^ d - 1) * X - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n
-  · -- Covering argument
-    have hZ0 : (m : ℤ) ^ d * X + a * M > b * ↑r := by
+  · have hZ0 : (m : ℤ) ^ d * X + a * M > b * ↑r := by
       obtain ⟨n₀, hn₀_div, hn₀_lower, hn₀_upper⟩ := interval_has_residue X a (b * ↑r) ha
       have h_base_lower : X - T ≤ n₀ := by linarith
       have h_base_upper : n₀ ≤ (m : ℤ) ^ d * X + a * M + T := by nlinarith
@@ -548,31 +507,24 @@ theorem meta_theorem
         unfold sumF at hsumF; rw [hcard] at hsumF; nlinarith
       have h_z0_ge := z0_ge_x_plus_a X a M ((m : ℤ) ^ d) hmc_ge hX ha hM1
       linarith
-    obtain ⟨k, hk⟩ : ∃ k, ((m ^ d - 1) * (Yk X a L b r s (m ^ d) k) - a * (M - L) ≤
-                              (m ^ d - 1) * n ∧
-                              (m ^ d - 1) * n ≤ (m ^ d - 1) * (Zk X a M b r s (m ^ d) k) + a * (M - L)) := by
-      refine covering X a L M b r s ((m : ℤ) ^ d) ha ?_ hLM ?_ ineq1a ineq1b ?_ n h_cov
+    obtain ⟨k, hk_lower, hk_upper⟩ : ∃ k, Yk X a L b r s ((m : ℤ) ^ d) k - T ≤ n ∧
+        n ≤ Zk X a M b r s ((m : ℤ) ^ d) k + T := by
+      refine covering_with_T_bounds X a L M b r s ((m : ℤ) ^ d) ha ?_ (le_of_lt hLM) ?_
+        ineq1a ineq1b ?_ T hT_nonneg n hn
       · exact_mod_cast hmc_ge
       · linarith
       · simpa [Zk] using hZ0
-    -- Convert covering bounds to T-form bounds
-    have hk_lower := covering_to_T_lower a L M m d hmd_gt1 T ht
-      (Yk X a L b r s ((m : ℤ) ^ d) k) n hk.1
-    have hk_upper := covering_to_T_upper a L M m d hmd_gt1 T ht
-      (Zk X a M b r s ((m : ℤ) ^ d) k) n hk.2
     obtain ⟨A, hA⟩ : ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r + k * s ∧ sumF a b d A = n ∧ sumRecip A = α := by
       apply induction_lemma a ha b d hd m hm hcop s hs_div S Q getβ getA prop_pos prop1 prop2 prop3 prop4 prop5 prop6 L hL M hM T ht r X base k α hα n hk_lower hk_upper hn_div
     use A
     exact ⟨hA.1, hA.2.1, hA.2.2.2.1, hA.2.2.2.2⟩
-  · -- Base case: n is in the small range handled directly by the base case
-    have h_upper : n ≤ (m : ℤ) ^ d * X + a * M + T := by
+  · have h_upper : n ≤ (m : ℤ) ^ d * X + a * M + T := by
       have hn_le_X_minus_1 : n ≤ X - 1 := by
         nlinarith [ show 0 ≤ a * ( M - L ) by nlinarith ];
       nlinarith
     obtain ⟨A, hQ, hpos, _, hsumF, hrecip⟩ := base α hα n hn h_upper hn_div
     exact ⟨A, hQ, hpos, hsumF, hrecip⟩
 
-set_option maxHeartbeats 1600000 in
 /-- Second metatheorem. -/
 theorem general_theorem
     (a : ℤ) (ha : 0 < a)
@@ -587,23 +539,23 @@ theorem general_theorem
     (getA : ℚ → Fin (m ^ d) → Finset ℕ)
     (prop_pos : ∀ α ∈ S, ∀ i, ∀ x ∈ getA α i, 0 < x)
     (prop1 : ∀ α ∈ S, ∀ i, getβ α i ∈ S)
-    (prop2 : ∀ α ∈ S, ∀ i : Fin (m ^ d), sumPow (getA α i) d % (m ^ d) = i.val)
+    (prop2 : ∀ α ∈ S, ∀ i, sumPow (getA α i) d % (m ^ d) = i)
     (prop3 : ∀ α ∈ S, ∀ i, (getA α i).card = s)
     (prop4 : ∀ α ∈ S, ∀ i, α = sumRecip (getA α i) + getβ α i / m)
     (prop5 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Disjoint (getA α i) (mFinset m B))
     (prop6 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Q ((getA α i) ∪ mFinset m B))
     (L : ℤ) (hL : ∀ α ∈ S, ∀ i, L ≤ sumPow (getA α i) d)
     (M : ℤ) (hM : ∀ α ∈ S, ∀ i, sumPow (getA α i) d ≤ M)
-    (T : ℤ) (ht : ⌊a * (M - L) / ((m : ℚ) ^ d - 1)⌋ ≤ T)
+    (T : ℤ) (ht : ⌈a * (M - L) / ((m : ℚ) ^ d - 1)⌉ - 1 ≤ T)
     (l₁ l₂ : ℤ) (hl₁ : l₁ ≤ 0) (hl₂ : 0 ≤ l₂)
     (r_w : Fin a.natAbs → ℕ) (hr_w : ∀ w : Fin a.natAbs, a ∣ (b * r_w w - w))
-    (X_w : Fin a.natAbs → ℤ) (hX_lower : ∀ w : Fin a.natAbs, 0 ≤ X_w w + l₁ * r_w w)
+    (X_w : Fin a.natAbs → ℤ) (hX_lower : ∀ w : Fin a.natAbs, l₁.natAbs * r_w w ≤ X_w w)
     (ineq2a : ∀ w : Fin a.natAbs, 0 ≤ (b + l₁) * r_w w * (m ^ d - 1) - (b + l₁) * s + a * (M - L))
     (ineq2b : ∀ w : Fin a.natAbs, 0 ≤ (b + l₂) * r_w w * (m ^ d - 1) - (b + l₂) * s + a * (M - L))
     (ineq2c : 0 ≤ (b + l₁) * s * (m ^ d - 1) + a * (M - L))
     (base_general : ∀ w : Fin a.natAbs, ∀ α ∈ S, ∀ n : ℤ,
       X_w w + l₁ * r_w w - T ≤ n → n ≤ m ^ d * (X_w w + l₂ * r_w w) + a * M + T →
-      a ∣ (n - b * r_w w) →
+      a ∣ (n - w) →
       ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r_w w ∧ sumF a b d A = n ∧ sumRecip A = α)
     : ∀ j : ℤ, l₁ ≤ j → j ≤ l₂ → Int.gcd (b + j) a = 1 →
       ∀ α ∈ S,
@@ -619,24 +571,28 @@ theorem general_theorem
     (fun w : Fin a.natAbs => (X_w w + j * ↑(r_w w) - T : ℤ)) with hbound_val_def
   apply n₀_le _ α bound_val
   · intro n hn_bound
-    -- For each w, X_w w + j * r_w w - T ≤ n
     have hn_w : ∀ w : Fin a.natAbs,
         (X_w w + j * ↑(r_w w)) - T ≤ n := by
       intro w
       exact le_trans (Finset.le_sup' (fun w : Fin a.natAbs => (X_w w + j * ↑(r_w w) - T : ℤ))
         (Finset.mem_univ w)) hn_bound
-    -- Find w₀ such that a ∣ n - (b+j) * r_w w₀
     obtain ⟨w₀, hw₀⟩ := residue_class_coverage a ha b j r_w hr_w hcop_j n
-    -- X_w w₀ + j * r_w w₀ ≥ 0
     have hX_nonneg : 0 ≤ X_w w₀ + j * ↑(r_w w₀) := by
       have h1 := hX_lower w₀
+      have hnatabs : (l₁.natAbs : ℤ) = -l₁ :=
+        by rw [Int.natCast_natAbs, abs_of_nonpos hl₁]
       have hr_nn : 0 ≤ (r_w w₀ : ℤ) := Nat.cast_nonneg (r_w w₀)
+      have h1' : -l₁ * ↑(r_w w₀) ≤ X_w w₀ := hnatabs ▸ h1
       nlinarith [mul_nonneg (show (0 : ℤ) ≤ j - l₁ by linarith) hr_nn,
-                show X_w w₀ + j * ↑(r_w w₀) = (X_w w₀ + l₁ * ↑(r_w w₀)) + (j - l₁) * ↑(r_w w₀) from by ring]
-    -- Build the base case for meta_theorem using base_case_shift
+            show X_w w₀ + j * ↑(r_w w₀) = (X_w w₀ + l₁ * ↑(r_w w₀)) + (j - l₁) * ↑(r_w w₀) from by ring]
+    have base_general_old : ∀ α ∈ S, ∀ n : ℤ,
+        X_w w₀ + l₁ * r_w w₀ - T ≤ n → n ≤ m ^ d * (X_w w₀ + l₂ * r_w w₀) + a * M + T →
+        a ∣ (n - b * r_w w₀) →
+        ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r_w w₀ ∧ sumF a b d A = n ∧ sumRecip A = α := by
+      intro α' hα' n' h1 h2 h3
+      exact base_general w₀ α' hα' n' h1 h2 (by convert dvd_add h3 (hr_w w₀) using 1; ring)
     have base_shifted_T := base_case_shift a b j d m S Q M l₁ l₂ hl₁ hl₂ hj1 hj2 hmc_ge T
-      (X_w w₀) (r_w w₀) (base_general w₀)
-    -- Apply meta_theorem
+      (X_w w₀) (r_w w₀) base_general_old
     have h_result := meta_theorem a ha (b + j) d hd m hm hcop s hs_div S Q getβ getA prop_pos
       prop1 prop2 prop3 prop4 prop5 prop6 L hL M hM
       T ht
