@@ -50,10 +50,6 @@ def Zk (X a M b : ℤ) (r s : ℕ) (md : ℤ) : ℕ → ℤ
   | 0 => md * X + a * M
   | k + 1 => md * Zk X a M b r s md k + a * M - Uk b r s md k
 
-/-- T = a(M - L) / (m^d - 1), the tolerance parameter in the base case bounds. -/
-noncomputable def baseTolerance (a L M : ℤ) (m : ℕ) (d : ℕ) : ℚ :=
-  (a : ℚ) * ((M : ℚ) - (L : ℚ)) / ((↑m : ℚ) ^ d - 1)
-
 lemma sumF_eq_sum (a c : ℤ) (d : ℕ) (A : Finset ℕ) :
     sumF a c d A = ∑ x ∈ A, (a * (x : ℤ) ^ d + c) := by
   unfold sumF sumPow
@@ -185,22 +181,6 @@ lemma z0_ge_x_plus_a (X a M : ℤ) (md : ℤ)
     md * X + a * M ≥ X + a := by
   nlinarith
 
-/-- Any n ∈ [X, X + a - 1] is in the base range when X ≥ 0, md ≥ 2, M ≥ 1. -/
-lemma interval_in_base_range (X a M L : ℤ) (md : ℤ)
-    (hmd : 2 ≤ md) (hX : 0 ≤ X) (ha : 0 < a)
-    (hLM : L ≤ M) (hM_pos : 1 ≤ M)
-    (n : ℤ) (hn_lower : X ≤ n) (hn_upper : n ≤ X + a - 1) :
-    (md - 1) * X - a * (M - L) ≤ (md - 1) * n ∧
-    (md - 1) * n ≤ (md - 1) * (md * X + a * M) + a * (M - L) := by
-  constructor
-  · nlinarith [mul_le_mul_of_nonneg_left hn_lower (show (0 : ℤ) ≤ md - 1 by linarith),
-               mul_nonneg ha.le (sub_nonneg.mpr hLM)]
-  · have h1 : (md - 1) * n ≤ (md - 1) * (X + a - 1) :=
-      mul_le_mul_of_nonneg_left hn_upper (by linarith)
-    have h2 : (md - 1) * (X + a - 1) ≤ (md - 1) * (md * X + a * M) :=
-      mul_le_mul_of_nonneg_left (by nlinarith) (by linarith)
-    linarith [mul_nonneg ha.le (sub_nonneg.mpr hLM)]
-
 /-- In any interval [X, X + a - 1] (with a ≥ 1), there exists n ≡ r (mod a). -/
 lemma interval_has_residue (X a r : ℤ) (ha : 0 < a) :
     ∃ n, a ∣ n - r ∧ X ≤ n ∧ n ≤ X + a - 1 := by
@@ -274,6 +254,32 @@ lemma covering (X a L M b : ℤ) (r s : ℕ) (md : ℤ)
   · convert hn using 1;
   · have := hk₂ k le_rfl; have := Yk_succ_le_Zk X a L M b r s md hmd hLM ineq1a ineq1b k; nlinarith;
 
+/-
+If ⌊a*(M-L)/(m^d-1)⌋ ≤ T and m^d ≥ 2, then a*(M-L) ≤ (m^d-1)*T + (m^d-2).
+-/
+lemma tolerance_int_bound (a L M : ℤ) (m : ℕ) (d : ℕ)
+    (hmd : 2 ≤ (m : ℤ) ^ d) (T : ℤ)
+    (ht : ⌊(a : ℚ) * ((M : ℚ) - (L : ℚ)) / ((↑m : ℚ) ^ d - 1)⌋ ≤ T) :
+    a * (M - L) ≤ ((m : ℤ) ^ d - 1) * T + ((m : ℤ) ^ d - 2) := by
+  rw [ Int.floor_le_iff ] at ht;
+  rw [ div_lt_iff₀ ] at ht <;> norm_cast at *;
+  · norm_num [ Int.subNatNat_eq_coe ] at * ; linarith;
+  · rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith
+
+/-
+If m^d * z ≤ a*(M-L) + T and ⌊baseTol⌋ ≤ T and m^d ≥ 2, then z ≤ T.
+-/
+lemma mul_bound_to_T_bound (a L M : ℤ) (m : ℕ) (d : ℕ)
+    (hmd : 2 ≤ (m : ℤ) ^ d) (T : ℤ)
+    (ht : ⌊(a : ℚ) * ((M : ℚ) - (L : ℚ)) / ((↑m : ℚ) ^ d - 1)⌋ ≤ T)
+    (z : ℤ) (hz : (m : ℤ) ^ d * z ≤ a * (M - L) + T) :
+    z ≤ T := by
+  -- By tolerance_int_bound, we know that $a * (M - L) \leq (m ^ d - 1) * T + (m ^ d - 2)$.
+  have h_bound : a * (M - L) ≤ (m ^ d - 1) * T + (m ^ d - 2) := by
+    exact tolerance_int_bound a L M m d hmd T ht
+  generalize_proofs at *;
+  nlinarith [pow_two_nonneg (m ^ d - 2 : ℤ)] ;
+
 set_option maxHeartbeats 800000 in
 lemma induction_lemma
     (a : ℤ) (ha : 0 < a)
@@ -295,24 +301,24 @@ lemma induction_lemma
     (prop6 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Q ((getA α i) ∪ mFinset m B))
     (L : ℤ) (hL : ∀ α ∈ S, ∀ i, L ≤ sumPow (getA α i) d)
     (M : ℤ) (hM : ∀ α ∈ S, ∀ i, sumPow (getA α i) d ≤ M)
+    (T : ℤ) (ht : ⌊a * (M - L) / ((↑m : ℚ) ^ d - 1)⌋ ≤ T)
     (r : ℕ)
     (X : ℤ)
     (base : ∀ α ∈ S, ∀ n : ℤ,
-      ((m : ℤ) ^ d - 1) * X - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n →
-      ((m : ℤ) ^ d - 1) * n ≤
-        ((m : ℤ) ^ d - 1) * ((m : ℤ) ^ d * X + a * M) + a * (M - L) →
+      X - T ≤ n →
+      n ≤ (m : ℤ) ^ d * X + a * M + T →
       a ∣ n - b * ↑r →
       ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r ∧ sumF a b d A = n ∧ sumRecip A = α)
     (k : ℕ) :
     ∀ α ∈ S, ∀ n : ℤ,
-    ((m : ℤ) ^ d - 1) * (Yk X a L b r s ((m : ℤ) ^ d) k) - a * (M - L)
-      ≤ ((m : ℤ) ^ d - 1) * n →
-    ((m : ℤ) ^ d - 1) * n ≤
-      ((m : ℤ) ^ d - 1) * (Zk X a M b r s ((m : ℤ) ^ d) k) + a * (M - L) →
+    Yk X a L b r s ((m : ℤ) ^ d) k - T ≤ n →
+    n ≤ Zk X a M b r s ((m : ℤ) ^ d) k + T →
     a ∣ n - b * ↑r →
     ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r + k * s ∧ sumF a b d A = n ∧ sumRecip A = α := by
+  have hmd_pos : (2 : ℤ) ≤ (m : ℤ) ^ d := by
+    have : 2 ≤ m ^ d := le_trans hm (Nat.le_self_pow hd.ne' m); exact_mod_cast this
   induction' k with k ih generalizing X;
-  · simpa using base;
+  · simpa [Yk, Zk] using base;
   · intro α hα n hn₁ hn₂ hn₃
     obtain ⟨i, hi⟩ : ∃ i : Fin (m ^ d), (m ^ d : ℤ) ∣ (n + Uk b r s (m ^ d) k - a * sumPow (getA α i) d) := by
       obtain ⟨ i, hi ⟩ : ∃ i : Fin (m ^ d), (m ^ d : ℤ) ∣ (n + Uk b r s (m ^ d) k - a * i.val) := by
@@ -323,17 +329,21 @@ lemma induction_lemma
       generalize_proofs at *; (
       use i; specialize prop2 α hα i; rw [ Int.dvd_iff_emod_eq_zero ] at *; simp_all +decide [ Int.add_emod, Int.sub_emod, Int.mul_emod ] ;);
     obtain ⟨ n', hn' ⟩ := hi;
-    have hn'_bounds : (m ^ d - 1) * Yk X a L b r s (m ^ d) k - a * (M - L) ≤ (m ^ d - 1) * n' ∧ (m ^ d - 1) * n' ≤ (m ^ d - 1) * Zk X a M b r s (m ^ d) k + a * (M - L) := by
-      constructor;
-      · have hn'_lower : (m ^ d - 1) * Yk X a L b r s (m ^ d) (k + 1) - a * (M - L) ≤ (m ^ d - 1) * (m ^ d * n' + a * sumPow (getA α i) d - Uk b r s (m ^ d) k) := by
-          rw [ ← hn' ] ; linarith;
-        rw [ show Yk X a L b r s ( m ^ d ) ( k + 1 ) = m ^ d * Yk X a L b r s ( m ^ d ) k + a * L - Uk b r s ( m ^ d ) k from rfl ] at hn'_lower;
-        nlinarith [ pow_le_pow_right₀ ( by linarith : 1 ≤ ( m : ℤ ) ) hd, hL α hα i, hM α hα i, mul_le_mul_of_nonneg_left ( hL α hα i ) ( show 0 ≤ ( m : ℤ ) ^ d - 1 by exact sub_nonneg_of_le ( one_le_pow₀ ( by linarith ) ) ), mul_le_mul_of_nonneg_left ( hM α hα i ) ( show 0 ≤ ( m : ℤ ) ^ d - 1 by exact sub_nonneg_of_le ( one_le_pow₀ ( by linarith ) ) ) ];
-      · have h_sub : (m ^ d - 1) * (m ^ d * n' - Uk b r s (m ^ d) k + a * sumPow (getA α i) d) ≤ (m ^ d - 1) * Zk X a M b r s (m ^ d) (k + 1) + a * (M - L) := by
-          convert hn₂ using 1 ; rw [ ← hn' ] ; ring;
-        have h_sub_Zk : (m ^ d - 1) * (m ^ d * n' - Uk b r s (m ^ d) k + a * sumPow (getA α i) d) ≤ (m ^ d - 1) * (m ^ d * Zk X a M b r s (m ^ d) k + a * M - Uk b r s (m ^ d) k) + a * (M - L) := by
-          convert h_sub using 1;
-        nlinarith [ pow_le_pow_right₀ ( by linarith : 1 ≤ ( m : ℤ ) ) hd, hL α hα i, hM α hα i, mul_le_mul_of_nonneg_left ( hL α hα i ) ( show 0 ≤ ( m : ℤ ) ^ d - 1 by exact sub_nonneg_of_le ( one_le_pow₀ ( by linarith ) ) ), mul_le_mul_of_nonneg_left ( hM α hα i ) ( show 0 ≤ ( m : ℤ ) ^ d - 1 by exact sub_nonneg_of_le ( one_le_pow₀ ( by linarith ) ) ) ];
+    have hn'_bounds : Yk X a L b r s (m ^ d) k - T ≤ n' ∧ n' ≤ Zk X a M b r s (m ^ d) k + T := by
+      constructor
+      · -- Lower bound: Yk(k) - T ≤ n'
+        by_contra h_neg; push_neg at h_neg
+        have h_from : (m : ℤ) ^ d * (Yk X a L b r s (m ^ d) k - n') ≤ a * (M - L) + T := by
+          have h_yk : Yk X a L b r s (m ^ d) (k + 1) = (m : ℤ) ^ d * Yk X a L b r s (m ^ d) k + a * L - Uk b r s ((m : ℤ) ^ d) k := rfl
+          nlinarith [hM α hα i, hn₁, hn', h_yk]
+        linarith [mul_bound_to_T_bound a L M m d hmd_pos T ht (Yk X a L b r s (m ^ d) k - n') h_from]
+      · -- Upper bound: n' ≤ Zk(k) + T (symmetric argument)
+        by_contra h_neg; push_neg at h_neg
+        have h_gap : n' - Zk X a M b r s (m ^ d) k > T := by linarith
+        have h_from : (m : ℤ) ^ d * (n' - Zk X a M b r s (m ^ d) k) ≤ a * (M - L) + T := by
+          have h_zk : Zk X a M b r s (m ^ d) (k + 1) = (m : ℤ) ^ d * Zk X a M b r s (m ^ d) k + a * M - Uk b r s ((m : ℤ) ^ d) k := rfl
+          nlinarith [hL α hα i, hn₂, hn', h_zk]
+        linarith [mul_bound_to_T_bound a L M m d hmd_pos T ht (n' - Zk X a M b r s (m ^ d) k) h_from]
     have hn'_div : a ∣ n' - b * r := by
       have hn'_div : a ∣ (n - a * sumPow (getA α i) d + Uk b r s (m ^ d) k - b * r * m ^ d) := by
         obtain ⟨ k, hk ⟩ := hn₃;
@@ -410,146 +420,92 @@ lemma residue_class_coverage
 lemma base_case_shift
     (a : ℤ) (b j : ℤ) (d : ℕ) (m : ℕ)
     (S : Set ℚ) (Q : Finset ℕ → Prop)
-    (L M : ℤ)
+    (M : ℤ)
     (l₁ l₂ : ℤ) (hl₁ : l₁ ≤ 0) (hl₂ : 0 ≤ l₂)
     (_hj1 : l₁ ≤ j) (hj2 : j ≤ l₂)
     (hmd : 2 ≤ (m : ℤ) ^ d)
+    (T : ℤ)
     (X_w : ℤ) (r_w : ℕ)
     (base_f : ∀ α ∈ S, ∀ n : ℤ,
-      ((m : ℤ) ^ d - 1) * (X_w + l₁ * ↑r_w) - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n →
-      ((m : ℤ) ^ d - 1) * n ≤
-        ((m : ℤ) ^ d - 1) * ((m : ℤ) ^ d * (X_w + l₂ * ↑r_w) + a * M) + a * (M - L) →
+      (X_w + l₁ * ↑r_w) - T ≤ n →
+      n ≤ (m : ℤ) ^ d * (X_w + l₂ * ↑r_w) + a * M + T →
       a ∣ n - b * ↑r_w →
       ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r_w ∧ sumF a b d A = n ∧ sumRecip A = α)
     : ∀ α ∈ S, ∀ n : ℤ,
-      ((m : ℤ) ^ d - 1) * (X_w + j * ↑r_w) - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n →
-      ((m : ℤ) ^ d - 1) * n ≤
-        ((m : ℤ) ^ d - 1) * ((m : ℤ) ^ d * (X_w + j * ↑r_w) + a * M) + a * (M - L) →
+      (X_w + j * ↑r_w) - T ≤ n →
+      n ≤ (m : ℤ) ^ d * (X_w + j * ↑r_w) + a * M + T →
       a ∣ n - (b + j) * ↑r_w →
       ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r_w ∧ sumF a (b + j) d A = n ∧ sumRecip A = α := by
-  intro α hα n hn_lower hn_upper hn_div
-  set n' := n - j * ↑r_w with hn'_def
-  have hn'_div : a ∣ n' - b * ↑r_w := by
-    convert hn_div using 1; ring
-  have hn'_lower : ((m : ℤ) ^ d - 1) * (X_w + l₁ * ↑r_w) - a * (M - L) ≤
-      ((m : ℤ) ^ d - 1) * n' := by
-    have hr_nn : (0 : ℤ) ≤ (r_w : ℤ) := Nat.cast_nonneg r_w
-    have h_l1r_nonpos : l₁ * (r_w : ℤ) ≤ 0 := mul_nonpos_of_nonpos_of_nonneg hl₁ hr_nn
-    have h_md1 : (0 : ℤ) < (m : ℤ) ^ d - 1 := by linarith
-    have h1 : ((m : ℤ) ^ d - 1) * (l₁ * (r_w : ℤ)) ≤ 0 :=
-      mul_nonpos_of_nonneg_of_nonpos (le_of_lt h_md1) h_l1r_nonpos
-    nlinarith
-  have hn'_upper : ((m : ℤ) ^ d - 1) * n' ≤
-      ((m : ℤ) ^ d - 1) * ((m : ℤ) ^ d * (X_w + l₂ * ↑r_w) + a * M) + a * (M - L) := by
-    have hr_nn : (0 : ℤ) ≤ (r_w : ℤ) := Nat.cast_nonneg r_w
-    have hj_le_l2 : ((m : ℤ) ^ d - 1) * j ≤ ((m : ℤ) ^ d - 1) * l₂ :=
-      mul_le_mul_of_nonneg_left hj2 (by linarith)
-    have h_md1_le : ((m : ℤ) ^ d - 1) * l₂ ≤ (m : ℤ) ^ d * l₂ :=
-      mul_le_mul_of_nonneg_right (by linarith : ((m : ℤ) ^ d - 1) ≤ (m : ℤ) ^ d) hl₂
-    have h_key : ((m : ℤ) ^ d - 1) * j * (r_w : ℤ) ≤ (m : ℤ) ^ d * l₂ * (r_w : ℤ) := by
-      have : ((m : ℤ) ^ d - 1) * j ≤ (m : ℤ) ^ d * l₂ := le_trans hj_le_l2 h_md1_le
-      exact mul_le_mul_of_nonneg_right this hr_nn
-    nlinarith
-  obtain ⟨A, hQ, hApos, hcard, hsumF, hrecip⟩ := base_f α hα n' hn'_lower hn'_upper hn'_div
-  refine ⟨A, hQ, hApos, hcard, ?_, hrecip⟩
-  have := sumF_add_shift a b j d A
-  rw [hcard] at this
-  linarith
+  intro α hα n hn1 hn2 hn3;
+  convert base_f α hα ( n - j * r_w ) _ _ _ using 1;
+  · ext; simp +decide [ sumF_add_shift ] ; ring_nf; aesop;
+  · nlinarith;
+  · nlinarith [ mul_le_mul_of_nonneg_right hj2 ( Nat.cast_nonneg r_w ) ];
+  · convert hn3 using 1 ; ring
 
-lemma lower_T_iff (a L M P n : ℤ) (m : ℕ) (d : ℕ) (hmd : 1 < (m : ℤ) ^ d) :
-    ((P : ℚ) - baseTolerance a L M m d ≤ (n : ℚ)) ↔
-    (((m : ℤ) ^ d - 1) * P - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n) := by
-  rw [ sub_le_iff_le_add ];
-  rw [ show baseTolerance a L M m d = ( a * ( M - L ) : ℚ ) / ( m ^ d - 1 ) by rfl, add_div', le_div_iff₀ ] <;> norm_cast at *;
-  · grind +ring;
-  · rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith;
-  · rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith
+lemma covering_to_T_lower (a L M : ℤ) (m : ℕ) (d : ℕ)
+    (hmd : 1 < (m : ℤ) ^ d)
+    (T : ℤ) (ht : ⌊(a : ℚ) * ((M : ℚ) - (L : ℚ)) / (m ^ d - 1)⌋ ≤ T)
+    (P n : ℤ)
+    (h : ((m : ℤ) ^ d - 1) * P - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n) :
+    P - T ≤ n := by
+  -- By dividing both sides of the inequality h by (m^d - 1), we obtain P - n ≤ a*(M-L)/(m^d - 1).
+  have h_div : (P - n : ℚ) ≤ a * (M - L) / ((m : ℚ) ^ d - 1) := by
+    rw [ le_div_iff₀ ] <;> norm_cast at * ; linarith;
+    rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith;
+  exact Int.le_of_lt_add_one <| by rw [ ← @Int.cast_lt ℚ ] ; push_cast; linarith [ Int.floor_le ( ( a : ℚ ) * ( M - L ) / ( m ^ d - 1 ) ), Int.lt_floor_add_one ( ( a : ℚ ) * ( M - L ) / ( m ^ d - 1 ) ), show ( T : ℚ ) ≥ ⌊ ( a : ℚ ) * ( M - L ) / ( m ^ d - 1 ) ⌋ by exact_mod_cast ht ] ;
 
-lemma upper_T_iff (a L M Q n : ℤ) (m : ℕ) (d : ℕ) (hmd : 1 < (m : ℤ) ^ d) :
-    ((n : ℚ) ≤ (m : ℚ) ^ d * (Q : ℚ) + (a : ℚ) * (M : ℚ) + baseTolerance a L M m d) ↔
-    (((m : ℤ) ^ d - 1) * n ≤ ((m : ℤ) ^ d - 1) * ((m : ℤ) ^ d * Q + a * M) + a * (M - L)) := by
-  unfold baseTolerance;
-  rw [ add_div', le_div_iff₀ ] <;> norm_cast at *;
-  · ring_nf;
-  · grind;
-  · rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith
+lemma covering_to_T_upper (a L M : ℤ) (m : ℕ) (d : ℕ)
+    (hmd : 1 < (m : ℤ) ^ d)
+    (T : ℤ) (ht : ⌊(a : ℚ) * ((M : ℚ) - (L : ℚ)) / (m ^ d - 1)⌋ ≤ T)
+    (Q n : ℤ)
+    (h : ((m : ℤ) ^ d - 1) * n ≤ ((m : ℤ) ^ d - 1) * Q + a * (M - L)) :
+    n ≤ Q + T := by
+  contrapose! ht;
+  refine' lt_of_lt_of_le ( show T < n - Q by linarith ) _;
+  refine' Int.le_floor.2 _;
+  rw [ le_div_iff₀ ] <;> norm_cast at * ; linarith;
+  rw [ Int.subNatNat_eq_coe ] ; norm_num ; linarith
 
-/-- Convert a base case from T (rational) form to the multiplied-out ℤ form. -/
-lemma base_from_T_form {a L M : ℤ} {m : ℕ} {d : ℕ} (hmd : 1 < (m : ℤ) ^ d)
-    {S : Set ℚ} {Q : Finset ℕ → Prop} {b : ℤ} {P₁ P₂ : ℤ} {r : ℕ}
-    (base : ∀ α ∈ S, ∀ n : ℤ,
-      (P₁ : ℚ) - baseTolerance a L M m d ≤ (n : ℚ) →
-      (n : ℚ) ≤ (m : ℚ) ^ d * (P₂ : ℚ) + (a : ℚ) * (M : ℚ) + baseTolerance a L M m d →
-      a ∣ n - b * ↑r →
-      ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r ∧ sumF a b d A = n ∧ sumRecip A = α)
-    : ∀ α ∈ S, ∀ n : ℤ,
-      ((m : ℤ) ^ d - 1) * P₁ - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n →
-      ((m : ℤ) ^ d - 1) * n ≤
-        ((m : ℤ) ^ d - 1) * ((m : ℤ) ^ d * P₂ + a * M) + a * (M - L) →
-      a ∣ n - b * ↑r →
-      ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r ∧ sumF a b d A = n ∧ sumRecip A = α := by
-  intro α hα n hn_l hn_u hn_d
-  exact base α hα n
-    ((lower_T_iff a L M P₁ n m d hmd).mpr hn_l)
-    ((upper_T_iff a L M P₂ n m d hmd).mpr hn_u) hn_d
-
-/-- Convert a base case from the multiplied-out ℤ form to T (rational) form. -/
-lemma base_to_T_form {a L M : ℤ} {m : ℕ} {d : ℕ} (hmd : 1 < (m : ℤ) ^ d)
-    {S : Set ℚ} {Q : Finset ℕ → Prop} {b : ℤ} {P : ℤ} {r : ℕ}
-    (base : ∀ α ∈ S, ∀ n : ℤ,
-      ((m : ℤ) ^ d - 1) * P - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n →
-      ((m : ℤ) ^ d - 1) * n ≤
-        ((m : ℤ) ^ d - 1) * ((m : ℤ) ^ d * P + a * M) + a * (M - L) →
-      a ∣ n - b * ↑r →
-      ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r ∧ sumF a b d A = n ∧ sumRecip A = α)
-    : ∀ α ∈ S, ∀ n : ℤ,
-      (P : ℚ) - baseTolerance a L M m d ≤ (n : ℚ) →
-      (n : ℚ) ≤ (m : ℚ) ^ d * (P : ℚ) + (a : ℚ) * (M : ℚ) + baseTolerance a L M m d →
-      a ∣ n - b * ↑r →
-      ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r ∧ sumF a b d A = n ∧ sumRecip A = α := by
-  intro α hα n hn_l hn_u hn_d
-  exact base α hα n
-    ((lower_T_iff a L M P n m d hmd).mp hn_l)
-    ((upper_T_iff a L M P n m d hmd).mp hn_u) hn_d
-
-/-- First metatheorem. -/
+/-
+First metatheorem.
+-/
 theorem meta_theorem
     (a : ℤ) (ha : 0 < a)
     (b : ℤ)
     (d : ℕ) (hd : 0 < d)
     (m : ℕ) (hm : 2 ≤ m)
-    (hcop : Int.gcd a ↑m = 1)
-    (s : ℕ) (hs_div : (a : ℤ) ∣ (s : ℤ))
+    (hcop : Int.gcd a m = 1)
+    (s : ℕ) (hs_div : a ∣ s)
     (S : Set ℚ)
     (Q : Finset ℕ → Prop)
     (getβ : ℚ → Fin (m ^ d) → ℚ)
     (getA : ℚ → Fin (m ^ d) → Finset ℕ)
     (prop_pos : ∀ α ∈ S, ∀ i, ∀ x ∈ getA α i, 0 < x)
     (prop1 : ∀ α ∈ S, ∀ i, getβ α i ∈ S)
-    (prop2 : ∀ α ∈ S, ∀ i : Fin (m ^ d), sumPow (getA α i) d % ((m : ℤ) ^ d) = ↑i.val)
+    (prop2 : ∀ α ∈ S, ∀ i : Fin (m ^ d), sumPow (getA α i) d % (m ^ d) = i.val)
     (prop3 : ∀ α ∈ S, ∀ i, (getA α i).card = s)
-    (prop4 : ∀ α ∈ S, ∀ i, (α : ℚ) = sumRecip (getA α i) + getβ α i / (m : ℚ))
+    (prop4 : ∀ α ∈ S, ∀ i, α = sumRecip (getA α i) + getβ α i / m)
     (prop5 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Disjoint (getA α i) (mFinset m B))
     (prop6 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Q ((getA α i) ∪ mFinset m B))
     (L : ℤ) (hL : ∀ α ∈ S, ∀ i, L ≤ sumPow (getA α i) d)
     (M : ℤ) (hM : ∀ α ∈ S, ∀ i, sumPow (getA α i) d ≤ M)
+    (T : ℤ) (ht : ⌊a * (M - L) / ((m : ℚ) ^ d - 1)⌋ ≤ T)
     (r : ℕ)
     (X : ℤ) (hX : 0 ≤ X)
-    (ineq1a : 0 ≤ b * ↑r * ((m : ℤ) ^ d - 1) - b * ↑s + a * (M - L))
-    (ineq1b : 0 ≤ b * ↑s * ((m : ℤ) ^ d - 1) + a * (M - L))
+    (ineq1a : 0 ≤ b * r * (m ^ d - 1) - b * s + a * (M - L))
+    (ineq1b : 0 ≤ b * s * (m ^ d - 1) + a * (M - L))
     (base : ∀ α ∈ S, ∀ n : ℤ,
-      (X : ℚ) - baseTolerance a L M m d ≤ (n : ℚ) →
-      (n : ℚ) ≤ (m : ℚ) ^ d * (X : ℚ) + (a : ℚ) * (M : ℚ) + baseTolerance a L M m d →
-      a ∣ n - b * ↑r →
+      X - T ≤ n → n ≤ m ^ d * X + a * M + T →
+      a ∣ (n - b * r) →
       ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r ∧ sumF a b d A = n ∧ sumRecip A = α)
     : ∀ α ∈ S, ∀ n : ℤ,
-      ((m : ℤ) ^ d - 1) * X - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n →
-      a ∣ n - b * ↑r →
+      X - T ≤ n →
+      a ∣ (n - b * r) →
       ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ sumF a b d A = n ∧ sumRecip A = α := by
   intro α hα n hn hn_div
   have hmd_gt1 : 1 < (m : ℤ) ^ d := by
     have : 2 ≤ m ^ d := le_trans hm (Nat.le_self_pow hd.ne' m); linarith
-  have base_old := base_from_T_form hmd_gt1 base
   have hmc_ge : (2 : ℤ) ≤ (m : ℤ) ^ d := by
     have : 2 ≤ m ^ d := le_trans hm (Nat.le_self_pow hd.ne' m)
     exact_mod_cast this
@@ -563,146 +519,133 @@ theorem meta_theorem
       have h_mod := prop2 α hα i1
       have h_sp_nn := sumPow_nonneg (getA α i1) d
       have h_sp_pos : 1 ≤ sumPow (getA α i1) d := by
-        have h3 := Int.mul_ediv_add_emod (sumPow (getA α i1) d) ((m : ℤ) ^ d)
-        have h4 : 0 ≤ sumPow (getA α i1) d / ((m : ℤ) ^ d) :=
+        have h3 := Int.mul_ediv_add_emod (sumPow (getA α i1) d) (m ^ d)
+        have h4 : 0 ≤ sumPow (getA α i1) d / (m ^ d) :=
           Int.ediv_nonneg h_sp_nn (by positivity)
         simp only [i1, Nat.cast_one] at h_mod
         rw [h_mod] at h3
         nlinarith
       linarith
   have hM1 : (1 : ℤ) ≤ M := by linarith
-  have hZ0 : (m : ℤ) ^ d * X + a * M > b * ↑r := by
-    obtain ⟨n₀, hn₀_div, hn₀_lower, hn₀_upper⟩ := interval_has_residue X a (b * ↑r) ha
-    obtain ⟨hrange_l, hrange_u⟩ := interval_in_base_range X a M L ((m : ℤ) ^ d)
-      hmc_ge hX ha hLM hM1 n₀ hn₀_lower hn₀_upper
-    obtain ⟨A, _, _, hcard, hsumF, _⟩ := base_old α hα n₀ hrange_l hrange_u hn₀_div
-    have h_sp := sumPow_nonneg A d
-    have h_n0_ge_br : b * ↑r ≤ n₀ := by
-      have := sumPow_nonneg A d
-      unfold sumF at hsumF; rw [hcard] at hsumF; nlinarith
-    have h_z0_ge := z0_ge_x_plus_a X a M ((m : ℤ) ^ d) hmc_ge hX ha hM1
-    linarith
-  obtain ⟨k, hk⟩ : ∃ k, ((m ^ d - 1) * (Yk X a L b r s (m ^ d) k) - a * (M - L) ≤
-                            (m ^ d - 1) * n ∧
-                            (m ^ d - 1) * n ≤ (m ^ d - 1) * (Zk X a M b r s (m ^ d) k) + a * (M - L)) := by
-    refine covering X a L M b r s ((m : ℤ) ^ d) ha ?_ hLM ?_ ineq1a ineq1b ?_ n hn
-    · exact_mod_cast hmc_ge
-    · linarith
-    · simpa [Zk] using hZ0
-  obtain ⟨A, hA⟩ : ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r + k * s ∧ sumF a b d A = n ∧ sumRecip A = α := by
-    apply induction_lemma a ha b d hd m hm hcop s hs_div S Q getβ getA prop_pos prop1 prop2 prop3 prop4 prop5 prop6 L hL M hM r X base_old k α hα n hk.left hk.right hn_div
-  use A
-  exact ⟨hA.1, hA.2.1, hA.2.2.2.1, hA.2.2.2.2⟩
+  have hT_nonneg : 0 ≤ T := by
+    apply le_trans _ ht
+    apply Int.floor_nonneg.mpr
+    apply div_nonneg
+    · exact_mod_cast mul_nonneg ha.le (sub_nonneg.mpr hLM)
+    · have : (1 : ℚ) ≤ (m : ℚ) ^ d := by
+        exact_mod_cast Nat.one_le_pow d m (by linarith)
+      linarith
+  by_cases h_cov : ((m : ℤ) ^ d - 1) * X - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n
+  · -- Covering argument
+    have hZ0 : (m : ℤ) ^ d * X + a * M > b * ↑r := by
+      obtain ⟨n₀, hn₀_div, hn₀_lower, hn₀_upper⟩ := interval_has_residue X a (b * ↑r) ha
+      have h_base_lower : X - T ≤ n₀ := by linarith
+      have h_base_upper : n₀ ≤ (m : ℤ) ^ d * X + a * M + T := by nlinarith
+      obtain ⟨A, _, _, hcard, hsumF, _⟩ := base α hα n₀ h_base_lower h_base_upper hn₀_div
+      have h_sp := sumPow_nonneg A d
+      have h_n0_ge_br : b * ↑r ≤ n₀ := by
+        have := sumPow_nonneg A d
+        unfold sumF at hsumF; rw [hcard] at hsumF; nlinarith
+      have h_z0_ge := z0_ge_x_plus_a X a M ((m : ℤ) ^ d) hmc_ge hX ha hM1
+      linarith
+    obtain ⟨k, hk⟩ : ∃ k, ((m ^ d - 1) * (Yk X a L b r s (m ^ d) k) - a * (M - L) ≤
+                              (m ^ d - 1) * n ∧
+                              (m ^ d - 1) * n ≤ (m ^ d - 1) * (Zk X a M b r s (m ^ d) k) + a * (M - L)) := by
+      refine covering X a L M b r s ((m : ℤ) ^ d) ha ?_ hLM ?_ ineq1a ineq1b ?_ n h_cov
+      · exact_mod_cast hmc_ge
+      · linarith
+      · simpa [Zk] using hZ0
+    -- Convert covering bounds to T-form bounds
+    have hk_lower := covering_to_T_lower a L M m d hmd_gt1 T ht
+      (Yk X a L b r s ((m : ℤ) ^ d) k) n hk.1
+    have hk_upper := covering_to_T_upper a L M m d hmd_gt1 T ht
+      (Zk X a M b r s ((m : ℤ) ^ d) k) n hk.2
+    obtain ⟨A, hA⟩ : ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r + k * s ∧ sumF a b d A = n ∧ sumRecip A = α := by
+      apply induction_lemma a ha b d hd m hm hcop s hs_div S Q getβ getA prop_pos prop1 prop2 prop3 prop4 prop5 prop6 L hL M hM T ht r X base k α hα n hk_lower hk_upper hn_div
+    use A
+    exact ⟨hA.1, hA.2.1, hA.2.2.2.1, hA.2.2.2.2⟩
+  · -- Base case: n is in the small range handled directly by the base case
+    have h_upper : n ≤ (m : ℤ) ^ d * X + a * M + T := by
+      have hn_le_X_minus_1 : n ≤ X - 1 := by
+        nlinarith [ show 0 ≤ a * ( M - L ) by nlinarith ];
+      nlinarith
+    obtain ⟨A, hQ, hpos, _, hsumF, hrecip⟩ := base α hα n hn h_upper hn_div
+    exact ⟨A, hQ, hpos, hsumF, hrecip⟩
 
-set_option maxHeartbeats 800000 in
+set_option maxHeartbeats 1600000 in
 /-- Second metatheorem. -/
 theorem general_theorem
     (a : ℤ) (ha : 0 < a)
     (b : ℤ)
     (d : ℕ) (hd : 0 < d)
     (m : ℕ) (hm : 2 ≤ m)
-    (hcop : Int.gcd a ↑m = 1)
-    (s : ℕ) (hs_div : (a : ℤ) ∣ (s : ℤ))
+    (hcop : Int.gcd a m = 1)
+    (s : ℕ) (hs_div : a ∣ s)
     (S : Set ℚ)
     (Q : Finset ℕ → Prop)
     (getβ : ℚ → Fin (m ^ d) → ℚ)
     (getA : ℚ → Fin (m ^ d) → Finset ℕ)
     (prop_pos : ∀ α ∈ S, ∀ i, ∀ x ∈ getA α i, 0 < x)
     (prop1 : ∀ α ∈ S, ∀ i, getβ α i ∈ S)
-    (prop2 : ∀ α ∈ S, ∀ i : Fin (m ^ d), sumPow (getA α i) d % ((m : ℤ) ^ d) = ↑i.val)
+    (prop2 : ∀ α ∈ S, ∀ i : Fin (m ^ d), sumPow (getA α i) d % (m ^ d) = i.val)
     (prop3 : ∀ α ∈ S, ∀ i, (getA α i).card = s)
-    (prop4 : ∀ α ∈ S, ∀ i, (α : ℚ) = sumRecip (getA α i) + getβ α i / (m : ℚ))
+    (prop4 : ∀ α ∈ S, ∀ i, α = sumRecip (getA α i) + getβ α i / m)
     (prop5 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Disjoint (getA α i) (mFinset m B))
     (prop6 : ∀ α ∈ S, ∀ i, ∀ B, Q B → Q ((getA α i) ∪ mFinset m B))
     (L : ℤ) (hL : ∀ α ∈ S, ∀ i, L ≤ sumPow (getA α i) d)
     (M : ℤ) (hM : ∀ α ∈ S, ∀ i, sumPow (getA α i) d ≤ M)
+    (T : ℤ) (ht : ⌊a * (M - L) / ((m : ℚ) ^ d - 1)⌋ ≤ T)
     (l₁ l₂ : ℤ) (hl₁ : l₁ ≤ 0) (hl₂ : 0 ≤ l₂)
-    (r_w : Fin a.natAbs → ℕ) (hr_w : ∀ w : Fin a.natAbs, a ∣ (b * ↑(r_w w) - ↑w.val))
-    (X_w : Fin a.natAbs → ℤ) (hX_lower : ∀ w : Fin a.natAbs, 0 ≤ X_w w + l₁ * ↑(r_w w))
-    (ineq2a : ∀ w : Fin a.natAbs, 0 ≤ (b + l₁) * ↑(r_w w) * ((m : ℤ) ^ d - 1) - (b + l₁) * ↑s + a * (M - L))
-    (ineq2b : ∀ w : Fin a.natAbs, 0 ≤ (b + l₂) * ↑(r_w w) * ((m : ℤ) ^ d - 1) - (b + l₂) * ↑s + a * (M - L))
-    (ineq2c : 0 ≤ (b + l₁) * ↑s * ((m : ℤ) ^ d - 1) + a * (M - L))
+    (r_w : Fin a.natAbs → ℕ) (hr_w : ∀ w : Fin a.natAbs, a ∣ (b * r_w w - w))
+    (X_w : Fin a.natAbs → ℤ) (hX_lower : ∀ w : Fin a.natAbs, 0 ≤ X_w w + l₁ * r_w w)
+    (ineq2a : ∀ w : Fin a.natAbs, 0 ≤ (b + l₁) * r_w w * (m ^ d - 1) - (b + l₁) * s + a * (M - L))
+    (ineq2b : ∀ w : Fin a.natAbs, 0 ≤ (b + l₂) * r_w w * (m ^ d - 1) - (b + l₂) * s + a * (M - L))
+    (ineq2c : 0 ≤ (b + l₁) * s * (m ^ d - 1) + a * (M - L))
     (base_general : ∀ w : Fin a.natAbs, ∀ α ∈ S, ∀ n : ℤ,
-      (X_w w + l₁ * ↑(r_w w) : ℤ) - baseTolerance a L M m d ≤ (n : ℚ) →
-      (n : ℚ) ≤ (m : ℚ) ^ d * (X_w w + l₂ * ↑(r_w w) : ℤ) + (a : ℚ) * (M : ℚ) + baseTolerance a L M m d →
-      a ∣ n - b * ↑(r_w w) →
+      X_w w + l₁ * r_w w - T ≤ n → n ≤ m ^ d * (X_w w + l₂ * r_w w) + a * M + T →
+      a ∣ (n - b * r_w w) →
       ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r_w w ∧ sumF a b d A = n ∧ sumRecip A = α)
     : ∀ j : ℤ, l₁ ≤ j → j ≤ l₂ → Int.gcd (b + j) a = 1 →
       ∀ α ∈ S,
-        n₀ (fun x : ℕ => a * (x : ℤ) ^ d + (b + j)) α ≤
-          ↑(Finset.univ.sup' ⟨⟨0, Int.natAbs_pos.mpr ha.ne'⟩, Finset.mem_univ _⟩
-            (fun w : Fin a.natAbs => X_w w + j * ↑(r_w w) - a * (M - L) / ((m : ℤ) ^ d - 1))) := by
+        n₀ (fun x : ℕ => a * x ^ d + (b + j)) α ≤
+          Finset.univ.sup' ⟨⟨0, Int.natAbs_pos.mpr ha.ne'⟩, Finset.mem_univ _⟩
+            (fun w : Fin a.natAbs => X_w w + j * r_w w - T) := by
   intro j hj1 hj2 hcop_j α hα
-  have hmd_gt1 : 1 < (m : ℤ) ^ d := by
-    have : 2 ≤ m ^ d := le_trans hm (Nat.le_self_pow hd.ne' m); linarith
-  have base_general_old : ∀ w : Fin a.natAbs, ∀ α ∈ S, ∀ n : ℤ,
-      ((m : ℤ) ^ d - 1) * (X_w w + l₁ * ↑(r_w w)) - a * (M - L) ≤ ((m : ℤ) ^ d - 1) * n →
-      ((m : ℤ) ^ d - 1) * n ≤
-        ((m : ℤ) ^ d - 1) * ((m : ℤ) ^ d * (X_w w + l₂ * ↑(r_w w)) + a * M) + a * (M - L) →
-      a ∣ n - b * ↑(r_w w) →
-      ∃ A : Finset ℕ, Q A ∧ (∀ x ∈ A, 0 < x) ∧ A.card = r_w w ∧ sumF a b d A = n ∧ sumRecip A = α :=
-    fun w => base_from_T_form hmd_gt1 (base_general w)
-  set T := a * (M - L) / ((m : ℤ) ^ d - 1) with hT_def
+  have hmc_ge : (2 : ℤ) ≤ (m : ℤ) ^ d := by
+    have : 2 ≤ m ^ d := le_trans hm (Nat.le_self_pow hd.ne' m); exact_mod_cast this
   set hne_wit : (Finset.univ : Finset (Fin a.natAbs)).Nonempty :=
     ⟨⟨0, Int.natAbs_pos.mpr ha.ne'⟩, Finset.mem_univ _⟩
-  set bound := Finset.univ.sup' hne_wit
-    (fun w : Fin a.natAbs => X_w w + j * ↑(r_w w) - T) with hbound_def
-  apply n₀_le _ α bound
+  set bound_val := Finset.univ.sup' hne_wit
+    (fun w : Fin a.natAbs => (X_w w + j * ↑(r_w w) - T : ℤ)) with hbound_val_def
+  apply n₀_le _ α bound_val
   · intro n hn_bound
-    have hmd_ge : (2 : ℤ) ≤ (m : ℤ) ^ d := by
-      have : 2 ≤ m ^ d := le_trans hm (Nat.le_self_pow hd.ne' m)
-      exact_mod_cast this
-    have hmd_pos : (0 : ℤ) < (m : ℤ) ^ d - 1 := by linarith
-    have hLM : L ≤ M := by
-      let i0 : Fin (m ^ d) := ⟨0, by positivity⟩
-      specialize hL α hα i0; specialize hM α hα i0; linarith
-    have hT_mul : ((m : ℤ) ^ d - 1) * T ≤ a * (M - L) := by
-      have := Int.mul_ediv_add_emod (a * (M - L)) ((m : ℤ) ^ d - 1)
-      have := Int.emod_nonneg (a * (M - L)) hmd_pos.ne'
-      linarith
-    have hn : ∀ w : Fin a.natAbs,
-        ((m : ℤ) ^ d - 1) * n ≥
-          ((m : ℤ) ^ d - 1) * (X_w w + j * ↑(r_w w)) - a * (M - L) := by
+    -- For each w, X_w w + j * r_w w - T ≤ n
+    have hn_w : ∀ w : Fin a.natAbs,
+        (X_w w + j * ↑(r_w w)) - T ≤ n := by
       intro w
-      have h_le : X_w w + j * ↑(r_w w) - T ≤ bound :=
-        Finset.le_sup' (fun w : Fin a.natAbs => X_w w + j * ↑(r_w w) - T) (Finset.mem_univ w)
-      have h1 : X_w w + j * ↑(r_w w) - T ≤ n := le_trans h_le hn_bound
-      have h2 : ((m : ℤ) ^ d - 1) * (X_w w + j * ↑(r_w w) - T) ≤ ((m : ℤ) ^ d - 1) * n :=
-        Int.mul_le_mul_of_nonneg_left h1 (le_of_lt hmd_pos)
-      linarith [show ((m : ℤ) ^ d - 1) * (X_w w + j * ↑(r_w w) - T) =
-        ((m : ℤ) ^ d - 1) * (X_w w + j * ↑(r_w w)) - ((m : ℤ) ^ d - 1) * T from by ring]
+      exact le_trans (Finset.le_sup' (fun w : Fin a.natAbs => (X_w w + j * ↑(r_w w) - T : ℤ))
+        (Finset.mem_univ w)) hn_bound
+    -- Find w₀ such that a ∣ n - (b+j) * r_w w₀
     obtain ⟨w₀, hw₀⟩ := residue_class_coverage a ha b j r_w hr_w hcop_j n
+    -- X_w w₀ + j * r_w w₀ ≥ 0
     have hX_nonneg : 0 ≤ X_w w₀ + j * ↑(r_w w₀) := by
       have h1 := hX_lower w₀
       have hr_nn : 0 ≤ (r_w w₀ : ℤ) := Nat.cast_nonneg (r_w w₀)
-      have h_diff_nonneg : 0 ≤ (j - l₁) * ↑(r_w w₀) :=
-        mul_nonneg (by linarith) hr_nn
-      linarith [show X_w w₀ + j * ↑(r_w w₀) = (X_w w₀ + l₁ * ↑(r_w w₀)) + (j - l₁) * ↑(r_w w₀) by ring]
-    have hM_pos : (0 : ℤ) < M := by
-      have h1lt : 1 < m ^ d := by linarith [Nat.le_self_pow hd.ne' m]
-      let i1 : Fin (m ^ d) := ⟨1, h1lt⟩
-      have h_sp := hM α hα i1
-      have h_mod := prop2 α hα i1
-      have h_sp_nn := sumPow_nonneg (getA α i1) d
-      have h_sp_pos : 1 ≤ sumPow (getA α i1) d := by
-        have h3 := Int.mul_ediv_add_emod (sumPow (getA α i1) d) ((m : ℤ) ^ d)
-        have h4 : 0 ≤ sumPow (getA α i1) d / ((m : ℤ) ^ d) :=
-          Int.ediv_nonneg h_sp_nn (by positivity)
-        simp only [i1, Nat.cast_one] at h_mod
-        rw [h_mod] at h3
-        nlinarith
-      linarith
-    have base_shifted := base_to_T_form hmd_gt1
-      (base_case_shift a b j d m S Q L M l₁ l₂ hl₁ hl₂ hj1 hj2 hmd_ge
-        (X_w w₀) (r_w w₀) (base_general_old w₀))
+      nlinarith [mul_nonneg (show (0 : ℤ) ≤ j - l₁ by linarith) hr_nn,
+                show X_w w₀ + j * ↑(r_w w₀) = (X_w w₀ + l₁ * ↑(r_w w₀)) + (j - l₁) * ↑(r_w w₀) from by ring]
+    -- Build the base case for meta_theorem using base_case_shift
+    have base_shifted_T := base_case_shift a b j d m S Q M l₁ l₂ hl₁ hl₂ hj1 hj2 hmc_ge T
+      (X_w w₀) (r_w w₀) (base_general w₀)
+    -- Apply meta_theorem
     have h_result := meta_theorem a ha (b + j) d hd m hm hcop s hs_div S Q getβ getA prop_pos
       prop1 prop2 prop3 prop4 prop5 prop6 L hL M hM
+      T ht
       (r_w w₀) (X_w w₀ + j * ↑(r_w w₀))
       hX_nonneg
       (eq1a_widening a L M (r_w w₀) s ((m : ℤ) ^ d) l₁ l₂ b (ineq2a w₀) (ineq2b w₀) j hj1 hj2)
       (eq1b_widening a L M s ((m : ℤ) ^ d) (by linarith) (b + l₁) (b + j) (by linarith) ineq2c)
-      base_shifted
-      α hα n (by linarith [hn w₀]) hw₀
+      base_shifted_T
+      α hα n (hn_w w₀) hw₀
     obtain ⟨A, _, hApos, hsumF, hrecip⟩ := h_result
     exact ⟨A, hApos, by rw [← sumF_eq_sum]; exact hsumF, hrecip⟩
   · exact bdd_below_poly_threshold a ha (b + j) d hd α
