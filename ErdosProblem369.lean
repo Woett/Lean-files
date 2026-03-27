@@ -831,3 +831,5 @@ theorem erdos_problem_369 (ε : ℝ) (hε : 0 < ε) (k : ℕ) (hk : 2 ≤ k) :
   by_cases hε1 : ε ≥ 1;
   · exact erdos_369_eps_ge_one k hk ε hε1;
   · convert erdos_369_eps_lt_one k hk ε hε using 1
+
+#print axioms erdos_problem_369
