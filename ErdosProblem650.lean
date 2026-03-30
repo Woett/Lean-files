@@ -6,6 +6,9 @@ These bounds solve Erdős Problem #650 (https://www.erdosproblems.com/650), and 
 https://github.com/QuanyuTang/erdos-problem-650/blob/main/On_Erdos_Problem_650.pdf
 
 Below you can find a formalization of the result in Lean, which is also due to Aristotle.
+
+Lean version: leanprover/lean4:v4.28.0
+Mathlib version: 8f9d9cff6bd728b17a24e163c9402775d9e6a365
 -/
 
 import Mathlib
