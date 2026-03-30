@@ -27,11 +27,34 @@ def HasDivMatching (A : Finset ℕ) (B : Finset ℤ) (r : ℕ) : Prop :=
     (∀ i, (c i : ℤ) ∣ b i)
 
 /-- `erdos_f m` is the largest `r` such that for every set `A` of `m`
-    positive integers and every integer offset `x`, there exists a
+    positive integers and every real offset `x`, there exists a
     divisibility matching of size `r` in the interval `(x, x + 2·max A)`. -/
 noncomputable def erdos_f (m : ℕ) : ℕ :=
   sSup { r : ℕ | ∀ (A : Finset ℕ), (∀ a ∈ A, 0 < a) → A.card = m →
-    ∀ (x : ℤ), HasDivMatching A (Finset.Ioo x (x + 2 * ↑(A.sup id))) r }
+    ∀ (x : ℝ), HasDivMatching A (Finset.Ioo ⌊x⌋ ⌈x + 2 * ↑(A.sup id)⌉) r }
+
+/-- For integer x, the real interval representation equals the integer one. -/
+lemma intIoo_real_eq_int (x : ℤ) (M : ℕ) :
+    Finset.Ioo (⌊(x : ℝ)⌋ : ℤ) (⌈(x : ℝ) + 2 * ↑M⌉ : ℤ) = Finset.Ioo x (x + 2 * ↑M) := by
+  congr 1
+  · exact Int.floor_intCast x
+  · rw [show (x : ℝ) + 2 * (M : ℝ) = ↑(x + 2 * (M : ℤ)) by push_cast; ring]
+    exact Int.ceil_intCast _
+
+/-- The integer-offset Ioo is contained in the real-offset one for any real x. -/
+lemma intIoo_int_sub_real (x : ℝ) (M : ℕ) :
+    Finset.Ioo ⌊x⌋ (⌊x⌋ + 2 * ↑M) ⊆ Finset.Ioo ⌊x⌋ ⌈x + 2 * ↑M⌉ := by
+  apply Finset.Ioo_subset_Ioo_right
+  have : ⌈x + 2 * (M : ℝ)⌉ = ⌈x⌉ + 2 * ↑M := by
+    rw [show x + 2 * (M : ℝ) = x + ↑(2 * (M : ℤ)) by push_cast; ring]
+    exact Int.ceil_add_intCast x _
+  linarith [Int.floor_le_ceil x]
+
+/-- Monotonicity of HasDivMatching in the interval set. -/
+lemma HasDivMatching.mono {A : Finset ℕ} {B B' : Finset ℤ} {r : ℕ}
+    (h : HasDivMatching A B r) (hBB' : B ⊆ B') : HasDivMatching A B' r := by
+  obtain ⟨c, b, hc, hb, hcA, hbB, hcd⟩ := h
+  exact ⟨c, b, hc, hb, hcA, fun i => hBB' (hbB i), hcd⟩
 
 /-- lcm of 1, 2, ..., n -/
 noncomputable def lcm_range : ℕ → ℕ
@@ -81,7 +104,7 @@ lemma erdos_f_le (m : ℕ) : erdos_f m ≤ m := by
   intro r hr
   obtain ⟨A, hA⟩ : ∃ A : Finset ℕ, (∀ a ∈ A, 0 < a) ∧ A.card = m :=
     ⟨Finset.Icc 1 m, fun a ha => by linarith [Finset.mem_Icc.mp ha], by simp⟩
-  obtain ⟨c, b, hc, hb, hcA, hbA, hcd⟩ := hr A hA.1 hA.2 0
+  obtain ⟨c, b, hc, hb, hcA, hbA, hcd⟩ := hr A hA.1 hA.2 (0 : ℝ)
   have := Finset.card_le_card (show Finset.image c Finset.univ ⊆ A from
     Finset.image_subset_iff.mpr fun i _ => hcA i)
   simp_all +decide [Finset.card_image_of_injective _ hc]
@@ -91,7 +114,7 @@ lemma erdos_f_mono : Monotone erdos_f := by
   intros m n hmn
   apply csSup_le_csSup
   · refine' ⟨n, fun r hr => _⟩
-    have := hr (Finset.Icc 1 n) (fun a ha => by linarith [Finset.mem_Icc.mp ha]) (by simp) 0
+    have := hr (Finset.Icc 1 n) (fun a ha => by linarith [Finset.mem_Icc.mp ha]) (by simp) (0 : ℝ)
     obtain ⟨c, b, hc, hb, hc', hb', h⟩ := this
     exact le_trans (by simpa [Finset.card_image_of_injective _ hc] using
       Finset.card_le_card (show Finset.image c Finset.univ ⊆ Finset.Icc 1 n from
@@ -105,8 +128,9 @@ lemma erdos_f_mono : Monotone erdos_f := by
       Finset.exists_subset_card_eq (by linarith)
     have hB_subset := hr B (fun a ha => hA a (hB.1 ha)) hB.2 x
     have hB_sup : B.sup id ≤ A.sup id := Finset.sup_mono hB.1
-    have hB_interval : Finset.Ioo x (x + 2 * (B.sup id)) ⊆ Finset.Ioo x (x + 2 * (A.sup id)) := by
-      grind
+    have hB_interval : Finset.Ioo ⌊x⌋ ⌈x + 2 * ↑(B.sup id)⌉ ⊆ Finset.Ioo ⌊x⌋ ⌈x + 2 * ↑(A.sup id)⌉ := by
+      apply Finset.Ioo_subset_Ioo_right
+      exact Int.ceil_le_ceil (by gcongr)
     obtain ⟨c, b, hc, hb, hc', hb', h⟩ := hB_subset
     exact ⟨c, b, hc, hb, fun i => hB.1 (hc' i), fun i => hB_interval (hb' i), h⟩
 
@@ -119,11 +143,12 @@ lemma erdos_f_le_of_few_multiples (n k : ℕ)
       (∃ a ∈ A, (a : ℤ) ∣ b) → b ∈ S) :
     erdos_f n ≤ k := by
       by_contra h_contra;
-      obtain ⟨r, hr⟩ : ∃ r > k, ∀ A : Finset ℕ, (∀ a ∈ A, 0 < a) → A.card = n → ∀ x : ℤ, HasDivMatching A (Finset.Ioo x (x + 2 * (A.sup id))) r := by
+      obtain ⟨r, hr⟩ : ∃ r > k, ∀ A : Finset ℕ, (∀ a ∈ A, 0 < a) → A.card = n → ∀ x : ℝ, HasDivMatching A (Finset.Ioo ⌊x⌋ ⌈x + 2 * (A.sup id)⌉) r := by
         contrapose! h_contra;
         refine' csSup_le' _;
         exact fun r hr => not_lt.1 fun contra => by obtain ⟨ A, hA_pos, hA_card, x, hx ⟩ := h_contra r contra; exact hx <| hr A hA_pos hA_card x;
-      obtain ⟨ c, b, hc, hb, hcA, hbB, hcb ⟩ := hr.2 A hA_pos hA_card x;
+      obtain ⟨ c, b, hc, hb, hcA, hbB, hcb ⟩ := hr.2 A hA_pos hA_card (↑x);
+      rw [intIoo_real_eq_int] at hbB;
       exact absurd ( Finset.card_le_card ( show Finset.image b Finset.univ ⊆ S from Finset.image_subset_iff.mpr fun i _ => hS_contains _ ( hbB i ) ⟨ _, hcA i, hcb i ⟩ ) ) ( by rw [ Finset.card_image_of_injective _ hb ] ; simpa using by linarith )
 
 -- ════════════════════════════════════════════════════════════════════════════════
@@ -1048,11 +1073,12 @@ theorem erdos_f_lower_bound (m : ℕ) (hm : 0 < m) :
       refine' le_csSup ⟨ m, fun r hr => _ ⟩ _;
       · contrapose! hr;
         simp +zetaDelta at *;
-        refine' ⟨ Finset.Icc 1 m, _, _, 0, _ ⟩ <;> norm_num [ Finset.card_range ] at * ; aesop;
+        refine' ⟨ Finset.Icc 1 m, _, _, (0 : ℝ), _ ⟩ <;> norm_num [ Finset.card_range ] at * ; aesop;
         rintro ⟨ c, b, hc, hb, hc', hb', h ⟩;
         exact absurd ( Finset.card_le_card ( show Finset.image c Finset.univ ⊆ Finset.Icc 1 m from Finset.image_subset_iff.mpr fun i _ => hc' i ) ) ( by rw [ Finset.card_image_of_injective _ hc ] ; simpa using by linarith );
       · -- Apply the lower bound core theorem to conclude the proof.
-        intros A hA_pos hA_card x; exact lower_bound_core m hm A hA_pos hA_card x
+        intros A hA_pos hA_card x
+        exact (lower_bound_core m hm A hA_pos hA_card ⌊x⌋).mono (intIoo_int_sub_real x (A.sup id))
 
 -- ════════════════════════════════════════════════════════════════════════════════
 -- Part 5: Statement and deduction of the main result  (Section 2)
