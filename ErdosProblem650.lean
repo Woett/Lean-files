@@ -360,7 +360,7 @@ lemma small_set_card (s t M D : ℕ) (x₀ : ℤ) (_hM : 0 < M) :
        · exact Finset.card_image_le.trans ( by simp )
 
 -- If gcd(n_i, m) | d for all i in S, then gcd(lcm_S n, m) | d.
-lemma gcd_lcm_dvd_of_all_gcd_dvd [DecidableEq ι] (S : Finset ι)
+lemma gcd_lcm_dvd_of_all_gcd_dvd {ι : Type*} [DecidableEq ι] (S : Finset ι)
     (n : ι → ℕ) (m : ℕ) (d : ℤ)
     (h : ∀ i ∈ S, (Nat.gcd (n i) m : ℤ) ∣ d) :
     (Nat.gcd (S.lcm n) m : ℤ) ∣ d := by
@@ -684,13 +684,13 @@ theorem large_3maxA_version (s t : ℕ) (hs : 0 < s) (ht : 0 < t)
 /-- The maximum deficiency of a family t of finite sets, defined as
     max_{S ⊆ ι} (|S| - |⋃_{i ∈ S} t(i)|).
     When this is 0, Hall's condition holds. -/
-noncomputable def maxDeficiency [DecidableEq α] [Fintype ι] [DecidableEq ι]
+noncomputable def maxDeficiency {α : Type*} {ι : Type*} [DecidableEq α] [Fintype ι] [DecidableEq ι]
     (t : ι → Finset α) : ℕ :=
   (Finset.univ : Finset (Finset ι)).sup
     (fun T => T.card - (T.biUnion t).card)
 
 /-- Deficient Hall's theorem: a matching of size |A| − maxDeficiency always exists. -/
-lemma deficient_hall [DecidableEq α] [DecidableEq ι] [Fintype ι]
+lemma deficient_hall {α : Type*} {ι : Type*} [DecidableEq α] [DecidableEq ι] [Fintype ι]
     (t : ι → Finset α) :
     ∃ (S : Finset ι) (f : S → α),
       Function.Injective f ∧
@@ -742,7 +742,7 @@ lemma deficient_hall [DecidableEq α] [DecidableEq ι] [Fintype ι]
         · intro i x hx hx'; have := Classical.choose_spec ( Finset.mem_image.mp ( Finset.mem_filter.mp ( by aesop : i ∈ S ) |>.2 ) ) ; aesop;
 
 /--  min(|A|, |A| − max_{∅ ≠ S ⊆ A}(|S| − |Γ(S)|)). -/
-lemma deficientHall [DecidableEq α] [DecidableEq ι] [Fintype ι]
+lemma deficientHall {α : Type*} {ι : Type*} [DecidableEq α] [DecidableEq ι] [Fintype ι]
     (t : ι → Finset α) :
     ∃ (S : Finset ι) (f : S → α),
       Function.Injective f ∧
@@ -753,8 +753,8 @@ lemma deficientHall [DecidableEq α] [DecidableEq ι] [Fintype ι]
 
 /-- If every subset S ⊆ A has |Γ(S)| ≥ g(|S|) where g satisfies
     t - g(t) ≤ m - g(m), then there is a matching of size ≥ g(m). -/
-lemma matching_from_neighborhood_bound [DecidableEq α] [DecidableEq ι] [Fintype ι]
-    (t : ι → Finset α)
+lemma matching_from_neighborhood_bound {α : Type*} {ι : Type*} [DecidableEq α] [DecidableEq ι]
+    [Fintype ι] (t : ι → Finset α)
     (g : ℕ → ℕ)
     (hg : ∀ S : Finset ι, g S.card ≤ (S.biUnion t).card)
     (hg_le : g (Fintype.card ι) ≤ Fintype.card ι)
