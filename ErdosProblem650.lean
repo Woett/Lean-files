@@ -3,7 +3,7 @@ Prompted by Yixin He, Yanyang Li and Quanyu Tang, ChatGPT 5.4 Pro proved that fo
 
 These bounds solve Erdős Problem #650 (https://www.erdosproblems.com/650), and the write-up can be found here:
 
-https://github.com/QuanyuTang/erdos-problem-650/blob/main/On_Erdos_Problem_650.pdf
+https://arxiv.org/pdf/2603.28636
 
 Below you can find a formalization of the result in Lean, which is also due to Aristotle.
 
