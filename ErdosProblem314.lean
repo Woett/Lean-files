@@ -1,1807 +1,1296 @@
 /-
-Solving Erdős Problem #314 (https://www.erdosproblems.com/314), Lim and Steinerberger proved that for every $\epsilon > 0$ there are infinitely many pairs $(n, m)$ such that $n^2 (1/n + 1/(n+1) + \ldots + 1/m - 1)$ is smaller than $\epsilon$.
+Solving Erdős Problem #314 (https://www.erdosproblems.com/314), Lim and Steinerberger proved that for every c > 0, there exist infinitely many pairs (n, m) of positive integers such that
+1 ≤ ∑_{ℓ=n}^{m} 1/ℓ − 1 ≤ c/n².
 
 J. Lim  and S. Steinerberger, On differences of two harmonic numbers. Mathematika 71 (2025).
 
-Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) tried to formalize their proof, but it unfortunately came up short. For what it's worth, below you can find what it did end up getting before I decided to throw in the towel.
+Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) managed to formalize their proof, and you can find the result below.
 
-Lean version: leanprover/lean4:v4.24.0
-Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
+Lean version: leanprover/lean4:v4.28.0
+Mathlib version: 8f9d9cff6bd728b17a24e163c9402775d9e6a365
 -/
-
 import Mathlib
 
-set_option linter.mathlibStandardSet false
-
-open scoped BigOperators
-open scoped Real
-open scoped Nat
-open scoped Classical
-open scoped Pointwise
-
-set_option maxHeartbeats 0
-set_option maxRecDepth 4000
-set_option synthInstance.maxHeartbeats 20000
-set_option synthInstance.maxSize 128
-
-set_option relaxedAutoImplicit false
-set_option autoImplicit false
+open Finset Real MeasureTheory intervalIntegral
 
 noncomputable section
 
-/-
-Definition of H_n and f(n) as in the paper.
--/
-noncomputable def H (n : ℕ) : ℝ := harmonic n
+/-- The partial harmonic sum from n to m: ∑_{ℓ=n}^{m} 1/ℓ. -/
+def harmonicPartialSum (n m : ℕ) : ℝ :=
+  ∑ ℓ ∈ Finset.Icc n m, (↑ℓ : ℝ)⁻¹
 
-noncomputable def f (n : ℕ) : ℝ := Real.log n + Real.eulerMascheroniConstant + 1 / (2 * n) - 1 / (12 * n ^ 2)
-
-/-
-Extension of f to real numbers.
--/
-noncomputable def f_real (x : ℝ) : ℝ := Real.log x + Real.eulerMascheroniConstant + 1 / (2 * x) - 1 / (12 * x ^ 2)
+/-! ## Part 1: Taylor expansion helpers -/
 
 /-
-Lemma 3.1: If $| \alpha - p/q | < 1 / (2 q^2)$, then $p/q$ is a convergent of $\alpha$.
+For |u| ≤ 1/2, |1/(1+u) - (1-u)| ≤ 2u².
 -/
-theorem lem_legendre (α : ℝ) (p q : ℕ) (hq : q > 0) :
-  |α - (p : ℚ) / q| < 1 / (2 * q ^ 2) →
-  ∃ (n : ℕ), (p : ℚ) / q = Real.convergent α n := by
-    intro h;
-    -- We use the Mathlib theorem `Real.exists_rat_eq_convergent` which states that if $| \alpha - r | < 1 / (2 r.den^2)$, then $r$ is a convergent.
-    have h_convergent : ∀ r : ℚ, |α - r| < 1 / (2 * r.den ^ 2) → ∃ n : ℕ, (r : ℚ) = Real.convergent α n := by
-      exact fun r a => Real.exists_rat_eq_convergent a;
-    convert h_convergent ( p / q ) _;
-    convert h.trans_le _ using 1 ; norm_num [ Rat.div_def' ];
-    · norm_num [ Rat.mkRat_eq_div ];
-    · gcongr;
-      rw [ div_eq_mul_inv ] ; norm_num [ Rat.mul_den ];
-      exact Nat.div_le_self _ _ |> le_trans <| by aesop;
+theorem reciprocal_approx (u : ℝ) (hu : |u| ≤ 1 / 2) :
+    |1 / (1 + u) - (1 - u)| ≤ 2 * u ^ 2 := by
+  rw [ abs_le ] at * ; constructor <;> nlinarith [ mul_div_cancel₀ ( 1 : ℝ ) ( show ( 1 + u ) ≠ 0 by linarith ) ] ;
 
 /-
-Lemma 3.2 (Corrected): If m = e^x n - 1/2 - e^x/2 + y/n, then either |y| >= 1/8 or (2m+1)/(2n-1) is a convergent of e^x.
+For |u| ≤ 1/2, |1/(1+u)² - (1-2u)| ≤ 8*u².
 -/
-theorem lem_y_or_convergent_corrected (x : ℝ) (m n : ℕ) (hn : n ≥ 1) (y : ℝ) :
-  (m : ℝ) = Real.exp x * n - 1 / 2 - Real.exp x / 2 + y / n →
-  |y| ≥ 1 / 8 ∨ ∃ (k : ℕ), (2 * m + 1 : ℚ) / (2 * n - 1) = Real.convergent (Real.exp x) k := by
-    intro h_eq
-    by_cases hy : |y| < 1 / 8;
-    · -- If $|y| < 1/8$, then $|(2m+1)/(2n-1) - e^x| < 1/(2(2n-1)^2)$.
-      have h_ineq : |(2 * m + 1 : ℝ) / (2 * n - 1) - Real.exp x| < 1 / (2 * (2 * n - 1) ^ 2) := by
-        rcases n with ( _ | _ | n ) <;> norm_num at *;
-        · exact abs_lt.mpr ⟨ by linarith [ abs_lt.mp hy ], by linarith [ abs_lt.mp hy ] ⟩;
-        · rw [ abs_lt ] at *;
-          constructor <;> norm_num [ h_eq ] <;> ring_nf at *;
-          · field_simp at *;
-            nlinarith [ Real.add_one_le_exp x, pow_nonneg ( Nat.cast_nonneg n : ( 0 : ℝ ) ≤ n ) 3 ];
-          · field_simp at *;
-            nlinarith [ Real.add_one_le_exp x, pow_nonneg ( Nat.cast_nonneg n : ( 0 : ℝ ) ≤ n ) 2, pow_nonneg ( Nat.cast_nonneg n : ( 0 : ℝ ) ≤ n ) 3 ];
-      have := @lem_legendre ( Real.exp x ) ( 2 * m + 1 ) ( 2 * n - 1 ) ?_ ?_ <;> norm_num at *;
-      · exact Or.inr <| by rcases this with ⟨ k, hk ⟩ ; exact ⟨ k, by rw [ Nat.cast_sub <| by linarith ] at hk; push_cast at *; linarith ⟩ ;
-      · linarith;
-      · rw [ Nat.cast_sub ( by linarith ) ] ; push_cast ; rw [ abs_sub_comm ] ; aesop;
-    · exact Or.inl <| le_of_not_gt hy
+theorem reciprocal_sq_approx (u : ℝ) (hu : |u| ≤ 1 / 2) :
+    |1 / (1 + u) ^ 2 - (1 - 2 * u)| ≤ 8 * u ^ 2 := by
+  norm_num [ abs_le ] at *;
+  constructor <;> nlinarith [ inv_mul_cancel₀ ( by nlinarith : ( 1 + u ) ^ 2 ≠ 0 ), pow_two_nonneg ( u + 1 / 2 ) ]
+
+/-! ## Part 2: Second-order expansion helpers -/
+
+theorem log_one_minus_inv_approx (n : ℕ) (hn : 2 ≤ n) :
+    |Real.log (1 - 1/(n : ℝ)) + 1/(n : ℝ) + 1/(2 * (n : ℝ)^2)| ≤ 1/(n : ℝ)^3 := by
+  have h_g'_deriv : ∀ u ∈ Set.Icc (-1 / 2 : ℝ) 0,
+    abs ((1 / (1 + u)) - 1 + u) ≤ 2 * u ^ 2 := by
+      norm_num +zetaDelta at *;
+      exact fun u hu₁ hu₂ => abs_le.mpr ⟨ by nlinarith [ inv_mul_cancel₀ ( by linarith : ( 1 + u ) ≠ 0 ) ], by nlinarith [ inv_mul_cancel₀ ( by linarith : ( 1 + u ) ≠ 0 ) ] ⟩;
+  have h_mvt : ∀ u ∈ Set.Icc (-1 / 2 : ℝ) 0, abs ((Real.log (1 + u)) - u + u ^ 2 / 2) ≤ abs u ^ 3 := by
+    have h_integral : ∀ u ∈ Set.Icc (-1 / 2 : ℝ) 0, abs ((Real.log (1 + u)) - u + u ^ 2 / 2) ≤ ∫ t in u..0, 2 * t ^ 2 := by
+      intros u hu
+      have h_ftc : ∫ t in (u)..0, (1 / (1 + t) - 1 + t) = Real.log (1 + 0) - 0 + 0^2 / 2 - (Real.log (1 + u) - u + u^2 / 2) := by
+        rw [ intervalIntegral.integral_add, intervalIntegral.integral_sub ] <;> norm_num [ intervalIntegral.integral_comp_add_left ];
+        · rw [ integral_inv_of_pos ] <;> norm_num <;> linarith [ hu.1, hu.2 ];
+        · exact ContinuousOn.intervalIntegrable ( by exact continuousOn_of_forall_continuousAt fun x hx => ContinuousAt.inv₀ ( continuousAt_const.add continuousAt_id ) ( by linarith [ hu.1, hu.2, Set.mem_Icc.mp ( by simpa [ hu.1, hu.2 ] using hx ) ] ) ) ..;
+        · exact ContinuousOn.intervalIntegrable ( by exact continuousOn_of_forall_continuousAt fun x hx => by exact ContinuousAt.sub ( ContinuousAt.inv₀ ( continuousAt_const.add continuousAt_id ) ( by linarith [ hu.1, hu.2, Set.mem_Icc.mp ( by simpa [ hu.1, hu.2 ] using hx ) ] ) ) continuousAt_const ) ..;
+      rw [ intervalIntegral.integral_of_le hu.2 ] at *;
+      norm_num +zetaDelta at *;
+      exact abs_le.mpr ⟨ by linarith [ abs_le.mp ( show |∫ x in Set.Ioc u 0, ( 1 + x ) ⁻¹ - 1 + x ∂MeasureTheory.volume| ≤ ∫ x in Set.Ioc u 0, 2 * x ^ 2 ∂MeasureTheory.volume by exact le_trans ( MeasureTheory.norm_integral_le_integral_norm ( _ : ℝ → ℝ ) ) ( by exact le_trans ( MeasureTheory.setIntegral_mono_on ( by exact ContinuousOn.integrableOn_Icc ( by exact ContinuousOn.abs ( by exact ContinuousOn.add ( ContinuousOn.sub ( ContinuousOn.inv₀ ( continuousOn_const.add continuousOn_id ) fun x hx => by linarith [ hx.1 ] ) continuousOn_const ) continuousOn_id ) ) |> fun h => h.mono_set <| Set.Ioc_subset_Icc_self ) ( by exact Continuous.integrableOn_Ioc <| by continuity ) measurableSet_Ioc fun x hx => h_g'_deriv x ( by linarith [ hx.1 ] ) ( by linarith [ hx.2 ] ) ) ( by norm_num ) ) ) ], by linarith [ abs_le.mp ( show |∫ x in Set.Ioc u 0, ( 1 + x ) ⁻¹ - 1 + x ∂MeasureTheory.volume| ≤ ∫ x in Set.Ioc u 0, 2 * x ^ 2 ∂MeasureTheory.volume by exact le_trans ( MeasureTheory.norm_integral_le_integral_norm ( _ : ℝ → ℝ ) ) ( by exact le_trans ( MeasureTheory.setIntegral_mono_on ( by exact ContinuousOn.integrableOn_Icc ( by exact ContinuousOn.abs ( by exact ContinuousOn.add ( ContinuousOn.sub ( ContinuousOn.inv₀ ( continuousOn_const.add continuousOn_id ) fun x hx => by linarith [ hx.1 ] ) continuousOn_const ) continuousOn_id ) ) |> fun h => h.mono_set <| Set.Ioc_subset_Icc_self ) ( by exact Continuous.integrableOn_Ioc <| by continuity ) measurableSet_Ioc fun x hx => h_g'_deriv x ( by linarith [ hx.1 ] ) ( by linarith [ hx.2 ] ) ) ( by norm_num ) ) ) ] ⟩ ;
+    intro u hu; convert le_trans ( h_integral u hu ) _ using 1; norm_num ; ring_nf;
+    cases abs_cases u <;> nlinarith [ sq_abs u, hu.1, hu.2 ];
+  convert h_mvt ( -1 / ( n : ℝ ) ) ⟨ _, _ ⟩ using 1 <;> ring_nf <;> norm_num [ hn.trans_lt' ];
+  rw [ inv_eq_one_div, div_le_div_iff₀ ] <;> norm_cast <;> linarith
+
+theorem recip_one_minus_inv_approx (n : ℕ) (hn : 2 ≤ n) :
+    |1 / (1 - 1/(n : ℝ)) - (1 + 1/(n : ℝ))| ≤ 2 / (n : ℝ)^2 := by
+  convert reciprocal_approx ( -1 / n ) _ using 1 <;> ring_nf;
+  norm_num;
+  rw [ inv_eq_one_div, div_le_div_iff₀ ] <;> norm_cast <;> linarith
+
+set_option maxHeartbeats 800000 in
+theorem taylor_error_bound (n : ℕ) (hn : 2 ≤ n) (u a : ℝ)
+    (ha : 0 < a) (_ha1 : a ≤ 1) (hu : |u| ≤ 1/2) :
+    |(Real.log (1 + u) - Real.log (1 - 1/(↑n : ℝ)))
+      + (a / (2 * ↑n) * (1 / (1 + u)) - 1 / (2 * ↑n) * (1 / (1 - 1/↑n)))
+      + (-(a^2 / (12 * (↑n)^2)) * (1 / (1 + u)^2) + 1 / (12 * (↑n)^2) * (1 / (1 - 1/↑n)^2))
+      - ((u - u^2/2 + 1/(↑n : ℝ) + 1/(2*(↑n)^2))
+        + (a*(1-u)/(2*↑n) - (1+1/↑n)/(2*↑n))
+        + (-(a^2/(12*(↑n)^2))*(1-2*u) + 1/(12*(↑n)^2)*(1+2/↑n)))|
+      ≤ |u|^3 + 1/(↑n)^3 + a * u^2 / ↑n + 1/↑n^3 + (a^2 + 1) * u^2 / (↑n)^2 + 1/(↑n)^4 := by
+  have h1 : abs (Real.log (1 + u) - u + u ^ 2 / 2) ≤ abs u ^ 3 := by
+    have h_mvt : ∀ u : ℝ, |u| ≤ 1 / 2 → |Real.log (1 + u) - u + u ^ 2 / 2| ≤ ∫ t in (0 : ℝ)..|u|, 2 * t ^ 2 := by
+      have h_deriv_bound : ∀ t : ℝ, |t| ≤ 1 / 2 → |deriv (fun t => Real.log (1 + t) - t + t ^ 2 / 2) t| ≤ 2 * t ^ 2 := by
+        intro t ht; norm_num [ add_comm, show t + 1 ≠ 0 from by linarith [ abs_le.mp ht ] ];
+        exact abs_le.mpr ⟨ by nlinarith only [ abs_le.mp ht, inv_mul_cancel₀ ( by linarith only [ abs_le.mp ht ] : ( t + 1 ) ≠ 0 ) ], by nlinarith only [ abs_le.mp ht, inv_mul_cancel₀ ( by linarith only [ abs_le.mp ht ] : ( t + 1 ) ≠ 0 ) ] ⟩;
+      have h_ftc : ∀ u : ℝ, |u| ≤ 1 / 2 → Real.log (1 + u) - u + u ^ 2 / 2 = ∫ t in (0 : ℝ)..u, deriv (fun t => Real.log (1 + t) - t + t ^ 2 / 2) t := by
+        intros u hu; rw [ intervalIntegral.integral_deriv_eq_sub ] ; norm_num [ add_comm ] ; ring_nf;
+        · exact fun x hx => DifferentiableAt.add ( DifferentiableAt.add ( differentiableAt_id.neg ) ( by norm_num ) ) ( DifferentiableAt.log ( differentiableAt_id.const_add _ ) ( by cases Set.mem_uIcc.mp hx <;> linarith [ abs_le.mp hu ] ) );
+        · apply_rules [ ContinuousOn.intervalIntegrable ];
+          refine' ContinuousOn.congr _ _;
+          exacts [ fun t => 1 / ( 1 + t ) - 1 + t, ContinuousOn.add ( ContinuousOn.sub ( continuousOn_const.div ( continuousOn_const.add continuousOn_id ) fun x hx => by cases Set.mem_uIcc.mp hx <;> linarith [ abs_le.mp hu ] ) continuousOn_const ) continuousOn_id, fun x hx => by norm_num [ add_comm, show x + 1 ≠ 0 from by cases Set.mem_uIcc.mp hx <;> linarith [ abs_le.mp hu ] ] ];
+      intro u hu; rw [ h_ftc u hu ] ; rcases abs_cases u with ( h | h ) <;> simp +decide [ *, intervalIntegral ] ;
+      · refine' le_trans ( MeasureTheory.norm_integral_le_integral_norm ( _ : ℝ → ℝ ) ) ( MeasureTheory.integral_mono_of_nonneg _ _ _ );
+        · exact Filter.Eventually.of_forall fun x => norm_nonneg _;
+        · exact Continuous.integrableOn_Ioc ( by continuity );
+        · filter_upwards [ MeasureTheory.ae_restrict_mem measurableSet_Ioc ] with x hx using h_deriv_bound x <| abs_le.mpr ⟨ by linarith [ hx.1, hx.2, abs_le.mp hu ], by linarith [ hx.1, hx.2, abs_le.mp hu ] ⟩;
+      · simp_all +decide [ le_of_lt ];
+        refine' le_trans ( MeasureTheory.norm_integral_le_integral_norm ( _ : ℝ → ℝ ) ) ( le_trans ( MeasureTheory.integral_mono_of_nonneg _ _ _ ) _ );
+        refine' fun t => 2 * t ^ 2;
+        · exact Filter.Eventually.of_forall fun x => norm_nonneg _;
+        · exact Continuous.integrableOn_Ioc ( by continuity );
+        · filter_upwards [ MeasureTheory.ae_restrict_mem measurableSet_Ioc ] with t ht using h_deriv_bound t <| abs_le.mpr ⟨ by norm_num at *; linarith [ ht.1, ht.2 ], by norm_num at *; linarith [ ht.1, ht.2 ] ⟩;
+        · rw [ ← intervalIntegral.integral_of_le ( by linarith ), ← intervalIntegral.integral_of_le ( by linarith ) ] ; norm_num ; ring_nf ; norm_num;
+    exact le_trans ( h_mvt u hu ) ( by norm_num; nlinarith [ abs_nonneg u, pow_two_nonneg ( |u|^2 ) ] )
+  have h2 : abs (Real.log (1 - 1 / (n : ℝ)) + 1 / (n : ℝ) + 1 / (2 * (n : ℝ) ^ 2)) ≤ 1 / (n : ℝ) ^ 3 := by
+    convert log_one_minus_inv_approx n hn using 1
+  have h3 : abs ((a / (2 * (n : ℝ))) * (1 / (1 + u)) - (a * (1 - u) / (2 * (n : ℝ)))) ≤ a * abs u ^ 2 / (n : ℝ) := by
+    have h3 : abs ((1 / (1 + u)) - (1 - u)) ≤ 2 * u ^ 2 := by
+      exact reciprocal_approx u hu
+    convert mul_le_mul_of_nonneg_left h3 ( show 0 ≤ a / ( 2 * n : ℝ ) by positivity ) using 1 <;> ring_nf;
+    · rw [ show a * ( n : ℝ ) ⁻¹ * ( -1 / 2 ) + a * ( n : ℝ ) ⁻¹ * u * ( 1 / 2 ) + a * ( n : ℝ ) ⁻¹ * ( 1 + u ) ⁻¹ * ( 1 / 2 ) = a * ( n : ℝ ) ⁻¹ * ( -1 + u + ( 1 + u ) ⁻¹ ) * ( 1 / 2 ) by ring ] ; rw [ abs_mul, abs_mul, abs_of_nonneg ( by positivity : ( 0 : ℝ ) ≤ a * ( n : ℝ ) ⁻¹ ) ] ; ring;
+    · norm_num [ mul_assoc, mul_comm, mul_left_comm ]
+  have h4 : abs ((1 / (2 * (n : ℝ))) * (1 / (1 - 1 / (n : ℝ))) - ((1 + 1 / (n : ℝ)) / (2 * (n : ℝ)))) ≤ 1 / (n : ℝ) ^ 3 := by
+    convert recip_one_minus_inv_approx n hn |> fun x => mul_le_mul_of_nonneg_left x ( show ( 0 : ℝ ) ≤ 1 / ( 2 * n ) by positivity ) using 1 <;> ring_nf!; norm_num [ show n ≠ 0 by positivity ] ; ring_nf;
+    rw [ show ( ( n : ℝ ) ⁻¹ * ( -1 / 2 ) + ( n : ℝ ) ⁻¹ * ( 1 - ( n : ℝ ) ⁻¹ ) ⁻¹ * ( 1 / 2 ) + ( n : ℝ ) ⁻¹ ^ 2 * ( -1 / 2 ) ) = ( ( n : ℝ ) ⁻¹ ) * ( -1 - ( n : ℝ ) ⁻¹ + ( 1 - ( n : ℝ ) ⁻¹ ) ⁻¹ ) * ( 1 / 2 ) by ring ] ; rw [ abs_mul, abs_mul, abs_of_nonneg ( by positivity : ( 0 : ℝ ) ≤ ( n : ℝ ) ⁻¹ ) ] ; ring
+  have h5 : abs (-(a ^ 2 / (12 * (n : ℝ) ^ 2)) * (1 / (1 + u) ^ 2) + (a ^ 2 / (12 * (n : ℝ) ^ 2)) * (1 - 2 * u)) ≤ a ^ 2 * abs u ^ 2 / (n : ℝ) ^ 2 := by
+    have h5 : abs (1 / (1 + u) ^ 2 - (1 - 2 * u)) ≤ 8 * abs u ^ 2 := by
+      convert reciprocal_sq_approx u hu using 1 ; ring_nf;
+      norm_num [ sq_abs ];
+    rw [ abs_le ] at *;
+    constructor <;> ring_nf at * <;> nlinarith [ show 0 ≤ a ^ 2 * ( n : ℝ ) ⁻¹ ^ 2 by positivity ]
+  have h6 : abs ((1 / (12 * (n : ℝ) ^ 2)) * (1 / (1 - 1 / (n : ℝ)) ^ 2) - (1 / (12 * (n : ℝ) ^ 2)) * (1 + 2 / (n : ℝ))) ≤ 1 / (n : ℝ) ^ 4 := by
+    rcases n with ( _ | _ | n ) <;> norm_num at *;
+    field_simp;
+    rw [ abs_of_nonneg ( by exact div_nonneg ( by ring_nf; positivity ) ( by ring_nf; positivity ) ) ] ; rw [ mul_div, div_le_iff₀ ] <;> ring_nf <;> norm_cast <;> norm_num [ Nat.succ_eq_add_one ] ; ring_nf ; nlinarith only [ sq ( n ^ 2 ) ] ;
+  refine' le_trans ( abs_le.mpr _ ) _;
+  exact |u|^3 + 1 / n^3 + a * |u|^2 / n + 1 / n^3 + a^2 * |u|^2 / n^2 + 1 / n^4;
+  · constructor <;> linarith [ abs_le.mp h1, abs_le.mp h2, abs_le.mp h3, abs_le.mp h4, abs_le.mp h5, abs_le.mp h6 ];
+  · norm_num [ abs_mul, abs_div ] ; ring_nf ; norm_num;
+    positivity
+
+/-! ## Part 3: Expansion helpers -/
+
+def eulerMaclaurinApprox' (x : ℝ) : ℝ :=
+  Real.log x + Real.eulerMascheroniConstant + 1 / (2 * x) - 1 / (12 * x ^ 2)
+
+/-- Bound on |u| in terms of 1/n. -/
+theorem u_bound (x : ℝ) (hx : x > 0) (M : ℝ) (hM : M > 0) :
+    ∃ K : ℝ, K > 0 ∧ ∀ n : ℕ, 1 ≤ n → ∀ y : ℝ, |y| ≤ M →
+      let u := (-(1 + Real.exp x) / 2 + y / ↑n) / (Real.exp x * ↑n)
+      |u| ≤ K / ↑n := by
+  norm_num +zetaDelta at *
+  refine' ⟨ ( Real.exp x + 1 ) / 2 + M, by positivity, fun n hn y hy => _ ⟩
+  rw [ abs_div, abs_of_nonneg ( by positivity : 0 ≤ Real.exp x * n ) ]
+  gcongr
+  · exact abs_le.mpr ⟨ by nlinarith [ abs_le.mp hy, show ( n : ℝ ) ≥ 1 by norm_cast, div_mul_cancel₀ y ( by positivity : ( n : ℝ ) ≠ 0 ), Real.exp_pos x ], by nlinarith [ abs_le.mp hy, show ( n : ℝ ) ≥ 1 by norm_cast, div_mul_cancel₀ y ( by positivity : ( n : ℝ ) ≠ 0 ), Real.exp_pos x ] ⟩
+  · exact le_mul_of_one_le_left ( by positivity ) ( Real.one_le_exp hx.le )
+
+/-- For n ≥ 2, the rewritten form of f(m) - f(n-1) - x. -/
+theorem f_diff_rewrite' (x : ℝ) (n : ℕ) (hn : 2 ≤ n)
+    (y : ℝ) (hu_pos : 1 + (-(1 + Real.exp x) / 2 + y / ↑n) / (Real.exp x * ↑n) > 0) :
+    let m := Real.exp x * ↑n - Real.exp x / 2 - 1 / 2 + y / ↑n
+    let u := (-(1 + Real.exp x) / 2 + y / ↑n) / (Real.exp x * ↑n)
+    let a := Real.exp (-x)
+    eulerMaclaurinApprox' m - eulerMaclaurinApprox' (↑n - 1) - x =
+      (Real.log (1 + u) - Real.log (1 - 1 / ↑n))
+      + (a / (2 * ↑n) * (1 / (1 + u)) - 1 / (2 * ↑n) * (1 / (1 - 1 / ↑n)))
+      + (-(a ^ 2 / (12 * ↑n ^ 2)) * (1 / (1 + u) ^ 2) + 1 / (12 * ↑n ^ 2) * (1 / (1 - 1 / ↑n) ^ 2)) := by
+  unfold eulerMaclaurinApprox'
+  by_cases hn : n = 0 <;> simp_all +decide [ division_def, mul_assoc, mul_comm, mul_left_comm, pow_two ]
+  rw [ Real.exp_neg ] ; ring_nf
+  field_simp
+  rw [ Real.log_div, Real.log_div ] <;> try positivity
+  · rw [ Real.log_div ] <;> norm_num
+    · rw [ Real.log_mul, Real.log_mul ] <;> ring_nf <;> norm_num [ hn ]
+      rw [ Real.log_mul ( by positivity ) ( by positivity ), Real.log_pow ] ; ring
+    · linarith [ show ( n : ℝ ) ≥ 2 by norm_cast ]
+    · positivity
+  · field_simp at hu_pos
+    nlinarith [ Real.add_one_le_exp x, show ( n : ℝ ) ≥ 2 by norm_cast ]
+  · field_simp at hu_pos
+    nlinarith [ Real.add_one_le_exp x, show ( n : ℝ ) ≥ 2 by norm_cast ]
+
+/-! ## Part 4: Continued fraction approximants of e -/
 
 /-
-Definitions of p_n, q_n as the numerator and denominator of the n-th convergent of e, and r_k as the normalized error term for the subsequence.
+We define the convergent sequences for e using the block recurrence
+derived from the CF [2; 1, 2, 1, 1, 4, 1, 1, 6, ...].
 -/
-noncomputable def p_seq (n : ℕ) : ℤ := (Real.convergent (Real.exp 1) n).num
-noncomputable def q_seq (n : ℕ) : ℕ := (Real.convergent (Real.exp 1) n).den
 
-noncomputable def r_seq (k : ℕ) : ℝ := |Real.exp 1 - (p_seq (3 * k + 1) : ℝ) / (q_seq (3 * k + 1) : ℝ)| * (q_seq (3 * k + 1) : ℝ) ^ 2
+/-! ## Section 1: Definitions
 
-/-
-Definition of the continued fraction coefficients of e.
+We define all four sequences together using a state (p, q, p', q')
+where (p,q) = (ePadeNum, ePadeDen) and (p',q') = (eSecNum, eSecDen).
 -/
-def e_coeff (n : ℕ) : ℕ :=
-  if n = 0 then 2
-  else if n % 3 = 2 then 2 * (n / 3 + 1)
-  else 1
 
-/-
-Initial values for the convergents of e.
--/
-theorem e_cf_init :
-  p_seq 0 = 2 ∧ q_seq 0 = 1 ∧ p_seq 1 = 3 ∧ q_seq 1 = 1 := by
-    convert And.intro _ ( And.intro _ ( And.intro _ _ ) );
-    · unfold p_seq;
-      -- The zeroth convergent of $e$ is $2$, so its numerator is $2$.
-      have h_zeroth_convergent : (Real.exp 1).convergent 0 = 2 := by
-        convert Int.floor_eq_iff.mpr ?_;
-        any_goals exact ( 2 : ℝ );
-        all_goals first | infer_instance | norm_num;
-        exact iff_of_true ( mod_cast Int.floor_eq_iff.mpr ⟨ by norm_num; exact Real.exp_one_gt_d9.le.trans' <| by norm_num, by norm_num; exact Real.exp_one_lt_d9.trans_le <| by norm_num ⟩ ) rfl;
-        norm_num;
-      exact h_zeroth_convergent.symm ▸ rfl;
-    · unfold q_seq; norm_num;
-    · unfold p_seq; norm_num;
-      -- Since $\exp  ( 1 ) \approx 2.718$, we have $\lfloor \exp(1) \rfloor = 2$ and $\lfloor (\exp(1) - 2)^{-1} \rfloor = 1  $ .
-      have h_floor : ⌊Real.exp 1⌋ = 2 ∧ ⌊(Int.fract (Real.exp 1))⁻¹⌋ = 1 := by
-        have h_exp : 2.718 < Real.exp 1 ∧ Real.exp 1 < 2.719 := by
-          -- We'll use the fact that $e \approx 2.718$ to estimate the bounds.
-          exact ⟨Real.exp_one_gt_d9.trans_le' (by norm_num), Real.exp_one_lt_d9.trans_le (by norm_num)⟩;
-        field_simp;
-        exact ⟨ Int.floor_eq_iff.mpr ⟨ by norm_num1 at *; linarith, by norm_num1 at *; linarith ⟩, Int.floor_eq_iff.mpr ⟨ by norm_num1 at *; rw [ le_div_iff₀ ] <;> linarith [ Int.fract_add_floor ( Real.exp 1 ), show ( Int.floor ( Real.exp 1 ) : ℝ ) = 2 by exact_mod_cast Int.floor_eq_iff.mpr ⟨ by norm_num1 at *; linarith, by norm_num1 at *; linarith ⟩ ], by norm_num1 at *; rw [ div_lt_iff₀ ] <;> linarith [ Int.fract_add_floor ( Real.exp 1 ), show ( Int.floor ( Real.exp 1 ) : ℝ ) = 2 by exact_mod_cast Int.floor_eq_iff.mpr ⟨ by norm_num1 at *; linarith, by norm_num1 at *; linarith ⟩ ] ⟩ ⟩;
-      norm_num [ h_floor ];
-    · unfold q_seq; norm_num [ Real.convergent ] ; ring_nf;
-      -- We'll use that $e \approx 2.718$ to show that $1 \leq \frac{1}{e - 2} < 2$.
-      have h_bounds : 1 ≤ (Real.exp 1 - 2)⁻¹ ∧ (Real.exp 1 - 2)⁻¹ < 2 := by
-        constructor;
-        · field_simp;
-          rw [ le_div_iff₀ ] <;> have := Real.exp_one_gt_d9.le <;> norm_num at * <;> linarith [ Real.exp_one_lt_d9.le ];
-        · rw [ inv_eq_one_div, div_lt_iff₀ ] <;> have := Real.exp_one_gt_d9.le <;> norm_num at * <;> linarith;
-      rw [ show Int.fract ( Real.exp 1 ) = Real.exp 1 - 2 by rw [ Int.fract ] ; norm_num [ show ⌊Real.exp 1⌋ = 2 by rw [ Int.floor_eq_iff ] ; norm_num ; exact ⟨ Real.exp_one_gt_d9.le.trans' <| by norm_num, Real.exp_one_lt_d9.trans_le <| by norm_num ⟩ ] ] ; norm_num [ show ⌊ ( Real.exp 1 - 2 ) ⁻¹⌋ = 1 by exact Int.floor_eq_iff.mpr ⟨ by norm_num; linarith, by norm_num; linarith ⟩ ]
+/-- The state of the CF convergent computation: (padeNum, padeDen, secNum, secDen) -/
+def eCFState : ℕ → ℤ × ℤ × ℤ × ℤ
+  | 0 => (3, 1, 2, 1)
+  | (k + 1) =>
+    let (u, s, v, t) := eCFState k
+    ((4 * k + 5) * u + 2 * v,
+     (4 * k + 5) * s + 2 * t,
+     (2 * k + 3) * u + v,
+     (2 * k + 3) * s + t)
 
-/-
-Recursive definitions of p_n and q_n.
--/
-def p_rec : ℕ → ℤ
-| 0 => 2
-| 1 => 3
-| n + 2 => (e_coeff (n + 2) : ℤ) * p_rec (n + 1) + p_rec n
+def ePadeNum (k : ℕ) : ℤ := (eCFState k).1
+def ePadeDen (k : ℕ) : ℤ := (eCFState k).2.1
+def eSecNum (k : ℕ) : ℤ := (eCFState k).2.2.1
+def eSecDen (k : ℕ) : ℤ := (eCFState k).2.2.2
 
-def q_rec : ℕ → ℤ
-| 0 => 1
-| 1 => 1
-| n + 2 => (e_coeff (n + 2) : ℤ) * q_rec (n + 1) + q_rec n
+@[simp] theorem ePadeNum_zero : ePadeNum 0 = 3 := rfl
+@[simp] theorem ePadeDen_zero : ePadeDen 0 = 1 := rfl
+@[simp] theorem eSecNum_zero : eSecNum 0 = 2 := rfl
+@[simp] theorem eSecDen_zero : eSecDen 0 = 1 := rfl
 
-/-
-The numerators p_{3k+1} are always odd.
--/
-theorem p_rec_odd (k : ℕ) : Odd (p_rec (3 * k + 1)) := by
+theorem ePadeNum_succ (k : ℕ) :
+    ePadeNum (k + 1) = (4 * k + 5) * ePadeNum k + 2 * eSecNum k := by
+  simp [ePadeNum, eSecNum, eCFState]
+
+theorem ePadeDen_succ (k : ℕ) :
+    ePadeDen (k + 1) = (4 * k + 5) * ePadeDen k + 2 * eSecDen k := by
+  simp [ePadeDen, eSecDen, eCFState]
+
+theorem eSecNum_succ (k : ℕ) :
+    eSecNum (k + 1) = (2 * k + 3) * ePadeNum k + eSecNum k := by
+  simp [eSecNum, ePadeNum, eCFState]
+
+theorem eSecDen_succ (k : ℕ) :
+    eSecDen (k + 1) = (2 * k + 3) * ePadeDen k + eSecDen k := by
+  simp [eSecDen, ePadeDen, eCFState]
+
+/-! ## Section 2: Parity -/
+
+theorem ePadeNum_odd : ∀ k, ¬ 2 ∣ ePadeNum k := by
+  intro k;
   induction' k with k ih;
   · decide +revert;
-  · -- By definition of $p_rec$, we have $p_{3(k+1)+1} = e_{3(k+1)+1} p_{3(k+1)} + p_{3(k+1)-1}$.
-    have h_recurrence : p_rec (3 * (k + 1) + 1) = (e_coeff (3 * (k + 1) + 1) : ℤ) * p_rec (3 * (k + 1)) + p_rec (3 * (k + 1) - 1) := by
-      exact Eq.symm ((fun {a b} => Int.neg_inj.mp) rfl);
-    -- By definition of $p_rec$, we have $p_{3k+3} = e_{3k+3} p_{3k  + 2} + p_{3k+1}$.
-    have h_recurrence2 : p_rec (3 * k + 3) = (e_coeff (3 * k + 3) : ℤ) * p_rec (3 * k + 2) + p_rec (3 * k + 1) := by
-      exact Eq.symm ((fun {a b} => Int.neg_inj.mp) rfl)
-    simp_all +decide [ Nat.mul_succ, parity_simps ];
-    unfold e_coeff; simp +decide [ parity_simps ] ;
-    grind
+  · simp_all +decide [ ePadeNum_succ, ← even_iff_two_dvd, parity_simps ]
 
-/-
-The denominators q_{3k+1} are always odd.
--/
-theorem q_rec_odd (k : ℕ) : Odd (q_rec (3 * k + 1)) := by
-  induction' k with k ih <;> simp_all +arith +decide [ Nat.mul_succ, parity_simps ];
-  -- By definition of $q_rec$, we have $q_rec (3 * k + 4) = e_coeff (3 * k + 4) * q_rec (3 * k + 3) + q_rec (3 * k + 2)$.
-  have h_q_rec_succ : q_rec (3 * k + 4) = e_coeff (3 * k + 4) * q_rec (3 * k + 3) + q_rec (3 * k + 2) := by
-    rfl;
-  -- By definition of $q_rec$, we have $q_rec (3 * k + 3) = e_coeff (3 * k + 3) * q_rec (3 * k + 2) + q_rec (3 * k + 1)$.
-  have h_q_rec_succ2 : q_rec (3 * k + 3) = e_coeff (3 * k + 3) * q_rec (3 * k + 2) + q_rec (3 * k + 1) := by
-    rfl;
-  simp_all +decide [ e_coeff, parity_simps ];
+theorem ePadeDen_odd : ∀ k, ¬ 2 ∣ ePadeDen k := by
+  intro k hk; induction' k with k ih <;> norm_num [ *, Nat.add_mod, Nat.mul_mod ] at *;
+  rw [ ePadeDen_succ ] at hk; simp_all +decide [ ← even_iff_two_dvd, parity_simps ] ;
   grind
 
-/-
-Hypothesis: The convergents of e match the recursive definitions p_rec and q_rec.
--/
-def Hypothesis_CF_e : Prop :=
-  ∀ n, (Real.convergent (Real.exp 1) n).num = p_rec n ∧ (Real.convergent (Real.exp 1) n).den = q_rec n
+theorem ePadeDen_pos : ∀ k, 0 < ePadeDen k := by
+  have h_ind : ∀ k, 0 < ePadeDen k ∧ 0 < eSecDen k := by
+    intro k
+    induction' k with k ih
+    · exact ⟨by norm_num [ePadeDen_zero], by norm_num [eSecDen_zero]⟩
+    ·
+      constructor <;> nlinarith [ ePadeDen_succ k, eSecDen_succ k ];
+  aesop
+
+/-! ## Section 3: Determinant identity -/
+
+theorem convergent_det (k : ℕ) :
+    ePadeNum k * eSecDen k - eSecNum k * ePadeDen k = (-1 : ℤ) ^ k := by
+  induction' k with k ih;
+  · decide +revert;
+  · rw [ ePadeNum_succ, ePadeDen_succ, eSecNum_succ, eSecDen_succ ] ; push_cast [ pow_succ' ] at * ; linarith;
+
+/-! ## Section 4: Integral representation of the Padé error -/
+
+/-- The "Padé integral" P(k) = ∫₀¹ t^{k+1}(1-t)^{k+1} eᵗ dt -/
+def padeBound (k : ℕ) : ℝ :=
+  ∫ t in (0:ℝ)..1, t ^ (k + 1) * (1 - t) ^ (k + 1) * exp t
+
+/-- The "secondary integral" S(k) = ∫₀¹ t^k(1-t)^{k+1} eᵗ dt -/
+def secBound (k : ℕ) : ℝ :=
+  ∫ t in (0:ℝ)..1, t ^ k * (1 - t) ^ (k + 1) * exp t
+
+/-- The "mixed integral" T(k) = ∫₀¹ t^{k+2}(1-t)^{k+1} eᵗ dt -/
+def mixedBound (k : ℕ) : ℝ :=
+  ∫ t in (0:ℝ)..1, t ^ (k + 2) * (1 - t) ^ (k + 1) * exp t
 
 /-
-With the notation of Lemma \ref{lem:secondorder}, if |f(m)-f(n-1) - x| \le \varepsilon/n^2 for arbitrarily small \varepsilon>0 (for infinitely many n), then y must satisfy y = y^* + o(1) as n\to\infty, where y^* := (e^{x}-e^{-x})/24 = \sinh x / 12.
+The Padé integral is positive: the integrand t^{k+1}(1-t)^{k+1}eᵗ > 0 on (0,1).
 -/
-theorem cor_necessity (x : ℝ) (hx : x > 0) (R : ℝ) :
-  ∃ C > 0, ∀ n : ℕ, n ≥ 2 → ∀ y : ℝ, |y| ≤ R →
-  let m := Real.exp x * n - 1 + Real.exp x / 2 + y / n
-  let y_star := Real.sinh x / 12
-  (∀ ε > 0, ∃ N, ∀ n ≥ N, |f_real m - f_real (n - 1) - x| ≤ ε / n ^ 2) →
-  abs (y - y_star) = 0 := by
-    contrapose! hx;
-    unfold f_real at *;
-    simp +zetaDelta at *;
-    have := hx 1 Nat.one_pos; obtain ⟨ n, hn₁, y, hy₁, hy₂, hy₃ ⟩ := this; have := hy₂ 1 zero_lt_one; obtain ⟨ N, hN ⟩ := this; have := hN ( Max.max N 2 ) ( le_max_left _ _ ) ; norm_num at this;
-    have h_lim : Filter.Tendsto (fun n_1 : ℝ => Real.log (n_1 - 1) + Real.eulerMascheroniConstant + (n_1 - 1)⁻¹ * (1 / 2) - ((n_1 - 1) ^ 2)⁻¹ * (1 / 12)) Filter.atTop Filter.atTop := by
-      exact Filter.Tendsto.atTop_add ( Filter.Tendsto.atTop_add ( Filter.Tendsto.atTop_add ( Real.tendsto_log_atTop.comp <| Filter.tendsto_id.atTop_add tendsto_const_nhds ) tendsto_const_nhds ) <| Filter.Tendsto.mul ( tendsto_inv_atTop_zero.comp <| Filter.tendsto_id.atTop_add tendsto_const_nhds ) tendsto_const_nhds ) <| Filter.Tendsto.neg <| Filter.Tendsto.mul ( tendsto_inv_atTop_zero.comp <| Filter.tendsto_pow_atTop ( by norm_num ) |> Filter.Tendsto.comp <| Filter.tendsto_id.atTop_add tendsto_const_nhds ) tendsto_const_nhds;
-    have h_lim : Filter.Tendsto (fun n_1 : ℝ => Real.log (Real.exp x * n - 1 + Real.exp x / 2 + y / n) + Real.eulerMascheroniConstant + (Real.exp x * n - 1 + Real.exp x / 2 + y / n)⁻¹ * (1 / 2) - ((Real.exp x * n - 1 + Real.exp x / 2 + y / n) ^ 2)⁻¹ * (1 / 12) - (Real.log (n_1 - 1) + Real.eulerMascheroniConstant + (n_1 - 1)⁻¹ * (1 / 2) - ((n_1 - 1) ^ 2)⁻¹ * (1 / 12)) - x) Filter.atTop Filter.atBot := by
-      exact Filter.Tendsto.atBot_add ( Filter.Tendsto.add_atBot tendsto_const_nhds ( Filter.tendsto_neg_atTop_atBot.comp h_lim ) ) tendsto_const_nhds;
-    have := h_lim.eventually ( Filter.eventually_lt_atBot ( -2 ) ) ; have := this.and ( Filter.eventually_ge_atTop ( Max.max N 2 ) ) ; obtain ⟨ n_1, hn_1₁, hn_1₂ ⟩ := this.exists; norm_num at *;
-    have := hN n_1 hn_1₂.1; norm_num at this; linarith [ abs_le.mp this, inv_le_one_of_one_le₀ ( show 1 ≤ n_1 ^ 2 by nlinarith ) ] ;
+lemma padeBound_pos (k : ℕ) : 0 < padeBound k := by
+  apply lt_of_le_of_ne; exact (by
+  exact intervalIntegral.integral_nonneg ( by norm_num ) fun x hx => mul_nonneg ( mul_nonneg ( pow_nonneg hx.1 _ ) ( pow_nonneg ( sub_nonneg.2 hx.2 ) _ ) ) ( Real.exp_nonneg _ )); exact (by
+  rw [ ne_comm ];
+  refine' ne_of_gt _;
+  apply_rules [ intervalIntegral.integral_pos ];
+  · norm_num;
+  · exact Continuous.continuousOn ( by continuity );
+  · exact fun x hx => mul_nonneg ( mul_nonneg ( pow_nonneg hx.1.le _ ) ( pow_nonneg ( sub_nonneg.2 hx.2 ) _ ) ) ( Real.exp_nonneg _ );
+  · exact ⟨ 1 / 2, ⟨ by norm_num, by norm_num ⟩, by positivity ⟩)
 
 /-
-The coefficients of the continued fraction of e satisfy: e_coeff(3k+2) = 2(k+1), e_coeff(3k) = 1 for k>0, and e_coeff(3k+1) = 1.
+The secondary integral is positive.
 -/
-theorem e_coeff_values (k : ℕ) :
-  e_coeff (3 * k + 2) = 2 * (k + 1) ∧
-  (k > 0 → e_coeff (3 * k) = 1) ∧
-  e_coeff (3 * k + 1) = 1 := by
-    -- By definition of e_coeff, we can split into cases based on the modulo operation.
-    simp [e_coeff];
-    exact ⟨ by omega, fun hk => by linarith ⟩
+lemma secBound_pos (k : ℕ) : 0 < secBound k := by
+  refine' lt_of_lt_of_le _ ( intervalIntegral.integral_mono_on _ _ _ fun x hx => mul_le_mul_of_nonneg_left ( Real.one_le_exp $ by linarith [ hx.1 ] ) <| mul_nonneg ( pow_nonneg ( by linarith [ hx.1 ] ) _ ) <| pow_nonneg ( by linarith [ hx.2 ] ) _ ) <;> norm_num;
+  · rw [ intervalIntegral.integral_of_le zero_le_one ];
+    rw [ MeasureTheory.integral_pos_iff_support_of_nonneg_ae ];
+    · simp +decide [ Function.support ];
+      rw [ show { x : ℝ | ( x = 0 → k = 0 ) ∧ ¬1 - x = 0 } ∩ Set.Ioc 0 1 = Set.Ioo 0 1 from ?_ ] ; rw [ Real.volume_Ioo ] ; norm_num;
+      grind;
+    · filter_upwards [ MeasureTheory.ae_restrict_mem measurableSet_Ioc ] with x hx using mul_nonneg ( pow_nonneg hx.1.le _ ) ( pow_nonneg ( sub_nonneg.2 hx.2 ) _ );
+    · exact Continuous.integrableOn_Ioc ( by continuity );
+  · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+  · exact Continuous.intervalIntegrable ( by continuity ) _ _
 
 /-
-For all k, p_{3k+4} is congruent to p_{3k+1} modulo 2.
+Base case: ∫₀¹ (1-t)eᵗ dt = e - 2
 -/
-theorem lem_p_mod_two (k : ℕ) : p_rec (3 * k + 4) % 2 = p_rec (3 * k + 1) % 2 := by
-  rw [ show p_rec ( 3 * k + 4 ) = ( e_coeff ( 3 * k + 4 ) : ) * p_rec ( 3 * k + 3 ) + p_rec ( 3 * k + 2 ) from rfl, show p_rec ( 3 * k + 3 ) = ( e_coeff ( 3 * k + 3 ) : ℤ ) * p_rec ( 3 * k + 2 ) + p_rec ( 3 * k + 1 ) from rfl, show p_rec ( 3 * k + 2 ) = ( e_coeff ( 3 * k + 2 ) : ℤ ) * p_rec ( 3 * k + 1 ) + p_rec ( 3 * k ) from rfl ] ; norm_num [ Int.add_emod, Int.mul_emod, e_coeff ];
-  cases Int.emod_two_eq_zero_or_one ( p_rec ( 3 * k ) ) <;> cases Int.emod_two_eq_zero_or_one ( p_rec ( 3 * k + 1 ) ) <;> simp +decide only [*]
+lemma secBound_zero : secBound 0 = exp 1 - 2 := by
+  unfold secBound;
+  rw [ intervalIntegral.integral_deriv_eq_sub' ];
+  rotate_left;
+  exacts [ fun t => ( 1 - t ) * Real.exp t + Real.exp t, funext fun t => by norm_num [ sub_mul, Real.differentiableAt_exp ] ; ring, fun t ht => by norm_num [ sub_mul, Real.differentiableAt_exp ], Continuous.continuousOn <| by continuity, by norm_num ]
 
 /-
-For all k, q_{3k+4} is congruent to q_{3k+1} modulo 2.
+Base case: ∫₀¹ t(1-t)eᵗ dt = 3 - e
 -/
-theorem lem_q_mod_two (k : ℕ) : q_rec (3 * k + 4) % 2 = q_rec (3 * k + 1) % 2 := by
-  -- By definition of $q_rec$, we have $q_rec (3 * k + 4) = e_coeff (3 * k + 4) * q_rec (3 * k + 3) + q_rec (3 * k + 2)$.
-  have h_q_rec_def : q_rec (3 * k + 4) = e_coeff (3 * k + 4) * q_rec (3 * k + 3) + q_rec (3 * k + 2) := by
-    rfl;
-  -- By definition of $q_rec$, we have $q_rec (3 * k + 3) = e_coeff (3 * k + 3) * q_rec (3 * k + 2) + q_rec (3 * k + 1)$.
-  have h_q_rec_def2 : q_rec (3 * k + 3) = e_coeff (3 * k + 3) * q_rec (3 * k + 2) + q_rec (3 * k + 1) := by
-    rfl;
-  -- By definition of $q_rec$, we have $q_rec (3 * k + 2) = e_coeff (3 * k + 2) * q_rec (3 * k + 1) + q_rec (3 * k)$.
-  have h_q_rec_def3 : q_rec (3 * k + 2) = e_coeff (3 * k + 2) * q_rec (3 * k + 1) + q_rec (3 * k) := by
-    rfl;
-  unfold e_coeff at *; simp +decide [ *, Int.add_emod, Int.mul_emod ] ;
-  cases Int.emod_two_eq_zero_or_one ( q_rec ( 3 * k ) ) <;> cases Int.emod_two_eq_zero_or_one ( q_rec ( 3 * k + 1 ) ) <;> simp +decide only [*]
+lemma padeBound_zero : padeBound 0 = 3 - exp 1 := by
+  unfold padeBound;
+  rw [ intervalIntegral.integral_deriv_eq_sub' ] <;> norm_num;
+  case f => exact fun t => ( t - t ^ 2 ) * Real.exp t - ( 1 - 2 * t ) * Real.exp t + ( -2 ) * Real.exp t;
+  · norm_num ; ring;
+  · exact funext fun x => by norm_num [ Real.differentiableAt_exp, mul_comm ] ; ring;
+  · norm_num [ Real.differentiableAt_exp, mul_comm ];
+  · fun_prop
 
 /-
-For all k, p_rec(3k+1) is odd.
+Polynomial decomposition: S(k+1) = P(k) - T(k), since
+    t^{k+1}(1-t)^{k+2} = t^{k+1}(1-t)^{k+1}(1-t) = t^{k+1}(1-t)^{k+1} - t^{k+2}(1-t)^{k+1}
 -/
-theorem lem_p_rec_odd (k : ℕ) : Odd (p_rec (3 * k + 1)) := by
-  exact p_rec_odd k
+lemma secBound_decomp (k : ℕ) :
+    secBound (k + 1) = padeBound k - mixedBound k := by
+      unfold secBound padeBound mixedBound ; ring_nf;
+      rw [ ← intervalIntegral.integral_sub ] ; congr ; ext ; ring;
+      · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+      · exact Continuous.intervalIntegrable ( by continuity ) _ _
 
 /-
-For all k, q_rec(3k+1) is odd.
+IBP identity: P(k+1) = -(k+2)·P(k) + 2(k+2)·T(k).
+    Proof: integrate ∫₀¹ eᵗ · t^{k+2}(1-t)^{k+2} dt by parts with
+    f(t) = eᵗ (so f' = eᵗ) and g(t) = t^{k+2}(1-t)^{k+2}.
+    g'(t) = (k+2)·t^{k+1}(1-t)^{k+1}(1-2t), [fg]₀¹ = 0.
 -/
-theorem lem_q_rec_odd (k : ℕ) : Odd (q_rec (3 * k + 1)) := by
-  exact q_rec_odd k
+set_option maxHeartbeats 800000 in
+lemma padeBound_ibp (k : ℕ) :
+    padeBound (k + 1) = -(↑(k + 2) : ℝ) * padeBound k
+      + 2 * (↑(k + 2) : ℝ) * mixedBound k := by
+        -- Apply integration by parts with $f(t) = \exp(t)$ and $g'(t) = t^{k+2}(1-t)^{k+2}$.
+        have h_parts : ∫ t in (0 : ℝ)..1, t ^ (k + 2) * (1 - t) ^ (k + 2) * Real.exp t = -∫ t in (0 : ℝ)..1, Real.exp t * deriv (fun t => t ^ (k + 2) * (1 - t) ^ (k + 2)) t := by
+          rw [ intervalIntegral.integral_mul_deriv_eq_deriv_mul ] <;> norm_num [ mul_comm ];
+          congr! 1;
+          · exact fun x _ _ => hasDerivAt_deriv_iff.mpr ( by exact DifferentiableAt.mul ( differentiableAt_pow _ ) ( DifferentiableAt.pow ( differentiableAt_id.const_sub _ ) _ ) );
+          · exact fun x _ _ => Real.hasDerivAt_exp x;
+          · apply_rules [ Continuous.intervalIntegrable ] ; ring_nf ; fun_prop;
+        convert h_parts using 1;
+        -- Now use the linearity of the integral to split the integral into two parts.
+        have h_split : ∫ t in (0 : ℝ)..1, Real.exp t * deriv (fun t => t ^ (k + 2) * (1 - t) ^ (k + 2)) t = ∫ t in (0 : ℝ)..1, Real.exp t * (k + 2) * t ^ (k + 1) * (1 - t) ^ (k + 1) * (1 - 2 * t) := by
+          refine' intervalIntegral.integral_congr fun t ht => _;
+          erw [ deriv_mul ] <;> norm_num [ sub_eq_add_neg ] ; ring_nf;
+          · erw [ deriv_add, deriv_add ] <;> norm_num [ sub_eq_add_neg ] ; ring_nf;
+            · erw [ deriv_mul, deriv_mul, deriv_pow ] <;> norm_num [ sub_eq_add_neg ] ; ring_nf;
+              · erw [ deriv_sub ] <;> norm_num ; ring_nf;
+                cases k <;> norm_num [ Nat.succ_eq_add_one, pow_add ] ; ring;
+              · exact differentiableAt_id.const_sub _;
+              · exact DifferentiableAt.pow ( differentiableAt_id.neg.const_add _ ) _;
+              · exact DifferentiableAt.pow ( differentiableAt_id.neg.const_add _ ) _;
+            · fun_prop;
+            · exact DifferentiableAt.mul ( differentiableAt_id.pow 2 ) ( DifferentiableAt.pow ( differentiableAt_id.neg.const_add _ ) _ );
+            · fun_prop (disch := norm_num);
+            · exact DifferentiableAt.pow ( differentiableAt_id.neg.const_add _ ) _;
+          · exact DifferentiableAt.pow ( differentiableAt_id.neg.const_add _ ) _;
+        -- Now use the linearity of the integral to split the integral into two parts and simplify.
+        have h_split_simplified : ∫ t in (0 : ℝ)..1, Real.exp t * (k + 2) * t ^ (k + 1) * (1 - t) ^ (k + 1) * (1 - 2 * t) = (k + 2) * (∫ t in (0 : ℝ)..1, Real.exp t * t ^ (k + 1) * (1 - t) ^ (k + 1)) - 2 * (k + 2) * (∫ t in (0 : ℝ)..1, Real.exp t * t ^ (k + 2) * (1 - t) ^ (k + 1)) := by
+          rw [ ← intervalIntegral.integral_const_mul, ← intervalIntegral.integral_const_mul ];
+          rw [ ← intervalIntegral.integral_sub ( by exact Continuous.intervalIntegrable ( by continuity ) _ _ ) ( by exact Continuous.intervalIntegrable ( by continuity ) _ _ ) ] ; congr ; ext ; ring;
+        simp_all +decide [ mul_assoc, mul_comm, mul_left_comm ];
+        unfold padeBound mixedBound; ring_nf;
 
 /-
-The denominator of the (n+1)-th auxiliary convergent is positive if the continued fraction is not terminated at n.
+IBP identity: T(k) = (k+1)·(S(k) - 2·P(k)).
+    Proof: write T(k) = ∫₀¹ t·[t^{k+1}(1-t)^{k+1}]·eᵗ dt.
+    IBP with u = t^{k+1}(1-t)^{k+1}, dv = t·eᵗ dt, v = (t-1)eᵗ.
+    [u·v]₀¹ = 0, u' = (k+1)t^k(1-t)^k(1-2t).
+    So T(k) = (k+1)∫₀¹ (1-t)eᵗ · t^k(1-t)^k(1-2t) dt
+    = (k+1)∫₀¹ t^k(1-t)^{k+1}(1-2t)eᵗ dt
+    = (k+1)(S(k) - 2P(k)).
 -/
-theorem lem_contsAux_b_pos_of_not_terminated (v : ℝ) (n : ℕ) (h : ¬ (GenContFract.of v).TerminatedAt n) :
-  0 < ((GenContFract.of v).contsAux (n + 1)).b := by
-    -- By definition of `GenContFract.of`, if `¬TerminatedAt n`, then `¬TerminatedAt (n - 1)`.
-    have h_not_terminated : ¬(GenContFract.of v).TerminatedAt (n - 1) := by
-      cases n <;> simp_all +decide [ GenContFract.terminatedAt_iff_s_none ];
-      -- By definition of `GenContFract.of`, if the (n+1)th partial quotient is not none, then the nth partial quotient must also be non-none.
-      have h_partial_quotient : ∀ n, (GenContFract.of v).s.get? n = none → (GenContFract.of v).s.get? (n + 1) = none := by
-        intros n hn_none
-        have h_partial_quotient : ∀ m ≥ n, (GenContFract.of v).s.get? m = none := by
-          exact fun m a => Stream'.Seq.le_stable (GenContFract.of v).s a hn_none;
-        grind;
-      exact fun h' => h <| h_partial_quotient _ h';
-    have h_pos : ∀ n, ¬(GenContFract.of v).TerminatedAt n → 0 < ((GenContFract.of v).contsAux (n + 2)).b := by
-      intro n hn_not_terminated
-      have h_pos : 0 < ((GenContFract.of v).contsAux (n + 2)).b := by
-        have h_fib_le : Nat.fib (n + 2) ≤ ((GenContFract.of v).contsAux (n + 2)).b := by
-          apply_rules [ GenContFract.fib_le_of_contsAux_b ];
-          tauto
-        exact lt_of_lt_of_le ( by norm_num ) h_fib_le;
-      exact h_pos;
-    cases n <;> aesop
-
-/-
-The fractional part at step n is positive if the continued fraction is not terminated at n.
--/
-theorem lem_ifp_fr_pos (v : ℝ) (n : ℕ) (ifp : GenContFract.IntFractPair ℝ)
-  (stream_nth_eq : GenContFract.IntFractPair.stream v n = some ifp)
-  (h_not_terminated : ¬ (GenContFract.of v).TerminatedAt n) :
-  0 < ifp.fr := by
-    contrapose! h_not_terminated; simp_all +decide [ GenContFract.TerminatedAt ] ;
-    simp_all +decide [ GenContFract.of ];
-    simp_all +decide [ GenContFract.IntFractPair.seq1 ];
-    simp_all +decide [ Stream'.Seq.TerminatedAt, Stream'.Seq.map ];
-    -- Since the fractional part is non-positive, the stream at n+1 is none by definition.
-    have h_stream_none : ∀ n, GenContFract.IntFractPair.stream v n = some ifp → ifp.fr ≤ 0 → GenContFract.IntFractPair.stream v (n + 1) = none := by
-      intros n stream_nth_eq h_not_terminated
-      simp [GenContFract.IntFractPair.stream] at *;
-      intros a stream_nth_eq; have := stream_nth_eq; simp_all +decide
-      have h_pos : ∀ n, (GenContFract.IntFractPair.stream v n).isSome → (GenContFract.IntFractPair.stream v n).get!.fr ≥ 0 := by
-        intro n hn; induction' n with n ih <;> simp_all +decide [ GenContFract.IntFractPair.stream ] ;
-        · exact Int.fract_nonneg _;
-        · cases h : GenContFract.IntFractPair.stream v n <;> simp_all +decide [ GenContFract.IntFractPair.of ];
-      exact le_antisymm h_not_terminated ( by simpa [ this ] using h_pos n ( by simp +decide [ this ] ) );
-    rw [ Stream'.map ] ; aesop
-
-/-
-Integer relations for m and n derived from parity.
--/
-theorem prop_scaling_integers (d : ℕ) (p q : ℤ) (hd : Odd d) (hp : Odd p) (hq : Odd q) :
-  let m := (d * p - 1) / 2
-  let n := (d * q + 1) / 2
-  (2 * m + 1 : ℤ) = d * p ∧ (2 * n - 1 : ℤ) = d * q := by
-    constructor <;> linarith [ Int.ediv_mul_cancel ( show 2 ∣ ( d : ℤ ) * p - 1 from even_iff_two_dvd.mp <| by simp_all +decide [ parity_simps ] ), Int.ediv_mul_cancel ( show 2 ∣ ( d : ℤ ) * q + 1 from even_iff_two_dvd.mp <| by simp_all +decide [ parity_simps ] ) ]
-
-/-
-Algebraic identity for e in terms of m and n.
--/
-theorem prop_scaling_algebra_e (k : ℕ) (d : ℕ) (p q : ℤ) (r : ℝ) (m n : ℤ)
-  (h_m : 2 * m + 1 = d * p)
-  (h_n : 2 * n - 1 = d * q)
-  (hd_pos : (d : ℝ) ≠ 0)
-  (h_err : Real.exp 1 - (p : ℝ) / q = (-1 : ℝ)^(k + 1) * r / q^2) :
-  Real.exp 1 = (2 * m + 1 : ℝ) / (2 * n - 1 : ℝ) + (-1 : ℝ)^(k + 1) * r * (d : ℝ)^2 / (2 * n - 1 : ℝ)^2 := by
-    convert eq_add_of_sub_eq' h_err using 1;
-    rw [ show ( 2 * m + 1 : ℝ ) = d * p by exact mod_cast h_m, show ( 2 * n - 1 : ℝ ) = d * q by exact mod_cast h_n ] ; ring_nf;
-    simp +decide [mul_assoc, mul_comm, sq, hd_pos]
-
-/-
-The coefficient $a_{3k+2}$ in the continued fraction of $e$ is $2(k+1)$.
--/
-theorem e_coeff_val (k : ℕ) : e_coeff (3 * k + 2) = 2 * (k + 1) := by
-  unfold e_coeff; norm_num [ Nat.add_mod, Nat.mul_mod ] ;
-  grind
-
-/-
-Values of `e_coeff` at indices $3k$ and $3k+1$.
--/
-theorem e_coeff_values_aux (k : ℕ) :
-  (k > 0 → e_coeff (3 * k) = 1) ∧
-  e_coeff (3 * k + 1) = 1 := by
-    unfold e_coeff; aesop;
-
-/-
-For $|x| \le 1/2$, $|\log(1+x) - (x - x^2/2)| \le |x|^3$.
--/
-theorem taylor_log_bound (x : ℝ) (hx : |x| ≤ 1/2) :
-  |Real.log (1 + x) - (x - x^2/2)| ≤ |x|^3 := by
-    -- Let's consider the expression $|\log(1+x) - (x - x^2/2)|$ for $|x| \le 1/2$.
-    -- We can use the Taylor series expansion of $\log(1+x)$ around $x=0$.
-    have h_taylor : ∀ x : ℝ, |x| ≤ 1 / 2 → |Real.log (1 + x) - (x - x ^ 2 / 2)| ≤ |x| ^ 3 := by
-      intro x hx
-      have h_taylor_series : ∀ x : ℝ, |x| ≤ 1 / 2 → |Real.log (1 + x) - (x - x ^ 2 / 2)| ≤ |x| ^ 3 := by
-        intro x hx
-        have h_integral : ∫ t in (0 : ℝ)..x, (t ^ 2 / (1 + t)) = Real.log (1 + x) - (x - x ^ 2 / 2) := by
-          -- We'll use the fact that $\frac{t^2}{1+t} = t - 1 + \frac{1}{1+t}$ to simplify the integral.
-          have h_integral_simplified : ∫ t in (0 : ℝ)..x, t ^ 2 / (1 + t) = ∫ t in (0 : ℝ)..x, (t - 1 + 1 / (1 + t)) := by
-            refine' intervalIntegral.integral_congr fun t ht => _;
-            rw [ add_div' ] <;> ring_nf ; cases Set.mem_uIcc.mp ht <;> linarith [ abs_le.mp hx ];
-          rw [ h_integral_simplified, intervalIntegral.integral_add, intervalIntegral.integral_sub ] <;> norm_num;
-          · rw [ integral_inv_of_pos ] <;> norm_num <;> linarith [ abs_le.mp hx ];
-          · apply_rules [ ContinuousOn.intervalIntegrable ];
-            exact continuousOn_of_forall_continuousAt fun t ht => ContinuousAt.inv₀ ( continuousAt_const.add continuousAt_id ) ( by cases Set.mem_uIcc.mp ht <;> linarith [ abs_le.mp hx ] )
-        -- We'll use the fact that $|\int_0^x \frac{t^2}{1+t} dt| \leq |x|^3$ for $|x| \leq 1/2$.
-        have h_integral_bound : ∀ x : ℝ, |x| ≤ 1 / 2 → |∫ t in (0 : ℝ)..x, t ^ 2 / (1 + t)| ≤ |x| ^ 3 := by
-          intros x hx
-          have h_integral_bound : ∀ t ∈ Set.Icc (0 : ℝ) (|x|), |t ^ 2 / (1 + t)| ≤ t ^ 2 := by
-            exact fun t ht => by rw [ abs_of_nonneg ( div_nonneg ( sq_nonneg _ ) ( by linarith [ ht.1 ] ) ) ] ; exact div_le_self ( sq_nonneg _ ) ( by linarith [ ht.1 ] ) ;
-          cases abs_cases x <;> simp_all +decide [ intervalIntegral ];
-          · rw [ abs_of_nonneg ( MeasureTheory.setIntegral_nonneg measurableSet_Ioc fun t ht => div_nonneg ( sq_nonneg _ ) ( by linarith [ ht.1 ] ) ) ];
-            exact le_trans ( MeasureTheory.setIntegral_mono_on ( by exact ContinuousOn.integrableOn_Icc ( by exact continuousOn_of_forall_continuousAt fun t ht => by exact ContinuousAt.div ( continuousAt_id.pow 2 ) ( continuousAt_const.add continuousAt_id ) ( by linarith [ ht.1 ] ) ) |> fun h => h.mono_set <| Set.Ioc_subset_Icc_self ) ( by exact Continuous.integrableOn_Ioc <| by continuity ) measurableSet_Ioc fun t ht => le_of_abs_le <| h_integral_bound t ht.1.le ht.2 ) <| by rw [ ← intervalIntegral.integral_of_le ( by linarith ) ] ; norm_num [ abs_of_nonneg, * ] ; nlinarith [ sq_nonneg x ] ;
-          · -- Since $x \leq 0$, we can rewrite the integral as $\int_{0}^{-x} \frac{t^2}{1-t} dt$.
-            have h_integral_neg : ∫ t in Set.Ioc x 0, t ^ 2 / (1 + t) = ∫ t in Set.Ioc 0 (-x), t ^ 2 / (1 - t) := by
-              rw [ ← intervalIntegral.integral_of_le ( by linarith ), ← intervalIntegral.integral_of_le ( by linarith ) ] ; convert intervalIntegral.integral_comp_neg _ using 3 <;> ring;
-            -- Since $x \leq 0$, we can rewrite the integral as $\int_{0}^{-x} \frac{t^2}{1-t} dt$ and bound it.
-            have h_integral_bound_neg : ∫ t in Set.Ioc 0 (-x), t ^ 2 / (1 - t) ≤ ∫ t in Set.Ioc 0 (-x), t ^ 2 / (1 - (-x)) := by
-              refine' MeasureTheory.setIntegral_mono_on _ _ _ _ <;> norm_num at *;
-              · exact ContinuousOn.integrableOn_Icc ( by exact continuousOn_of_forall_continuousAt fun t ht => ContinuousAt.div ( continuousAt_id.pow 2 ) ( continuousAt_const.sub continuousAt_id ) ( by linarith [ ht.1, ht.2 ] ) ) |> fun h => h.mono_set ( Set.Ioc_subset_Icc_self );
-              · exact Continuous.integrableOn_Ioc ( by continuity );
-              · exact fun t ht₁ ht₂ => by rw [ div_le_div_iff₀ ] <;> nlinarith [ sq_pos_of_pos ht₁ ] ;
-            simp_all +decide [ ← intervalIntegral.integral_of_le, abs_of_nonpos ];
-            rw [ abs_of_nonneg ( intervalIntegral.integral_nonneg ( by linarith ) fun t ht => div_nonneg ( sq_nonneg _ ) ( by linarith [ ht.1, ht.2 ] ) ) ] ; exact h_integral_bound_neg.trans ( by rw [ div_div, div_le_iff₀ ] <;> nlinarith [ pow_pos ( neg_pos.mpr ( by linarith : x < 0 ) ) 3 ] ) ;
-        exact h_integral ▸ h_integral_bound x hx
-      exact h_taylor_series x hx;
-    exact h_taylor x hx
-
-/-
-For $|x| \le 1/2$, $|(1+x)^{-1} - (1-x)| \le 2|x|^2$.
--/
-theorem taylor_inv_bound (x : ℝ) (hx : |x| ≤ 1/2) :
-  |1 / (1 + x) - (1 - x)| ≤ 2 * |x|^2 := by
-    rw [ abs_le ] at *;
-    constructor <;> cases abs_cases x <;> nlinarith [ mul_div_cancel₀ 1 ( by linarith : ( 1 + x ) ≠ 0 ), sq_nonneg ( x - 1 / 2 ), sq_nonneg ( x + 1 / 2 ) ]
-
-/-
-For $|x| \le 1/2$, $|(1+x)^{-2} - (1-2x)| \le 20|x|^2$.
--/
-theorem taylor_inv_sq_bound (x : ℝ) (hx : |x| ≤ 1/2) :
-  |1 / (1 + x)^2 - (1 - 2 * x)| ≤ 20 * |x|^2 := by
-    by_cases hx' : x = 0 <;> norm_num [ hx', abs_le ] at hx ⊢;
-    constructor <;> nlinarith [ mul_le_mul_of_nonneg_left hx.2 ( sq_nonneg ( x + 1 / 2 ) ), mul_le_mul_of_nonneg_left hx.1 ( sq_nonneg ( x - 1 / 2 ) ), mul_inv_cancel₀ ( show ( 1 + x ) ^ 2 ≠ 0 by nlinarith [ mul_self_pos.2 hx' ] ) ]
-
-/-
-Definition of the normalized error term r_n for the n-th convergent.
--/
-noncomputable def r_val (n : ℕ) : ℝ := |Real.exp 1 - (p_seq n : ℝ) / (q_seq n : ℝ)| * (q_seq n : ℝ) ^ 2
-
-/-
-For any real number x, there exists an odd integer d within distance 1 of x.
--/
-theorem exists_odd_near (x : ℝ) : ∃ d : ℤ, Odd d ∧ |d - x| ≤ 1 := by
-  cases' em ( ⌊x⌋ % 2 = 0 ) with h h;
-  · refine' ⟨ ⌊x⌋ + 1, _, _ ⟩;
-    · exact Int.odd_iff.mpr ( by norm_num [ Int.add_emod, h ] );
-    · exact abs_le.mpr ⟨ by push_cast; linarith [ Int.floor_le x, Int.lt_floor_add_one x ], by push_cast; linarith [ Int.floor_le x, Int.lt_floor_add_one x ] ⟩;
-  · exact ⟨ ⌊x⌋, by simpa [ ← Int.odd_iff ] using h, abs_sub_le_iff.mpr ⟨ by linarith [ Int.floor_le x ], by linarith [ Int.lt_floor_add_one x ] ⟩ ⟩
-
-/-
-Definitions for the corrected m and s_0.
--/
-noncomputable def s_0 (x : ℝ) : ℝ := -(Real.exp x + 1) / 2
-
-noncomputable def m_def (x y : ℝ) (n : ℕ) : ℝ := Real.exp x * n + s_0 x + y / n
-
-/-
-Definitions of the three parts of the difference f(m) - f(n-1) - x.
--/
-noncomputable def log_term (x y : ℝ) (n : ℕ) : ℝ := Real.log (m_def x y n / (n - 1)) - x
-noncomputable def inv_term (x y : ℝ) (n : ℕ) : ℝ := 1 / (2 * m_def x y n) - 1 / (2 * ((n : ℝ) - 1))
-noncomputable def quad_term (x y : ℝ) (n : ℕ) : ℝ := -1 / (12 * (m_def x y n)^2) + 1 / (12 * ((n : ℝ) - 1)^2)
-
-/-
-Definitions for the coefficients and the auxiliary term h.
--/
-noncomputable def c1_log (x : ℝ) : ℝ := (1 - Real.exp (-x)) / 2
-noncomputable def c2_log (x y : ℝ) : ℝ := Real.exp (-x) * y + (1 - Real.exp (-x)) / 2 - (1 - Real.exp (-x))^2 / 8
-noncomputable def h_def (x y : ℝ) (n : ℕ) : ℝ := ((1 - Real.exp (-x)) / 2 + Real.exp (-x) * y / n) / (n - 1)
-
-/-
-Coefficient for the 1/n^2 term in the expansion of h.
--/
-noncomputable def c2_h (x y : ℝ) : ℝ := (1 - Real.exp (-x)) / 2 + Real.exp (-x) * y
-
-/-
-Coefficient for the 1/n term in the expansion of h.
--/
-noncomputable def c1_h (x : ℝ) : ℝ := (1 - Real.exp (-x)) / 2
-
-/-
-Approximation lemma for h.
--/
-theorem h_bound_approx (x : ℝ) (hx : x > 0) (R : ℝ) :
-  ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-  |h_def x y n - (c1_h x / n + c2_h x y / n^2)| ≤ C / n^3 := by
-    -- Set $A$ and $B$ as given in the problem statement.
-    set A := (1 - Real.exp (-x)) / 2
-    set B := Real.exp (-x) * R;
-    -- Then we have $|h - (A/n + (A+B)/n^2)| \leq (|A| + |B|) / (n^2(n-1))$.
-    have h_bound : ∀ n : ℕ, n ≥ 2 → ∀ y : ℝ, |y| ≤ R → |h_def x y n - (A / (n : ℝ) + (A + Real.exp (-x) * y) / (n : ℝ)^2)| ≤ (|A| + |Real.exp (-x) * y|) / ((n : ℝ)^2 * (n - 1)) := by
-      field_simp;
-      intros n hn y hy; rw [ show h_def x y n = ( A + Real.exp ( -x ) * y / n ) / ( n - 1 ) by rfl ] ; rw [ div_sub_div, abs_le ];
-      · rw [ mul_comm, div_le_div_iff₀, neg_le ];
-        · rw [ neg_div', div_le_div_iff₀ ];
-          · constructor <;> cases abs_cases A <;> cases abs_cases ( y * Real.exp ( -x ) ) <;> nlinarith [ show ( n : ℝ ) ≥ 2 by norm_cast, show ( n ^ 2 : ℝ ) * ( n - 1 ) ≥ 0 by exact mul_nonneg ( sq_nonneg _ ) ( sub_nonneg.mpr ( Nat.one_le_cast.mpr ( by linarith ) ) ), show ( n ^ 3 : ℝ ) * ( n - 1 ) ≥ 0 by exact mul_nonneg ( pow_nonneg ( Nat.cast_nonneg _ ) _ ) ( sub_nonneg.mpr ( Nat.one_le_cast.mpr ( by linarith ) ) ), mul_div_cancel₀ ( y * Real.exp ( -x ) ) ( by positivity : ( n : ℝ ) ≠ 0 ) ];
-          · exact mul_pos ( by norm_num; linarith ) ( by positivity );
-          · exact mul_pos ( sq_pos_of_pos ( by positivity ) ) ( by norm_num; linarith );
-        · exact mul_pos ( by norm_num; linarith ) ( by positivity );
-        · exact mul_pos ( sq_pos_of_pos ( by positivity ) ) ( by norm_num; linarith );
-      · exact sub_ne_zero_of_ne ( by norm_cast; linarith );
-      · positivity;
-    -- We can simplify the expression on the right-hand side.
-    have h_simplified : ∀ n : ℕ, n ≥ 2 → ∀ y : ℝ, |y| ≤ R → |h_def x y n - (A / (n : ℝ) + (A + Real.exp (-x) * y) / (n : ℝ)^2)| ≤ (|A| + |Real.exp (-x) * y|) / ((n : ℝ)^3 / 2) := by
-      intro n hn y hy; refine le_trans ( h_bound n hn y hy ) ?_; gcongr ; nlinarith [ show ( n : ℝ ) ≥ 2 by norm_cast ] ;
-    refine' ⟨ 2 * ( |A| + |Real.exp ( -x ) * R| ) + 1, _, 2, _ ⟩ <;> norm_num;
-    · positivity;
-    · intro n hn y hy; specialize h_simplified n hn y hy; refine' le_trans h_simplified _;
-      field_simp;
-      cases abs_cases y <;> cases abs_cases R <;> cases abs_cases ( Real.exp ( -x ) * y ) <;> nlinarith [ Real.exp_pos ( -x ), Real.exp_le_one_iff.mpr ( show -x ≤ 0 by linarith ) ]
-
-/-
-Approximation lemma for h^2.
--/
-theorem h_sq_bound_approx (x : ℝ) (hx : x > 0) (R : ℝ) :
-  ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-  |h_def x y n ^ 2 / 2 - c1_h x ^ 2 / (2 * (n : ℝ)^2)| ≤ C / (n : ℝ)^3 := by
-    -- We'll use the fact that $h$ is approximately $c1_h x / n$ for large $n$.
-    obtain ⟨C, hC_pos, N, hN⟩ : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |h_def x y n - c1_h x / n| ≤ C / n^2 := by
-      -- Apply the approximation lemma for h.
-      obtain ⟨C, hC_pos, N, hN⟩ : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |h_def x y n - (c1_h x / n + c2_h x y / n^2)| ≤ C / n^3 := by
-        exact h_bound_approx x hx R;
-      -- We'll use the fact that $|c2_h x y / n^2| \leq C' / n^2$ for some $C' > 0$.
-      obtain ⟨C', hC'_pos, hC'⟩ : ∃ C' > 0, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |c2_h x y / (n : ℝ)^2| ≤ C' / (n : ℝ)^2 := by
-        -- We'll use the fact that $|c2_h x y| \leq C'$ for some $C' > 0$.
-        obtain ⟨C', hC'_pos, hC'⟩ : ∃ C' > 0, ∀ y : ℝ, |y| ≤ R → |c2_h x y| ≤ C' := by
-          unfold c2_h;
-          exact ⟨ |( 1 - Real.exp ( -x ) ) / 2| + Real.exp ( -x ) * ( |R| + 1 ), by positivity, fun y hy => abs_le.mpr ⟨ by cases abs_cases ( ( 1 - Real.exp ( -x ) ) / 2 ) <;> cases abs_cases R <;> nlinarith [ Real.exp_pos ( -x ), abs_le.mp hy ], by cases abs_cases ( ( 1 - Real.exp ( -x ) ) / 2 ) <;> cases abs_cases R <;> nlinarith [ Real.exp_pos ( -x ), abs_le.mp hy ] ⟩ ⟩;
-        exact ⟨ C', hC'_pos, fun n hn y hy => by rw [ abs_div, abs_sq ] ; gcongr ; aesop ⟩;
-      refine' ⟨ C + C', by positivity, N + 1, fun n hn y hy => _ ⟩ ; specialize hN n ( by linarith ) y hy ; specialize hC' n ( by linarith ) y hy ; simp_all +decide [ abs_le ];
-      ring_nf at *;
-      constructor <;> nlinarith [ show ( n : ℝ ) ⁻¹ ^ 3 ≤ ( n : ℝ ) ⁻¹ ^ 2 by exact pow_le_pow_of_le_one ( by positivity ) ( inv_le_one_of_one_le₀ ( by norm_cast; linarith ) ) ( by norm_num ) ];
-    -- Using the bound on $|h_def x y n - c1_h x / n|$, we can bound $|h_def x y n^2 - c1_h x^2 / n^2|$.
-    have h_bound_sq : ∃ C' > 0, ∃ N' : ℕ, ∀ n ≥ N', ∀ y : ℝ, |y| ≤ R → |h_def x y n^2 - c1_h x^2 / n^2| ≤ C' / n^3 := by
-      -- Using the bound on $|h_def x y n - c1_h x / n|$, we can bound $|h_def x y n + c1_h x / n|$.
-      have h_bound_sum : ∃ C'' > 0, ∃ N'' : ℕ, ∀ n ≥ N'', ∀ y : ℝ, |y| ≤ R → |h_def x y n + c1_h x / n| ≤ C'' / n := by
-        -- Using the bound on $|h_def x y n - c1_h x / n|$, we can bound $|h_def x y n + c1_h x / n|$ by $|h_def x y n - c1_h x / n| + 2|c1_h x / n|$.
-        have h_bound_sum : ∃ C'' > 0, ∃ N'' : ℕ, ∀ n ≥ N'', ∀ y : ℝ, |y| ≤ R → |h_def x y n + c1_h x / n| ≤ |h_def x y n - c1_h x / n| + 2 * |c1_h x / n| := by
-          exact ⟨ 1, by norm_num, 0, fun n hn y hy => by cases abs_cases ( h_def x y n + c1_h x / n ) <;> cases abs_cases ( h_def x y n - c1_h x / n ) <;> cases abs_cases ( c1_h x / n ) <;> linarith ⟩;
-        obtain ⟨ C'', hC''_pos, N'', hN'' ⟩ := h_bound_sum;
-        refine' ⟨ C + 2 * |c1_h x| + 1, by positivity, Max.max N N'' + 1, fun n hn y hy => le_trans ( hN'' n ( by linarith [ le_max_left N N'', le_max_right N N'' ] ) y hy ) _ ⟩;
-        refine le_trans ( add_le_add ( hN n ( by linarith [ le_max_left N N'' ] ) y hy ) ( mul_le_mul_of_nonneg_left ( show |c1_h x / n| ≤ |c1_h x| / n from by rw [ abs_div, abs_of_nonneg ( by positivity : ( 0 : ℝ ) ≤ n ) ] ) zero_le_two ) ) ?_;
-        rw [ div_add', div_le_div_iff₀ ] <;> nlinarith [ show ( n : ℝ ) ≥ 1 by norm_cast; linarith [ le_max_left N N'', le_max_right N N'' ], abs_nonneg ( c1_h x ), mul_div_cancel₀ ( |c1_h x| : ℝ ) ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith [ le_max_left N N'', le_max_right N N'' ] ), pow_two ( n - 1 : ℝ ) ];
-      -- Using the bounds on $|h_def x y n - c1_h x / n|$ and $|h_def x y n + c1_h x / n|$, we can bound $|h_def x y n^2 - c1_h x^2 / n^2|$.
-      obtain ⟨C'', hC''_pos, N'', hN''⟩ := h_bound_sum;
-      use C * C'', by
-        positivity, max N N''; intros n hn y hy; (
-      convert mul_le_mul ( hN n ( le_trans ( le_max_left _ _ ) hn ) y hy ) ( hN'' n ( le_trans ( le_max_right _ _ ) hn ) y hy ) ( by positivity ) ( by positivity ) using 1 <;> ring_nf;
-      rw [ ← abs_mul ] ; ring_nf;);
-    obtain ⟨ C', hC'_pos, N', hN' ⟩ := h_bound_sq; exact ⟨ C' / 2, half_pos hC'_pos, N', fun n hn y hy => abs_le.mpr ⟨ by have := abs_le.mp ( hN' n hn y hy ) ; ring_nf at *; linarith, by have := abs_le.mp ( hN' n hn y hy ) ; ring_nf at *; linarith ⟩ ⟩ ;
-
-/-
-Coefficients for the inverse term expansion.
--/
-noncomputable def c1_inv (x : ℝ) : ℝ := (Real.exp (-x) - 1) / 2
-noncomputable def c2_inv (x : ℝ) : ℝ := (Real.exp (-x) + Real.exp (-2 * x) - 2) / 4
-
-/-
-Helper lemma: The difference f(n) - f(n-1) approximates 1/n with an error of order 1/n^5.
--/
-theorem lem_f_diff_bound : ∃ C > 0, ∀ n : ℕ, n ≥ 2 → |f n - f (n - 1) - 1 / n| ≤ C / (n : ℝ) ^ 5 := by
-  -- We compute the difference f(n) - f(n-1) using Taylor expansions in powers of 1/n.
-  -- f(n) - f(n-1) = log(n) - log(n-1) + 1/(2n) - 1/(2(n-1)) - 1/(12n^2) + 1/(12(n-1)^2).
-  -- Using log(n) - log(n-1) = -log(1 - 1/n) = 1/n + 1/(2n^2) + 1/(3n^3) + 1/(4n^4) + O(1/n^5),
-  -- and expanding the rational terms, we find that the terms of order 1/n, 1/n^2, 1/n^3, 1/n^4 all cancel out.
-  -- Thus the difference is O(1/n^5).
-  have h_diff : ∀ n : ℕ, n ≥ 2 → |f n - f (n - 1) - 1 / (n : ℝ)| ≤ 10 / (n : ℝ) ^ 5 := by
-    intros n hn_ge_2
-    have h_log : |Real.log (n : ℝ) - Real.log ((n - 1) : ℝ) - (1 / (n : ℝ) + 1 / (2 * (n : ℝ)^2) + 1 / (3 * (n : ℝ)^3) + 1 / (4 * (n : ℝ)^4))| ≤ 1 / (n : ℝ)^5 := by
-      -- Using the integral representation of the logarithm, we can bound the difference.
-      have h_log_integral : Real.log n - Real.log (n - 1) = ∑ k ∈ Finset.range 4, (1 / (n : ℝ) ^ (k + 1)) / (k + 1) + ∫ x in (0 : ℝ)..1 / n, (x ^ 4) / (1 - x) := by
-        have h_log_integral : ∀ x : ℝ, 0 < x ∧ x < 1 → Real.log (1 / (1 - x)) = ∑ k ∈ Finset.range 4, x ^ (k + 1) / (k + 1) + ∫ t in (0 : ℝ)..x, t ^ 4 / (1 - t) := by
-          intros x hx
-          have h_log_integral : ∫ t in (0 : ℝ)..x, t ^ 4 / (1 - t) = ∫ t in (0 : ℝ)..x, (1 / (1 - t) - ∑ k ∈ Finset.range 4, t ^ k) := by
-            refine' intervalIntegral.integral_congr fun t ht => _;
-            rw [ div_sub' ] <;> norm_num [ Finset.sum_range_succ ] ; ring ; cases Set.mem_uIcc.mp ht <;> linarith;
-          rw [ h_log_integral, intervalIntegral.integral_sub ] <;> norm_num;
-          · rw [ integral_inv_of_pos, intervalIntegral.integral_finset_sum ] <;> norm_num [ Finset.sum_range_succ ] ; linarith;
-          · exact ContinuousOn.intervalIntegrable ( by exact continuousOn_of_forall_continuousAt fun t ht => ContinuousAt.inv₀ ( continuousAt_const.sub continuousAt_id ) ( by linarith [ Set.mem_Icc.mp ( by simpa [ hx.1.le ] using ht ) ] ) );
+set_option maxHeartbeats 800000 in
+lemma mixedBound_ibp (k : ℕ) :
+    mixedBound k = (↑(k + 1) : ℝ) * (secBound k - 2 * padeBound k) := by
+      -- Apply integration by parts with $u(t) = t^{k+1}(1-t)^{k+1}$ and $dv = t e^t dt$.
+      have h_parts : ∀ a b : ℝ, ∫ t in a..b, t ^ (k + 2) * (1 - t) ^ (k + 1) * Real.exp t = (b ^ (k + 1) * (1 - b) ^ (k + 1) * (b - 1) * Real.exp b) - (a ^ (k + 1) * (1 - a) ^ (k + 1) * (a - 1) * Real.exp a) - ∫ t in a..b, (k + 1) * t ^ k * (1 - t) ^ k * (1 - 2 * t) * (t - 1) * Real.exp t := by
+        intro a b;
+        rw [ eq_sub_iff_add_eq, ← intervalIntegral.integral_add ];
+        · rw [ intervalIntegral.integral_deriv_eq_sub' ];
+          · nontriviality;
+            funext x; norm_num [ Real.differentiableAt_exp, mul_assoc, mul_comm, mul_left_comm, sub_mul, ← mul_pow ] ; ring_nf;
+            norm_num [ Real.differentiableAt_exp, mul_assoc, mul_comm, mul_left_comm ] ; ring_nf;
+            cases k <;> norm_num [ pow_succ' ] ; ring;
+            rw [ show x - x ^ 2 = x * ( 1 - x ) by ring ] ; rw [ mul_pow ] ; ring;
+          · fun_prop;
+          · fun_prop;
+        · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+        · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+      nontriviality;
+      convert h_parts 0 1 using 1 ; norm_num ; ring_nf;
+      rw [ intervalIntegral.integral_add, intervalIntegral.integral_add ] <;> norm_num [ mul_assoc, ← pow_succ' ] ; ring_nf;
+      · rw [ intervalIntegral.integral_sub ] <;> norm_num ; ring_nf!;
+        · rw [ intervalIntegral.integral_add, intervalIntegral.integral_sub ] <;> norm_num [ mul_assoc, ← pow_succ' ] ; ring_nf!;
+          · unfold secBound padeBound; norm_num [ mul_assoc, mul_comm, mul_left_comm, ← pow_succ' ] ; ring_nf;
+            rw [ intervalIntegral.integral_add, intervalIntegral.integral_sub ] <;> norm_num ; ring!;
+            · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+            · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+            · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+            · exact Continuous.intervalIntegrable ( by continuity ) _ _;
           · exact Continuous.intervalIntegrable ( by continuity ) _ _;
-        convert h_log_integral ( 1 / n ) ⟨ by positivity, by rw [ div_lt_iff₀ ] <;> norm_cast <;> linarith ⟩ using 1 <;> norm_num;
-        rw [ ← Real.log_div ( by positivity ) ( by exact ne_of_gt ( by norm_num; linarith ) ), inv_eq_one_div, one_sub_div ( by positivity ) ];
-        rw [ ← Real.log_inv, inv_div ];
-      -- We'll use the fact that $\int_0^{1/n} \frac{x^4}{1-x} \, dx$ is bounded.
-      have h_integral_bound : |∫ x in (0 : ℝ)..1 / n, x^4 / (1 - x)| ≤ ∫ x in (0 : ℝ)..1 / n, x^4 / (1 - 1 / n) := by
-        rw [ abs_of_nonneg ( intervalIntegral.integral_nonneg ( by positivity ) fun x hx => div_nonneg ( pow_nonneg hx.1 _ ) ( sub_nonneg.2 <| by exact hx.2.trans <| div_le_one_of_le₀ ( by norm_cast; linarith ) <| by positivity ) ) ];
-        refine' intervalIntegral.integral_mono_on _ _ _ _ <;> norm_num;
-        · exact ContinuousOn.intervalIntegrable ( by exact continuousOn_of_forall_continuousAt fun x hx => ContinuousAt.div ( continuousAt_id.pow 4 ) ( continuousAt_const.sub continuousAt_id ) ( by linarith [ show ( x : ℝ ) ≤ 1 / n by exact ( Set.mem_Icc.mp <| by simpa [ show ( 0 : ℝ ) ≤ 1 / n by positivity ] using hx ) |>.2, show ( 1 : ℝ ) / n < 1 by rw [ div_lt_iff₀ ] <;> norm_cast <;> linarith ] ) );
-        · field_simp;
-          intro x hx₁ hx₂; rw [ div_le_div_iff₀ ] <;> nlinarith [ show ( n : ℝ ) ≥ 2 by norm_cast, pow_nonneg hx₁ 2, pow_nonneg hx₁ 3, pow_nonneg hx₁ 4, mul_le_mul_of_nonneg_left ( show ( n : ℝ ) ≥ 2 by norm_cast ) ( pow_nonneg hx₁ 4 ) ] ;
-      norm_num [ Finset.sum_range_succ ] at *;
-      rw [ abs_le ];
-      constructor <;> nlinarith [ abs_le.mp h_integral_bound, show ( n : ℝ ) ≥ 2 by norm_cast, inv_pos.mpr ( by positivity : 0 < ( n : ℝ ) ), inv_pos.mpr ( by positivity : 0 < ( n ^ 2 : ℝ ) ), inv_pos.mpr ( by positivity : 0 < ( n ^ 3 : ℝ ) ), inv_pos.mpr ( by positivity : 0 < ( n ^ 4 : ℝ ) ), inv_pos.mpr ( by positivity : 0 < ( n ^ 5 : ℝ ) ), mul_inv_cancel₀ ( by positivity : ( n : ℝ ) ≠ 0 ), mul_inv_cancel₀ ( by positivity : ( n ^ 2 : ℝ ) ≠ 0 ), mul_inv_cancel₀ ( by positivity : ( n ^ 3 : ℝ ) ≠ 0 ), mul_inv_cancel₀ ( by positivity : ( n ^ 4 : ℝ ) ≠ 0 ), mul_inv_cancel₀ ( by positivity : ( n ^ 5 : ℝ ) ≠ 0 ), div_mul_cancel₀ ( ( n ^ 5 : ℝ ) ⁻¹ / 5 ) ( by nlinarith [ inv_mul_cancel₀ ( by positivity : ( n : ℝ ) ≠ 0 ), ( by norm_cast : ( 2 :ℝ ) ≤ n ) ] : ( 1 - ( n :ℝ ) ⁻¹ ) ≠ 0 ) ];
-    -- Using the bounds from Lemma 25, we can simplify the expression.
-    have h_simplify : |(1 / (2 * (n : ℝ)) - 1 / (2 * ((n - 1) : ℝ))) - (-1 / (2 * (n : ℝ)^2) - 1 / (2 * (n : ℝ)^3) - 1 / (2 * (n : ℝ)^4))| ≤ 1 / (n : ℝ)^5 ∧ |(-1 / (12 * (n : ℝ)^2) + 1 / (12 * ((n - 1) : ℝ)^2)) - (1 / (6 * (n : ℝ)^3) + 1 / (4 * (n : ℝ)^4))| ≤ 1 / (n : ℝ)^5 := by
-      constructor <;> rw [ abs_le ] <;> constructor <;> ring_nf;
-      · field_simp;
-        nlinarith only [ show ( n : ℝ ) ≥ 2 by norm_cast, pow_pos ( show ( n : ℝ ) > 0 by positivity ) 2, pow_pos ( show ( n : ℝ ) > 0 by positivity ) 3, pow_pos ( show ( n : ℝ ) > 0 by positivity ) 4, mul_div_cancel₀ ( ( n : ℝ ) ^ 4 ) ( by linarith [ show ( n : ℝ ) ≥ 2 by norm_cast ] : ( -1 + n : ℝ ) ≠ 0 ) ];
-      · field_simp;
-        nlinarith only [ show ( n : ℝ ) ≥ 2 by norm_cast, pow_pos ( by positivity : 0 < ( n : ℝ ) ) 2, pow_pos ( by positivity : 0 < ( n : ℝ ) ) 3, pow_pos ( by positivity : 0 < ( n : ℝ ) ) 4, mul_div_cancel₀ ( ( n : ℝ ) ^ 4 ) ( by linarith [ show ( n : ℝ ) ≥ 2 by norm_cast ] : ( -1 + n : ℝ ) ≠ 0 ) ];
-      · field_simp;
-        rw [ add_div', mul_div_assoc' ] <;> try nlinarith [ show ( n : ℝ ) ≥ 2 by norm_cast ];
-        rw [ le_div_iff₀ ] <;> nlinarith only [ show ( n : ℝ ) ≥ 2 by norm_cast, pow_pos ( show ( n : ℝ ) > 0 by positivity ) 3, pow_pos ( show ( n : ℝ ) > 0 by positivity ) 4 ];
-      · field_simp;
-        rw [ add_div', mul_div_assoc' ] <;> try nlinarith [ ( by norm_cast : ( 2 : ℝ ) ≤ n ) ];
-        rw [ div_le_iff₀ ] <;> nlinarith only [ show ( n : ℝ ) ≥ 2 by norm_cast, pow_pos ( show ( n : ℝ ) > 0 by positivity ) 3, pow_pos ( show ( n : ℝ ) > 0 by positivity ) 4 ];
-    unfold f;
-    rw [ Nat.cast_pred ( by linarith ) ] ; ring_nf at *; exact abs_le.mpr ⟨ by linarith [ abs_le.mp h_log, abs_le.mp h_simplify.1, abs_le.mp h_simplify.2 ], by linarith [ abs_le.mp h_log, abs_le.mp h_simplify.1, abs_le.mp h_simplify.2 ] ⟩ ;
-  exact ⟨ 10, by norm_num, h_diff ⟩
+          · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+          · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+          · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+        · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+        · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+      · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+      · exact Continuous.intervalIntegrable ( by continuity ) _ _;
+      · apply_rules [ Continuous.intervalIntegrable ] ; continuity;
+      · exact Continuous.intervalIntegrable ( by continuity ) _ _
+
+/-- Combined recurrence: P(k+1) = -(4k+5)(k+2)·P(k) + 2(k+1)(k+2)·S(k).
+    Derived algebraically from padeBound_ibp and mixedBound_ibp. -/
+lemma padeBound_recurrence (k : ℕ) :
+    padeBound (k + 1) = -(4 * ↑k + 5) * (↑(k + 2) : ℝ) * padeBound k
+      + 2 * (↑(k + 1) : ℝ) * (↑(k + 2) : ℝ) * secBound k := by
+  rw [padeBound_ibp, mixedBound_ibp]; push_cast; ring
+
+/-- Combined recurrence: S(k+1) = (2k+3)·P(k) - (k+1)·S(k).
+    Derived from secBound_decomp and mixedBound_ibp. -/
+lemma secBound_recurrence (k : ℕ) :
+    secBound (k + 1) = (2 * ↑k + 3) * padeBound k
+      - (↑(k + 1) : ℝ) * secBound k := by
+  rw [secBound_decomp, mixedBound_ibp]; push_cast; ring
 
 /-
-Lemma: The quantity delta = (m/(n-1) - e^x)/e^x has the expansion c1_delta/n + c2_delta/n^2 + O(1/n^3).
+Main integral identity: the Padé error equals (-1)^k / (k+1)! times the Padé integral,
+    and analogously for the secondary sequences.
 -/
-noncomputable def delta_val (x y : ℝ) (n : ℕ) : ℝ := (m_def x y n / (n - 1) - Real.exp x) / Real.exp x
+set_option maxHeartbeats 800000 in
+lemma ePade_integral_identity (k : ℕ) :
+    (ePadeNum k : ℝ) - (ePadeDen k : ℝ) * exp 1 =
+      (-1 : ℝ) ^ k / ↑(Nat.factorial (k + 1)) * padeBound k ∧
+    (eSecNum k : ℝ) - (eSecDen k : ℝ) * exp 1 =
+      (-1 : ℝ) ^ (k + 1) / ↑(Nat.factorial k) * secBound k := by
+        induction' k with k ih;
+        · constructor <;> norm_num [ ePadeNum_zero, ePadeDen_zero, eSecNum_zero, eSecDen_zero, padeBound_zero, secBound_zero ];
+        · norm_num [ ePadeNum_succ, ePadeDen_succ, eSecNum_succ, eSecDen_succ, Nat.factorial_succ ] at *;
+          rw [ padeBound_recurrence, secBound_recurrence ] at *;
+          field_simp at *;
+          grind +extAll
 
-noncomputable def c1_delta (x : ℝ) : ℝ := (1 - Real.exp (-x)) / 2
-noncomputable def c2_delta (x y : ℝ) : ℝ := (1 - Real.exp (-x)) / 2 + Real.exp (-x) * y
+/-! ## Section 5: Construction for choose_d -/
 
-theorem lem_delta_expansion (x : ℝ) (hx : x > 0) (R : ℝ) :
-  ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-  |delta_val x y n - (c1_delta x / n + c2_delta x y / n^2)| ≤ C / n^3 := by
-    obtain ⟨ C, hC₀, N, hN ⟩ := h_bound_approx x hx ( R + 1 );
-    refine' ⟨ C, hC₀, N + 2, fun n hn y hy => _ ⟩ ; simp_all +decide [ abs_le ];
-    convert hN n ( by linarith ) y ( by linarith ) ( by linarith ) using 1 <;> unfold c1_delta c2_delta c1_h c2_h delta_val h_def <;> ring_nf;
-    · rw [ show m_def x y n = Real.exp x * n + s_0 x + y / n by rfl ] ; norm_num [ Real.exp_neg ] ; ring_nf;
-      field_simp;
-      rw [ show s_0 x = - ( Real.exp x + 1 ) / 2 by rfl ] ; ring_nf;
-      rw [ show ( -n + n ^ 2 : ℝ ) = n * ( -1 + n ) by ring ] ; norm_num ; ring_nf;
-      constructor <;> intro <;> nlinarith [ inv_mul_cancel_left₀ ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ) ( Real.exp x ), inv_mul_cancel_left₀ ( show ( -1 + n : ℝ ) ≠ 0 by linarith [ show ( n : ℝ ) ≥ 2 by norm_cast; linarith ] ) ( Real.exp x ), inv_mul_cancel_left₀ ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ) ( ( n : ℝ ) ⁻¹ ), inv_mul_cancel_left₀ ( show ( -1 + n : ℝ ) ≠ 0 by linarith [ show ( n : ℝ ) ≥ 2 by norm_cast; linarith ] ) ( ( n : ℝ ) ⁻¹ ), Real.exp_pos x ];
-    · unfold m_def; ring_nf;
-      norm_num [ Real.exp_neg, mul_assoc, mul_comm, mul_left_comm, ne_of_gt ( Real.exp_pos x ) ] ; ring_nf;
-      rw [ show ( -1 + n : ℝ ) ⁻¹ = ( n : ℝ ) ⁻¹ * ( 1 - ( n : ℝ ) ⁻¹ ) ⁻¹ by rw [ ← mul_inv, mul_sub, mul_one, mul_inv_cancel₀ ( by norm_cast; linarith ) ] ; ring ] ; norm_num ; ring_nf;
-      rw [ show s_0 x = - ( Real.exp x + 1 ) / 2 by rfl ] ; ring_nf;
-      norm_num [ ne_of_gt ( Real.exp_pos x ), ne_of_gt ( show 0 < ( n : ℝ ) by norm_cast; linarith ) ] ; ring_nf;
-      constructor <;> intro <;> nlinarith [ inv_pos.mpr ( show 0 < ( n : ℝ ) by norm_cast; linarith ), inv_pos.mpr ( show 0 < ( 1 - ( n : ℝ ) ⁻¹ ) by exact sub_pos.mpr ( inv_lt_one_of_one_lt₀ ( by norm_cast; linarith ) ) ), mul_inv_cancel₀ ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ), mul_inv_cancel₀ ( show ( 1 - ( n : ℝ ) ⁻¹ ) ≠ 0 by exact sub_ne_zero.mpr ( ne_of_gt ( inv_lt_one_of_one_lt₀ ( by norm_cast; linarith ) ) ) ) ]
+theorem ePadeDen_exp_growth (k : ℕ) : (ePadeDen k : ℝ) ≥ 3 ^ k := by
+  induction' k with k ih <;> norm_num [ *, pow_succ' ] at *;
+  have h_sub : (ePadeDen (k + 1) : ℝ) = (4 * k + 5) * (ePadeDen k : ℝ) + 2 * (eSecDen k : ℝ) := by
+    exact_mod_cast ePadeDen_succ k;
+  have h_sub2 : (eSecDen k : ℝ) ≥ 0 := by
+    have h_pos : ∀ k, 0 < eSecDen k := by
+      intro k; induction' k with k ih <;> norm_num [ *, eSecDen_succ ] ;
+      exact add_pos_of_nonneg_of_pos ( mul_nonneg ( by positivity ) ( mod_cast ePadeDen_pos k |> le_of_lt ) ) ih
+    norm_cast at *; exact le_of_lt (h_pos k);
+  nlinarith [ pow_pos ( by norm_num : ( 0 : ℝ ) < 3 ) k ]
+
+/-! ## Section 6: Key identities for asymptotic analysis -/
+
+/-- The eSecDen sequence is positive. -/
+lemma eSecDen_pos : ∀ k, 0 < eSecDen k := by
+  intro k; induction' k with k ih
+  · norm_num [eSecDen_zero]
+  · rw [eSecDen_succ]
+    exact add_pos_of_nonneg_of_pos
+      (mul_nonneg (by positivity) (mod_cast ePadeDen_pos k |>.le)) ih
 
 /-
-Lemma: The expansion of log(m/(n-1)) - x is c1/n + c2/n^2 + O(1/n^3).
+The Padé–secondary factorial identity: eSecDen k · P(k) + (k+1) · ePadeDen k · S(k) = (k+1)!.
+    Derived from the integral identities and the determinant.
 -/
-theorem lem_log_expansion (x : ℝ) (hx : x > 0) (R : ℝ) :
-  ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-  |Real.log (m_def x y n / (n - 1)) - x - (c1_log x / n + c2_log x y / n^2)| ≤ C / n^3 := by
-    obtain ⟨ C₁, hC₁, N₁, hN₁ ⟩ := @lem_delta_expansion x hx R;
-    -- For large n, |delta| <= 1/2, so |log(1+delta) - (delta - delta^2/2)| <= |delta|^3.
-    obtain ⟨ N₂, hN₂ ⟩ : ∃ N₂ : ℕ, ∀ n ≥ N₂, ∀ y : ℝ, |y| ≤ R → |delta_val x y n| ≤ 1 / 2 := by
-      -- By definition of $delta_val$, we know that $|delta_val x y n|$ is bounded for large $n$.
-      have h_delta_bound : ∃ N₂ : ℕ, ∀ n ≥ N₂, ∀ y : ℝ, |y| ≤ R → |c1_delta x / n + c2_delta x y / n^2| ≤ 1 / 4 := by
-        -- We'll use that $c1_delta x$ and $c2_delta x y$ are bounded.
-        have h_bounded : ∃ M : ℝ, ∀ y : ℝ, |y| ≤ R → |c1_delta x| ≤ M ∧ |c2_delta x y| ≤ M := by
-          unfold c1_delta c2_delta;
-          norm_num [ abs_le ];
-          exact ⟨ |(1 - Real.exp ( -x )) / 2| + |Real.exp ( -x )| * R, fun y hy₁ hy₂ => ⟨ ⟨ by cases abs_cases ( ( 1 - Real.exp ( -x ) ) / 2 ) <;> cases abs_cases ( Real.exp ( -x ) ) <;> nlinarith [ Real.exp_pos ( -x ) ], by cases abs_cases ( ( 1 - Real.exp ( -x ) ) / 2 ) <;> cases abs_cases ( Real.exp ( -x ) ) <;> nlinarith [ Real.exp_pos ( -x ) ] ⟩, by cases abs_cases ( ( 1 - Real.exp ( -x ) ) / 2 ) <;> cases abs_cases ( Real.exp ( -x ) ) <;> nlinarith [ Real.exp_pos ( -x ) ], by cases abs_cases ( ( 1 - Real.exp ( -x ) ) / 2 ) <;> cases abs_cases ( Real.exp ( -x ) ) <;> nlinarith [ Real.exp_pos ( -x ) ] ⟩ ⟩;
-        obtain ⟨ M, hM ⟩ := h_bounded;
-        refine' ⟨ ⌈4 * M * 4⌉₊ + 1, fun n hn y hy => _ ⟩ ; rw [ abs_le ] ; constructor <;> nlinarith [ Nat.le_ceil ( 4 * M * 4 ), show ( n : ℝ ) ≥ ⌈4 * M * 4⌉₊ + 1 by exact_mod_cast hn, abs_le.mp ( hM y hy |>.1 ), abs_le.mp ( hM y hy |>.2 ), div_mul_cancel₀ ( c1_delta x ) ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ), div_mul_cancel₀ ( c2_delta x y ) ( show ( n ^ 2 : ℝ ) ≠ 0 by norm_cast; nlinarith ) ];
-      -- Choose N₂ such that for all n ≥ N₂, C₁ / n^3 ≤ 1/4.
-      obtain ⟨ N₂, hN₂ ⟩ : ∃ N₂ : ℕ, ∀ n ≥ N₂, C₁ / (n : ℝ) ^ 3 ≤ 1 / 4 := by
-        exact ⟨ ⌈C₁ * 4⌉₊ + 1, fun n hn => by rw [ div_le_iff₀ ] <;> nlinarith [ Nat.le_ceil ( C₁ * 4 ), show ( n : ℝ ) ≥ ⌈C₁ * 4⌉₊ + 1 by exact_mod_cast hn, pow_two ( n : ℝ ) ] ⟩;
-      exact ⟨ Max.max N₁ N₂ + h_delta_bound.choose, fun n hn y hy => abs_le.mpr ⟨ by linarith [ abs_le.mp ( hN₁ n ( by linarith [ le_max_left N₁ N₂, h_delta_bound.choose_spec n ( by linarith [ le_max_left N₁ N₂, le_max_right N₁ N₂ ] ) y hy ] ) y hy ), abs_le.mp ( h_delta_bound.choose_spec n ( by linarith [ le_max_left N₁ N₂, le_max_right N₁ N₂ ] ) y hy ), hN₂ n ( by linarith [ le_max_left N₁ N₂, le_max_right N₁ N₂ ] ) ], by linarith [ abs_le.mp ( hN₁ n ( by linarith [ le_max_left N₁ N₂, h_delta_bound.choose_spec n ( by linarith [ le_max_left N₁ N₂, le_max_right N₁ N₂ ] ) y hy ] ) y hy ), abs_le.mp ( h_delta_bound.choose_spec n ( by linarith [ le_max_left N₁ N₂, le_max_right N₁ N₂ ] ) y hy ), hN₂ n ( by linarith [ le_max_left N₁ N₂, le_max_right N₁ N₂ ] ) ] ⟩ ⟩;
-    -- For large n, |delta|^3 is O(1/n^3), so we can bound the error term by a constant times 1/n^3.
-    obtain ⟨ C₂, hC₂, N₃, hN₃ ⟩ : ∃ C₂ > 0, ∃ N₃ : ℕ, ∀ n ≥ N₃, ∀ y : ℝ, |y| ≤ R → |Real.log (1 + delta_val x y n) - (delta_val x y n - delta_val x y n ^ 2 / 2)| ≤ C₂ / (n : ℝ) ^ 3 := by
-      obtain ⟨ C₂, hC₂, N₃, hN₃ ⟩ : ∃ C₂ > 0, ∃ N₃ : ℕ, ∀ n ≥ N₃, ∀ y : ℝ, |y| ≤ R → |delta_val x y n|^3 ≤ C₂ / (n : ℝ) ^ 3 := by
-        -- Using the expansion from lem_delta_expansion, we can bound |delta_val x y n| by a constant times 1/n.
-        obtain ⟨ C₃, hC₃, N₃, hN₃ ⟩ : ∃ C₃ > 0, ∃ N₃ : ℕ, ∀ n ≥ N₃, ∀ y : ℝ, |y| ≤ R → |delta_val x y n| ≤ C₃ / (n : ℝ) := by
-          have h_bound : ∃ C₃ > 0, ∃ N₃ : ℕ, ∀ n ≥ N₃, ∀ y : ℝ, |y| ≤ R → |c1_delta x / (n : ℝ) + c2_delta x y / (n : ℝ)^2| ≤ C₃ / (n : ℝ) := by
-            -- Since $|c2_delta x y|$ is bounded for $|y| \leq R$, we can find a constant $M$ such that $|c2_delta x y| \leq M$ for all $y$ with $|y| \leq R$.
-            obtain ⟨ M, hM ⟩ : ∃ M > 0, ∀ y : ℝ, |y| ≤ R → |c2_delta x y| ≤ M := by
-              exact ⟨ |( 1 - Real.exp ( -x ) ) / 2| + |Real.exp ( -x ) * R| + 1, by positivity, fun y hy => by rw [ show c2_delta x y = ( 1 - Real.exp ( -x ) ) / 2 + Real.exp ( -x ) * y by rfl ] ; exact abs_le.mpr ⟨ by cases abs_cases ( ( 1 - Real.exp ( -x ) ) / 2 ) <;> cases abs_cases ( Real.exp ( -x ) * R ) <;> nlinarith [ abs_le.mp hy, Real.exp_pos ( -x ) ], by cases abs_cases ( ( 1 - Real.exp ( -x ) ) / 2 ) <;> cases abs_cases ( Real.exp ( -x ) * R ) <;> nlinarith [ abs_le.mp hy, Real.exp_pos ( -x ) ] ⟩ ⟩;
-            refine' ⟨ |c1_delta x| + M + 1, by linarith [ abs_nonneg ( c1_delta x ) ], 1, fun n hn y hy => _ ⟩;
-            rw [ abs_le ];
-            constructor <;> cases abs_cases ( c1_delta x ) <;> nlinarith [ show ( n : ℝ ) ≥ 1 by norm_cast, div_mul_cancel₀ ( |c1_delta x| + M + 1 ) ( by positivity : ( n : ℝ ) ≠ 0 ), div_mul_cancel₀ ( c1_delta x ) ( by positivity : ( n : ℝ ) ≠ 0 ), div_mul_cancel₀ ( c2_delta x y ) ( by positivity : ( n ^ 2 : ℝ ) ≠ 0 ), abs_le.mp ( hM.2 y hy ), show ( n : ℝ ) ^ 2 ≥ n by norm_cast; nlinarith ];
-          obtain ⟨ C₃, hC₃, N₃, hN₃ ⟩ := h_bound;
-          use C₃ + C₁ + 1, by positivity, max N₁ (max N₂ N₃) + 1; intros n hn y hy; specialize hN₁ n (by
-          linarith [ Nat.le_max_left N₁ ( max N₂ N₃ ) ]) y hy; specialize hN₃ n (by
-          linarith [ Nat.le_max_left N₁ ( max N₂ N₃ ), Nat.le_max_right N₁ ( max N₂ N₃ ), Nat.le_max_left N₂ N₃, Nat.le_max_right N₂ N₃ ]) y hy; specialize hN₂ n (by
-          linarith [ Nat.le_max_left N₁ ( max N₂ N₃ ), Nat.le_max_right N₁ ( max N₂ N₃ ), Nat.le_max_left N₂ N₃, Nat.le_max_right N₂ N₃ ]) y hy; (
-          rw [ abs_le ] at *;
-          constructor <;> ring_nf at * <;> nlinarith [ inv_pos.mpr ( show 0 < ( n : ℝ ) by norm_cast; linarith [ Nat.le_max_left N₁ ( Max.max N₂ N₃ ), Nat.le_max_right N₁ ( Max.max N₂ N₃ ), Nat.le_max_left N₂ N₃, Nat.le_max_right N₂ N₃ ] ), mul_inv_cancel₀ ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith [ Nat.le_max_left N₁ ( Max.max N₂ N₃ ), Nat.le_max_right N₁ ( Max.max N₂ N₃ ), Nat.le_max_left N₂ N₃, Nat.le_max_right N₂ N₃ ] ) ]);
-        exact ⟨ C₃ ^ 3, pow_pos hC₃ 3, N₃, fun n hn y hy => le_trans ( pow_le_pow_left₀ ( abs_nonneg _ ) ( hN₃ n hn y hy ) 3 ) ( by ring_nf; norm_num ) ⟩;
-      -- Using the Taylor series expansion of log(1 + delta), we have |log(1 + delta) - (delta - delta^2/2)| ≤ |delta|^3.
-      have h_log_taylor : ∀ delta : ℝ, |delta| ≤ 1 / 2 → |Real.log (1 + delta) - (delta - delta^2 / 2)| ≤ |delta|^3 := by
-        exact fun delta a => taylor_log_bound delta a;
-      exact ⟨ C₂, hC₂, Max.max N₂ N₃, fun n hn y hy => le_trans ( h_log_taylor _ ( hN₂ n ( le_trans ( le_max_left _ _ ) hn ) y hy ) ) ( hN₃ n ( le_trans ( le_max_right _ _ ) hn ) y hy ) ⟩;
-    -- For large n, delta^2 is (c1_delta/n)^2 + O(1/n^3) = c1_delta^2/n^2 + O(1/n^3).
-    obtain ⟨ C₃, hC₃, N₄, hN₄ ⟩ : ∃ C₃ > 0, ∃ N₄ : ℕ, ∀ n ≥ N₄, ∀ y : ℝ, |y| ≤ R → |delta_val x y n ^ 2 / 2 - (c1_delta x ^ 2 / (2 * (n : ℝ)^2))| ≤ C₃ / (n : ℝ) ^ 3 := by
-      obtain ⟨ C₃, hC₃, N₄, hN₄ ⟩ := h_sq_bound_approx x hx R;
-      use C₃, hC₃, N₄ + 2;
-      intro n hn y hy; convert hN₄ n ( by linarith ) y hy using 1; unfold delta_val h_def c1_h c1_delta; ring_nf;
-      unfold m_def; norm_num [ Real.exp_neg, Real.exp_ne_zero ] ; ring_nf;
-      unfold s_0; ring_nf;
-      norm_num [ sq, mul_assoc, mul_comm, mul_left_comm, Real.exp_ne_zero ] ; ring_nf;
-      rw [ show ( -1 + n : ℝ ) = ( 1 - n * 2 + n ^ 2 ) / ( n - 1 ) by rw [ eq_div_iff ] <;> nlinarith [ show ( n : ℝ ) ≥ 2 by norm_cast; linarith ] ] ; norm_num ; ring_nf;
-      exact congr_arg _ ( by nlinarith [ inv_mul_cancel₀ ( by nlinarith [ show ( n : ℝ ) ≥ 2 by norm_cast; linarith ] : ( 1 - n * 2 + n ^ 2 : ℝ ) ≠ 0 ) ] );
-    -- Substitute the expansion of delta into the goal.
-    have h_subst : ∀ n ≥ max N₂ (max N₁ (max N₃ N₄)), ∀ y : ℝ, |y| ≤ R → Real.log (m_def x y n / (n - 1)) - x = Real.log (1 + delta_val x y n) := by
-      intros n hn y hy
-      have h_delta : m_def x y n / (n - 1) = Real.exp x * (1 + delta_val x y n) := by
-        unfold delta_val m_def; ring_nf;
-        norm_num [ sq, mul_assoc, mul_comm, mul_left_comm, Real.exp_ne_zero ] ; ring;
-      rw [ h_delta, Real.log_mul ( by positivity ) ( by linarith [ abs_le.mp ( hN₂ n ( by linarith [ le_max_left N₂ ( max N₁ ( max N₃ N₄ ) ) ] ) y hy ) ] ), Real.log_exp ] ; ring;
-    refine' ⟨ C₁ + C₂ + C₃, by positivity, max N₂ ( max N₁ ( max N₃ N₄ ) ), fun n hn y hy => _ ⟩ ; simp_all +decide [ abs_le ];
-    unfold c1_log c2_log c1_delta c2_delta at *;
-    constructor <;> ring_nf at * <;> linarith [ hN₁ n hn.2.1 y hy.1 hy.2, hN₃ n hn.2.2.1 y hy.1 hy.2, hN₄ n hn.2.2.2 y hy.1 hy.2 ]
+lemma pade_sec_factorial_identity (k : ℕ) :
+    (eSecDen k : ℝ) * padeBound k + (↑(k + 1) : ℝ) * (ePadeDen k : ℝ) * secBound k =
+      ↑(Nat.factorial (k + 1)) := by
+  -- By multiplying equation (1) by $eSemDen k$ and equation (2) by $ePadeDen k$, we can eliminate the $e$ term.
+  have h_lim : (ePadeDen k : ℝ) * ((eSecNum k : ℝ) - (eSecDen k : ℝ) * Real.exp 1) - (eSecDen k : ℝ) * ((ePadeNum k : ℝ) - (ePadeDen k : ℝ) * Real.exp 1) = -(-1 : ℝ) ^ k := by
+    exact Eq.symm ( by have := convergent_det k; push_cast [ ← @Int.cast_inj ℝ .. ] at *; linarith ) ;
+  -- Substitute the integral identities into the equation.
+  have h_subst : (ePadeDen k : ℝ) * (-1 : ℝ) ^ (k + 1) / (Nat.factorial k) * secBound k - (eSecDen k : ℝ) * (-1 : ℝ) ^ k / (Nat.factorial (k + 1)) * padeBound k = -(-1 : ℝ) ^ k := by
+    convert h_lim using 1 ; rw [ ePade_integral_identity k |>.1, ePade_integral_identity k |>.2 ] ; ring;
+  norm_num [ pow_succ', mul_assoc, mul_comm, mul_left_comm, div_eq_mul_inv ] at *;
+  norm_num [ Nat.factorial_succ ] at *;
+  field_simp at *;
+  linarith
 
 /-
-Lemma: The expansion of 1/(2m) is c1_inv_m/n + c2_inv_m/n^2 + O(1/n^3).
+The inverse of the error coefficient decomposes as eSecDen k / ePadeDen k + (k+1) · S(k)/P(k).
 -/
-noncomputable def c1_inv_m (x : ℝ) : ℝ := Real.exp (-x) / 2
-noncomputable def c2_inv_m (x : ℝ) : ℝ := (Real.exp (-2 * x) + Real.exp (-x)) / 4
-
-theorem lem_inv_m_expansion (x : ℝ) (R : ℝ) :
-  ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-  |1 / (2 * m_def x y n) - (c1_inv_m x / (n : ℝ) + c2_inv_m x / (n : ℝ)^2)| ≤ C / (n : ℝ)^3 := by
-    -- We have $1/(2m) = 1/(2(e^x n + s)) = e^{-x}/(2n) * (1 + s e^{-x}/n)^{-1}$.
-    -- $s e^{-x} = -(e^{-x}+1)/2 + y e^{-x}/n$.
-    -- $(1 + s e^{-x}/n)^{-1} = 1 - s e^{-x}/n + O(1/n^2)$.
-    -- $1/(2m) = e^{-x}/(2n) (1 - (-(e^{-x}+1)/2)/n) + O(1/n^3)$
-    -- $= e^{-x}/(2n) + e^{-x}(e^{-x}+1)/(4n^2) + O(1/n^3)$
-    -- $= e^{-x}/(2n) + (e^{-2x}+e^{-x})/(4n^2) + O(1/n^3)$.
-    have h_inv_m_expansion : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-      |1 / (2 * (Real.exp x * n + s_0 x + y / n)) - (Real.exp (-x) / (2 * n) + (Real.exp (-2 * x) + Real.exp (-x)) / (4 * n^2))| ≤ C / (n : ℝ)^3 := by
-        -- Let's simplify the expression inside the absolute value.
-        suffices h_simplify : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-          |(1 / (1 + ((s_0 x + y / n) * Real.exp (-x)) / n) - (1 - (-(Real.exp (-x) + 1) / 2) / n)) / (2 * n * Real.exp x)| ≤ C / (n : ℝ)^3 by
-            obtain ⟨ C, hC₀, N, hN ⟩ := h_simplify; use C, hC₀, N+2; intros n hn y hy; convert hN n ( by linarith ) y hy using 1 ; ring_nf;
-            norm_num [ Real.exp_neg, Real.exp_mul ] ; ring_nf;
-            field_simp;
-            field_simp;
-            rw [ show ( Real.exp x * ( - ( n * 4 ) + -2 ) + -2 ) / n ^ 2 + Real.exp x ^ 2 * 4 / ( ( Real.exp x * n ^ 2 + y ) / n + s_0 x ) = ( Real.exp x * ( n * 4 * ( -1 + Real.exp x / ( Real.exp x + s_0 x / n + y / n ^ 2 ) ) + -2 ) + -2 ) / ( n ^ 2 ) by
-                  by_cases hn : n = 0 <;> simp_all +decide [s_0, div_eq_mul_inv, mul_assoc,
-                    mul_comm, sq] ; ring_nf;
-                  field_simp [hn]
-                  ring ] ; ring_nf;
-        -- We'll use the fact that $1 / (1 + z) = 1 - z + O(z^2)$ for $z$ close to $0$.
-        have h_inv_approx : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-          |1 / (1 + ((s_0 x + y / n) * Real.exp (-x)) / n) - (1 - ((s_0 x + y / n) * Real.exp (-x)) / n)| ≤ C / (n : ℝ)^2 := by
-            -- We'll use the fact that $|(1 + z)^{-1} - (1 - z)| \leq 2z^2$ for $|z| \leq 1/2$.
-            have h_inv_approx : ∀ z : ℝ, |z| ≤ 1 / 2 → |1 / (1 + z) - (1 - z)| ≤ 2 * z^2 := by
-              intro z hz; rw [ abs_le ] ; constructor <;> nlinarith [ abs_le.mp hz, mul_div_cancel₀ 1 ( show ( 1 + z ) ≠ 0 by linarith [ abs_le.mp hz ] ), sq_nonneg ( z ) ] ;
-            -- Let's choose $C = 2 * (|s_0 x| + R + 1)^2 * \exp(-2x)$.
-            use 2 * (|s_0 x| + R + 1)^2 * Real.exp (-2 * x) + 1, by
-              positivity;
-            refine' ⟨ ⌈2 * ( |s_0 x| + R + 1 ) * Real.exp ( -x ) ⌉₊ + 1, fun n hn y hy => le_trans ( h_inv_approx _ _ ) _ ⟩ <;> norm_num [ abs_div, abs_mul, abs_of_nonneg, Real.exp_nonneg ] at *;
-            · rw [ div_le_iff₀ ( by norm_cast; linarith ) ];
-              rw [ abs_le ] at *;
-              cases abs_cases ( s_0 x + y / n ) <;> cases abs_cases ( s_0 x ) <;> nlinarith [ Nat.le_ceil ( 2 * ( |s_0 x| + R + 1 ) * Real.exp ( -x ) ), show ( n : ℝ ) ≥ ⌈2 * ( |s_0 x| + R + 1 ) * Real.exp ( -x ) ⌉₊ + 1 by exact_mod_cast hn, Real.exp_pos ( -x ), mul_div_cancel₀ y ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ) ];
-            · -- Let's simplify the expression inside the absolute value further.
-              have h_simplify : |(s_0 x + y / n) * Real.exp (-x)| ≤ (|s_0 x| + R + 1) * Real.exp (-x) := by
-                rw [ abs_mul, abs_of_nonneg ( Real.exp_pos _ |> le_of_lt ) ];
-                gcongr;
-                exact abs_le.mpr ⟨ by cases abs_cases ( s_0 x ) <;> nlinarith [ abs_le.mp hy, show ( n : ℝ ) ≥ ⌈2 * ( |s_0 x| + R + 1 ) * Real.exp ( -x ) ⌉₊ + 1 by exact_mod_cast hn, Real.exp_pos ( -x ), mul_div_cancel₀ y ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ) ], by cases abs_cases ( s_0 x ) <;> nlinarith [ abs_le.mp hy, show ( n : ℝ ) ≥ ⌈2 * ( |s_0 x| + R + 1 ) * Real.exp ( -x ) ⌉₊ + 1 by exact_mod_cast hn, Real.exp_pos ( -x ), mul_div_cancel₀ y ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ) ] ⟩;
-              rw [ div_pow, mul_div_assoc' ];
-              gcongr;
-              rw [ show ( - ( 2 * x ) ) = -x + -x by ring, Real.exp_add ] ; nlinarith [ abs_le.mp h_simplify, Real.exp_pos ( -x ), Real.exp_pos ( -x + -x ) ] ;
-        -- We'll use the fact that $|(s_0 x + y / n) * Real.exp (-x) / n - (-(Real.exp (-x) + 1) / 2) / n| \leq C / n^2$ for some constant $C$.
-        have h_diff_approx : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-          |((s_0 x + y / n) * Real.exp (-x) / n) - (-(Real.exp (-x) + 1) / 2) / n| ≤ C / (n : ℝ)^2 := by
-            unfold s_0; ring_nf; norm_num;
-            field_simp;
-            refine' ⟨ 2 * ( |Real.exp ( -x ) * Real.exp x| + |Real.exp ( -x ) * 2 * R| + 1 ), by positivity, 1, fun n hn y hy => _ ⟩ ; rw [ abs_div ] ; norm_num [ abs_mul, abs_of_nonneg, hn ];
-            field_simp;
-            rw [ abs_le ] ; constructor <;> cases abs_cases R <;> nlinarith [ abs_le.mp hy, Real.exp_pos x, Real.exp_pos ( -x ), Real.exp_neg x, mul_inv_cancel₀ ( ne_of_gt ( Real.exp_pos x ) ), mul_le_mul_of_nonneg_left ( show ( n : ℝ ) ≥ 1 by norm_cast ) ( Real.exp_nonneg x ), mul_le_mul_of_nonneg_left ( show ( n : ℝ ) ≥ 1 by norm_cast ) ( Real.exp_nonneg ( -x ) ) ];
-        -- By combining the results from h_inv_approx and h_diff_approx, we can bound the expression.
-        obtain ⟨C1, hC1_pos, N1, hC1⟩ := h_inv_approx
-        obtain ⟨C2, hC2_pos, N2, hC2⟩ := h_diff_approx
-        use (C1 + C2) / (2 * Real.exp x), by
-          positivity, max N1 N2 + 1;
-        intros n hn y hy
-        have h_combined : |(1 / (1 + ((s_0 x + y / n) * Real.exp (-x)) / n) - (1 - (-(Real.exp (-x) + 1) / 2) / n))| ≤ (C1 + C2) / (n : ℝ)^2 := by
-          have := hC1 n ( by linarith [ le_max_left N1 N2 ] ) y hy; have := hC2 n ( by linarith [ le_max_right N1 N2 ] ) y hy; rw [ abs_le ] at *; constructor <;> ring_nf at * <;> linarith;
-        rw [ abs_div, abs_of_nonneg ( by positivity : ( 0 : ℝ ) ≤ 2 * n * Real.exp x ) ];
-        convert mul_le_mul_of_nonneg_right h_combined ( inv_nonneg.mpr ( show ( 0 : ℝ ) ≤ 2 * n * Real.exp x by positivity ) ) using 1 ; ring;
-    convert h_inv_m_expansion using 8 ;unfold m_def c1_inv_m c2_inv_m ; ring_nf!
+lemma error_coeff_inv_decomp (k : ℕ) :
+    (↑(Nat.factorial (k + 1)) : ℝ) / (padeBound k * (ePadeDen k : ℝ)) =
+      (eSecDen k : ℝ) / (ePadeDen k : ℝ) + (↑(k + 1) : ℝ) * secBound k / padeBound k := by
+  rw [ div_add_div ];
+  · rw [ ← pade_sec_factorial_identity ] ; ring;
+  · exact_mod_cast ne_of_gt ( ePadeDen_pos k );
+  · exact ne_of_gt <| padeBound_pos k
 
 /-
-Lemma: The expansion of 1/(2(n-1)) is 1/(2n) + 1/(2n^2) + O(1/n^3).
+Bound on eSecDen k / ePadeDen k: for k ≥ 1, it equals 1/2 + ePadeDen(k-1)/(2·ePadeDen(k)),
+    and in particular is between 1/2 and 1.
 -/
-theorem lem_inv_n_expansion :
-  ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N,
-  |1 / (2 * ((n : ℝ) - 1)) - (1 / (2 * (n : ℝ)) + 1 / (2 * (n : ℝ)^2))| ≤ C / (n : ℝ)^3 := by
-    use 6; norm_num; use 2; intros n hn; rw [ abs_le ] ; constructor <;> ring_nf <;> norm_num at *;
-    · field_simp;
-      nlinarith [ show ( n : ℝ ) ≥ 2 by norm_cast, mul_div_cancel₀ ( ( n : ℝ ) ^ 2 ) ( by linarith [ show ( n : ℝ ) ≥ 2 by norm_cast ] : ( -1 + n : ℝ ) ≠ 0 ) ];
-    · field_simp;
-      rw [ div_le_iff₀ ] <;> nlinarith [ show ( n : ℝ ) ≥ 2 by norm_cast ]
+lemma eSecDen_ePadeDen_ratio_bound (k : ℕ) (hk : 1 ≤ k) :
+    (eSecDen k : ℝ) / (ePadeDen k : ℝ) ≤ 1 := by
+  refine' div_le_one_of_le₀ _ ( mod_cast ePadeDen_pos k |> le_of_lt );
+  norm_cast;
+  -- We prove this by induction on $k$.
+  induction' k with k ih;
+  · contradiction;
+  · by_cases hk : 1 ≤ k <;> simp_all +decide [ eSecDen_succ, ePadeDen_succ ];
+    nlinarith [ show 0 < ePadeDen k from ePadeDen_pos k, show 0 < eSecDen k from eSecDen_pos k ]
+
+/-! ## Section 7: Error coefficient asymptotics -/
 
 /-
-Lemma: The expansion of 1/(2m) - 1/(2(n-1)) is c1_inv/n + c2_inv/n^2 + O(1/n^3).
+Upper bound: (k+1) secBound k < (2k+3) padeBound k.
 -/
-theorem lem_inv_expansion (x : ℝ) (R : ℝ) :
-  ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-  |inv_term x y n - (c1_inv x / n + c2_inv x / n^2)| ≤ C / n^3 := by
-    obtain ⟨ C₁, hC₁, N₁, hC₁N₁ ⟩ := lem_inv_m_expansion x R
-    obtain ⟨ C₂, hC₂, N₂, hC₂N₂ ⟩ := lem_inv_n_expansion;
-    use C₁ + C₂;
-    refine' ⟨ add_pos hC₁ hC₂, Max.max N₁ N₂, fun n hn y hy => _ ⟩ ; simp_all +decide [ add_div ];
-    convert le_trans ( abs_sub _ _ ) ( add_le_add ( hC₁N₁ n hn.1 y hy ) ( hC₂N₂ n hn.2 ) ) using 1 ; unfold inv_term ; ring_nf;
-    unfold c1_inv c2_inv c1_inv_m c2_inv_m; ring_nf;
-    rw [ show ( -2 + n * 2 : ℝ ) = 2 * ( -1 + n ) by ring, mul_inv ] ; ring_nf
+lemma secBound_upper (k : ℕ) :
+    (↑(k + 1) : ℝ) * secBound k < (2 * ↑k + 3) * padeBound k := by
+  -- From secBound_recurrence, we have secBound (k + 1) = (2 * k + 3) * padeBound k - (k + 1) * secBound k.
+  have h_recurrence : secBound (k + 1) = (2 * k + 3) * padeBound k - (k + 1) * secBound k := by
+    exact_mod_cast secBound_recurrence k;
+  simp +zetaDelta at *;
+  linarith [ secBound_pos ( k + 1 ) ]
 
 /-
-Lemma: The expansion of the quadratic term is c2_quad/n^2 + O(1/n^3).
+The inverse of the error coefficient is at most 2k+4.
 -/
-noncomputable def c2_quad (x : ℝ) : ℝ := (1 - Real.exp (-2 * x)) / 12
-
-theorem lem_quad_expansion (x : ℝ) (R : ℝ) :
-  ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-  |quad_term x y n - c2_quad x / n^2| ≤ C / n^3 := by
-    by_contra! h_contra;
-    -- By definition of $quad_term$, we have:
-    have h_quad_def : ∀ n ≥ 2, ∀ y : ℝ, |y| ≤ R → quad_term x y n = -1 / (12 * (m_def x y n)^2) + 1 / (12 * ((n : ℝ) - 1)^2) := by
-      exact fun n a y a => rfl;
-    -- We have $1/m^2 = 1/(e^x n + s)^2 = e^{-2x}/n^2 * (1 + s e^{-x}/n)^{-2} = e^{-2x}/n^2 * (1 + O(1/n)) = e^{-2x}/n^2 + O(1/n^3)$.
-    have h_inv_m_sq : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |1 / (m_def x y n)^2 - Real.exp (-2 * x) / ((n : ℝ)^2)| ≤ C / ((n : ℝ)^3) := by
-      -- We have $1/m^2 = 1/(e^x n + s)^2 = e^{-2x}/n^2 * (1 + s e^{-x}/n)^{-2}$.
-      have h_inv_m_sq : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |1 / (m_def x y n)^2 - Real.exp (-2 * x) / ((n : ℝ)^2) * (1 + (s_0 x + y / n) * Real.exp (-x) / n)^(-2 : ℝ)| ≤ C / ((n : ℝ)^3) := by
-        -- We can factor out $e^{-2x}/n^2$ from the expression.
-        have h_factor : ∀ n ≥ 2, ∀ y : ℝ, |y| ≤ R → 1 / (m_def x y n)^2 = Real.exp (-2 * x) / ((n : ℝ)^2) * (1 + (s_0 x + y / n) * Real.exp (-x) / n)^(-2 : ℝ) := by
-          intros n hn y hy
-          have h_m_def : m_def x y n = Real.exp x * n + s_0 x + y / n := by
-            exact rfl
-          have h_inv_m_sq : 1 / (m_def x y n)^2 = 1 / (Real.exp x * n * (1 + (s_0 x + y / n) * Real.exp (-x) / n))^2 := by
-            rw [ h_m_def ] ; ring_nf; norm_num [ Real.exp_neg, Real.exp_ne_zero, mul_assoc, mul_comm, mul_left_comm, div_eq_mul_inv, ne_of_gt ( zero_lt_two.trans_le hn ) ] ; ring_nf;
-            -- Combine like terms and simplify the expression.
-            field_simp
-            ring
-          have h_inv_m_sq_simplified : 1 / (m_def x y n)^2 = Real.exp (-2 * x) / ((n : ℝ)^2) * (1 + (s_0 x + y / n) * Real.exp (-x) / n)^(-2 : ℝ) := by
-            rw [ h_inv_m_sq ] ; norm_cast ; norm_num ; ring_nf;
-            rw [ inv_eq_iff_eq_inv ] ; norm_num ; ring_nf;
-            norm_num [ ← Real.exp_nat_mul, ← Real.exp_neg ] ; ring_nf
-          exact h_inv_m_sq_simplified ▸ rfl;
-        exact ⟨ 1, by norm_num, 2, fun n hn y hy => by rw [ h_factor n hn y hy ] ; norm_num ⟩;
-      -- We have $(1 + (s_0 x + y / n) * Real.exp (-x) / n)^{-2} = 1 + O(1/n)$.
-      have h_inv_sq_approx : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |(1 + (s_0 x + y / n) * Real.exp (-x) / n)^(-2 : ℝ) - 1| ≤ C / ((n : ℝ)) := by
-        -- We have $(1 + (s_0 x + y / n) * Real.exp (-x) / n)^{-2} = 1 + O(1/n)$ by the binomial approximation.
-        have h_inv_sq_approx : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |(1 + (s_0 x + y / n) * Real.exp (-x) / n)^(-2 : ℝ) - 1| ≤ C * |(s_0 x + y / n) * Real.exp (-x) / n| := by
-          -- We have $(1 + z)^{-2} = 1 - 2z + O(z^2)$ for $z$ close to $0$.
-          have h_inv_sq_approx : ∃ C > 0, ∀ z : ℝ, |z| ≤ 1 / 2 → |(1 + z)^(-2 : ℝ) - 1| ≤ C * |z| := by
-            use 8, by norm_num, fun z hz => ?_;
-            norm_cast ; norm_num;
-            rw [ abs_le ] at *;
-            constructor <;> cases abs_cases z <;> nlinarith [ inv_mul_cancel₀ ( by nlinarith : ( 1 + z ) ^ 2 ≠ 0 ), pow_two_nonneg ( z + 1 / 2 ), pow_two_nonneg ( z - 1 / 2 ) ];
-          -- Choose $N$ such that for all $n \geq N$, $|(s_0 x + y / n) * Real.exp (-x) / n| \leq 1 / 2$.
-          obtain ⟨N, hN⟩ : ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |(s_0 x + y / n) * Real.exp (-x) / n| ≤ 1 / 2 := by
-            -- We'll use the fact that |s_0 x + y / n| is bounded for large n.
-            have h_bound : ∃ C > 0, ∀ n : ℕ, n ≥ 1 → ∀ y : ℝ, |y| ≤ R → |s_0 x + y / n| ≤ C := by
-              use |s_0 x| + R + 1;
-              exact ⟨ by linarith [ abs_nonneg ( s_0 x ), show 0 ≤ R by exact le_trans ( abs_nonneg _ ) ( h_contra 1 zero_lt_one 0 |> Classical.choose_spec |> And.right |> Classical.choose_spec |> And.left ) ], fun n hn y hy => abs_le.mpr ⟨ by cases abs_cases ( s_0 x ) <;> nlinarith [ abs_le.mp hy, show ( n : ℝ ) ≥ 1 by norm_cast, div_mul_cancel₀ y ( by positivity : ( n : ℝ ) ≠ 0 ) ], by cases abs_cases ( s_0 x ) <;> nlinarith [ abs_le.mp hy, show ( n : ℝ ) ≥ 1 by norm_cast, div_mul_cancel₀ y ( by positivity : ( n : ℝ ) ≠ 0 ) ] ⟩ ⟩;
-            obtain ⟨ C, hC₀, hC ⟩ := h_bound;
-            norm_num [ abs_div, abs_mul ];
-            exact ⟨ ⌈2 * C * Real.exp ( -x ) ⌉₊ + 1, fun n hn y hy => by rw [ div_le_iff₀ ( by norm_cast; linarith ) ] ; nlinarith [ Nat.le_ceil ( 2 * C * Real.exp ( -x ) ), show ( n : ℝ ) ≥ ⌈2 * C * Real.exp ( -x ) ⌉₊ + 1 by exact_mod_cast hn, abs_nonneg ( s_0 x + y / n ), hC n ( by linarith ) y hy, Real.exp_pos ( -x ), mul_le_mul_of_nonneg_right ( hC n ( by linarith ) y hy ) ( Real.exp_nonneg ( -x ) ) ] ⟩;
-          exact ⟨ h_inv_sq_approx.choose, h_inv_sq_approx.choose_spec.1, N, fun n hn y hy => h_inv_sq_approx.choose_spec.2 _ ( hN n hn y hy ) ⟩;
-        -- We have $|(s_0 x + y / n) * Real.exp (-x) / n| \leq C / n$ for some constant $C$.
-        have h_bound : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |(s_0 x + y / n) * Real.exp (-x) / n| ≤ C / ((n : ℝ)) := by
-          use |s_0 x * Real.exp (-x)| + R * |Real.exp (-x)| + 1, by
-            exact add_pos_of_nonneg_of_pos ( add_nonneg ( abs_nonneg _ ) ( mul_nonneg ( show 0 ≤ R by obtain ⟨ n, hn, y, hy, h ⟩ := h_contra 1 zero_lt_one 0; linarith [ abs_le.mp hy ] ) ( abs_nonneg _ ) ) ) zero_lt_one, 1, by
-            intros n hn y hy
-            have h_bound : |(s_0 x + y / n) * Real.exp (-x)| ≤ |s_0 x * Real.exp (-x)| + R * |Real.exp (-x)| := by
-              rw [ abs_mul, abs_mul ];
-              rw [ ← add_mul ];
-              exact mul_le_mul_of_nonneg_right ( abs_le.mpr ⟨ by cases abs_cases ( s_0 x ) <;> cases abs_cases y <;> nlinarith [ show ( n : ℝ ) ≥ 1 by norm_cast, div_mul_cancel₀ y ( by positivity : ( n : ℝ ) ≠ 0 ) ], by cases abs_cases ( s_0 x ) <;> cases abs_cases y <;> nlinarith [ show ( n : ℝ ) ≥ 1 by norm_cast, div_mul_cancel₀ y ( by positivity : ( n : ℝ ) ≠ 0 ) ] ⟩ ) ( abs_nonneg _ );
-            rw [ abs_div, abs_of_nonneg ( by positivity : ( 0 : ℝ ) ≤ n ) ] ; gcongr ; linarith [ abs_nonneg ( ( s_0 x + y / n ) * Real.exp ( -x ) ) ] ;
-        obtain ⟨ C₁, hC₁, N₁, hN₁ ⟩ := h_inv_sq_approx; obtain ⟨ C₂, hC₂, N₂, hN₂ ⟩ := h_bound; exact ⟨ C₁ * C₂, mul_pos hC₁ hC₂, Max.max N₁ N₂, fun n hn y hy => le_trans ( hN₁ n ( le_trans ( le_max_left _ _ ) hn ) y hy ) ( by simpa only [ mul_div_assoc ] using mul_le_mul_of_nonneg_left ( hN₂ n ( le_trans ( le_max_right _ _ ) hn ) y hy ) hC₁.le ) ⟩ ;
-      obtain ⟨ C₁, hC₁_pos, N₁, hN₁ ⟩ := h_inv_m_sq
-      obtain ⟨ C₂, hC₂_pos, N₂, hN₂ ⟩ := h_inv_sq_approx
-      use C₁ + C₂ * Real.exp (-2 * x), by
-        positivity, max N₁ N₂ + 1
-      intro n hn y hy
-      have h_diff : |Real.exp (-2 * x) / ((n : ℝ)^2) * ((1 + (s_0 x + y / n) * Real.exp (-x) / n)^(-2 : ℝ) - 1)| ≤ C₂ * Real.exp (-2 * x) / ((n : ℝ)^3) := by
-        rw [ abs_mul, abs_of_nonneg ( by positivity ) ];
-        convert mul_le_mul_of_nonneg_left ( hN₂ n ( by linarith [ Nat.le_max_right N₁ N₂ ] ) y hy ) ( by positivity : 0 ≤ Real.exp ( -2 * x ) / ( n : ℝ ) ^ 2 ) using 1 ; ring
-      generalize_proofs at *;
-      exact abs_le.mpr ⟨ by have := abs_le.mp ( hN₁ n ( by linarith [ le_max_left N₁ N₂ ] ) y hy ) ; have := abs_le.mp h_diff; ring_nf at *; linarith, by have := abs_le.mp ( hN₁ n ( by linarith [ le_max_left N₁ N₂ ] ) y hy ) ; have := abs_le.mp h_diff; ring_nf at *; linarith ⟩;
-    -- We have $1/(n-1)^2 = 1/n^2 * (1 - 1/n)^{-2} = 1/n^2 * (1 + O(1/n)) = 1/n^2 + O(1/n^3)$.
-    have h_inv_n_sq : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, |1 / ((n : ℝ) - 1)^2 - 1 / ((n : ℝ)^2)| ≤ C / ((n : ℝ)^3) := by
-      refine' ⟨ 8, by norm_num, 2, fun n hn => _ ⟩ ; rw [ div_sub_div, abs_div ] <;> try ring_nf ; nlinarith [ show ( n : ℝ ) ≥ 2 by exact_mod_cast hn ];
-      rw [ div_le_div_iff₀ ] <;> norm_num <;> cases abs_cases ( ( n : ℝ ) ^ 2 - ( n - 1 ) ^ 2 ) <;> cases abs_cases ( ( n - 1 : ℝ ) ^ 2 * n ^ 2 ) <;> nlinarith [ show ( n : ℝ ) ≥ 2 by norm_cast, pow_pos ( show ( n : ℝ ) > 0 by positivity ) 3 ];
-    -- Combining the above results, we get:
-    obtain ⟨C1, hC1_pos, N1, hC1⟩ := h_inv_m_sq
-    obtain ⟨C2, hC2_pos, N2, hC2⟩ := h_inv_n_sq;
-    obtain ⟨ n, hn1, y, hy1, hy2 ⟩ := h_contra ( C1 / 12 + C2 / 12 + 1 ) ( by positivity ) ( N1 + N2 + 2 ) ; specialize hC1 n ( by linarith ) y hy1 ; specialize hC2 n ( by linarith ) ; specialize h_quad_def n ( by linarith ) y hy1 ; norm_num [ div_eq_mul_inv ] at *;
-    unfold c2_quad at * ; norm_num at *;
-    cases abs_cases ( quad_term x y n - ( 1 - Real.exp ( - ( 2 * x ) ) ) / 12 * ( n ^ 2 : ℝ ) ⁻¹ ) <;> cases abs_cases ( ( m_def x y n ^ 2 ) ⁻¹ - Real.exp ( - ( 2 * x ) ) * ( n ^ 2 : ℝ ) ⁻¹ ) <;> cases abs_cases ( ( ( n - 1 ) ^ 2 : ℝ ) ⁻¹ - ( n ^ 2 : ℝ ) ⁻¹ ) <;> linarith [ inv_pos.mpr ( show 0 < ( n : ℝ ) ^ 3 by norm_cast; exact pow_pos ( by linarith ) 3 ) ]
+lemma error_coeff_inv_upper (k : ℕ) (hk : 1 ≤ k) :
+    (↑(Nat.factorial (k + 1)) : ℝ) / (padeBound k * (ePadeDen k : ℝ)) ≤ 2 * ↑k + 4 := by
+  -- By error_coeff_inv_decomp, we have (Nat.factorial (k + 1) : ℝ) / (padeBound k * (ePadeDen k : ℝ)) = (eSecDen k : ℝ) / (ePadeDen k : ℝ) + (k + 1) * secBound k / padeBound k.
+  have h_decomp : (Nat.factorial (k + 1) : ℝ) / (padeBound k * (ePadeDen k : ℝ)) = (eSecDen k : ℝ) / (ePadeDen k : ℝ) + (k + 1) * secBound k / padeBound k := by
+    convert error_coeff_inv_decomp k using 1;
+    norm_cast;
+  -- From secBound_upper, we have (k+1)*secBound k / padeBound k < (2k+3).
+  have h_sec_upper : (k + 1) * secBound k / padeBound k < (2 * k + 3) := by
+    rw [ div_lt_iff₀ ( padeBound_pos k ) ];
+    exact_mod_cast secBound_upper k;
+  linarith [ show ( eSecDen k : ℝ ) / ePadeDen k ≤ 1 by exact_mod_cast eSecDen_ePadeDen_ratio_bound k hk ]
 
 /-
-Lemma: The sum of the first order coefficients is 0, and the sum of the second order coefficients matches the target term.
+The inverse of the error coefficient is at least 2k+2.
 -/
-theorem lem_coeff_sum (x : ℝ) (y : ℝ) :
-  c1_log x + c1_inv x = 0 ∧
-  c2_log x y + c2_inv x + c2_quad x = (24 * Real.exp (-x) * y + Real.exp (-2 * x) - 1) / 24 := by
-    unfold c1_log c1_inv c2_log c2_inv c2_quad; ring_nf;
-    rw [ ← Real.exp_nat_mul ] ; ring_nf;
-    norm_num
+lemma error_coeff_inv_lower (k : ℕ) (hk : 1 ≤ k) :
+    2 * ↑k + 2 ≤ (↑(Nat.factorial (k + 1)) : ℝ) / (padeBound k * (ePadeDen k : ℝ)) := by
+  rw [ le_div_iff₀ ];
+  · -- By induction on $k$, we show that $(k+1) \cdot \frac{S(k)}{P(k)} \geq 2k + \frac{3}{2}$.
+    have h_ind : ∀ k ≥ 1, (k + 1) * (secBound k / padeBound k) ≥ 2 * k + 3 / 2 := by
+      -- By induction on $k$, we show that $\frac{S(k-1)}{P(k-1)} > \frac{4k+1}{2k}$ for all $k \geq 1$.
+      have h_ind_step : ∀ k ≥ 1, secBound (k - 1) / padeBound (k - 1) > (4 * k + 1) / (2 * k) := by
+        intro k hk
+        have h_pos : padeBound k > 0 := by
+          grind +suggestions;
+        rcases k with ( _ | k ) <;> norm_num [ padeBound_recurrence, secBound_recurrence ] at *;
+        rw [ div_lt_div_iff₀ ] <;> nlinarith [ show 0 < padeBound k from padeBound_pos k ];
+      intro k hk;
+      specialize h_ind_step ( k + 1 ) ( by linarith ) ; norm_num [ div_eq_mul_inv ] at *;
+      nlinarith [ mul_inv_cancel₀ ( by positivity : ( k : ℝ ) + 1 ≠ 0 ) ];
+    -- By induction on $k$, we show that $\frac{eSecDen k}{ePadeDen k} \geq \frac{1}{2}$.
+    have h_ind2 : ∀ k ≥ 1, (eSecDen k : ℝ) / (ePadeDen k : ℝ) ≥ 1 / 2 := by
+      intro k hk; rw [ ge_iff_le ] ; rw [ div_le_div_iff₀ ] <;> norm_cast <;> induction hk <;> norm_num [ * ] at *;
+      · decide +revert;
+      · rw [ ePadeDen_succ, eSecDen_succ ] ; nlinarith [ ePadeDen_pos ‹_›, eSecDen_pos ‹_› ];
+      · decide +revert;
+      · exact ePadeDen_pos _;
+    -- By combining the results from h_ind and h_ind2, we get the desired inequality.
+    have h_combined : (eSecDen k : ℝ) / (ePadeDen k : ℝ) + (k + 1) * (secBound k / padeBound k) ≥ 2 * k + 2 := by
+      linarith [ h_ind k hk, h_ind2 k hk ];
+    have h_final : (Nat.factorial (k + 1) : ℝ) / (padeBound k * ePadeDen k) = (eSecDen k : ℝ) / (ePadeDen k : ℝ) + (k + 1) * (secBound k / padeBound k) := by
+      convert error_coeff_inv_decomp k using 1;
+      norm_num [ mul_div_assoc ];
+    rw [ div_eq_iff ] at h_final <;> nlinarith [ show 0 < padeBound k * ePadeDen k from mul_pos ( padeBound_pos k ) ( mod_cast ePadeDen_pos k ) ];
+  · refine' mul_pos _ _;
+    · grind +suggestions;
+    · exact_mod_cast ePadeDen_pos k
 
 /-
-Lemma 2.2 (Corrected): With m = e^x n - 1/2 - e^x/2 + y/n, f(m) - f(n-1) - x = (24 e^{-x} y + e^{-2x} - 1)/24 * 1/n^2 + O(1/n^3).
+For k ≥ 1, eSecDen k / ePadeDen k ≥ 1/2.
 -/
-theorem lem_secondorder (x : ℝ) (hx : x > 0) (R : ℝ) :
-  ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R →
-  let m := Real.exp x * n - 1 / 2 - Real.exp x / 2 + y / n
-  let term := (24 * Real.exp (-x) * y + Real.exp (-2 * x) - 1) / 24
-  |f_real m - f_real (n - 1) - x - term / n ^ 2| ≤ C / n ^ 3 := by
-    by_contra! h_contra;
-    -- Apply the expansion bounds from the provided solution.
-    obtain ⟨C₁, hC₁_pos, N₁, hC₁⟩ := lem_log_expansion x hx R
-    obtain ⟨C₂, hC₂_pos, N₂, hC₂⟩ := lem_inv_expansion x R
-    obtain ⟨C₃, hC₃_pos, N₃, hC₃⟩ := lem_quad_expansion x R;
-    obtain ⟨N₄, hN₄⟩ : ∃ N₄ : ℕ, ∀ n ≥ N₄, ∀ y : ℝ, |y| ≤ R → m_def x y n > 0 ∧ (n - 1 : ℝ) > 0 := by
-      use Nat.ceil ((|s_0 x| + R + 1) / Real.exp x) + 2;
-      intro n hn y hy; constructor <;> norm_num [ m_def ] at *;
-      · have : Real.exp x * n > |s_0 x| + R := by
-          nlinarith [ Nat.le_ceil ( ( |s_0 x| + R + 1 ) / Real.exp x ), Real.exp_pos x, mul_div_cancel₀ ( |s_0 x| + R + 1 ) ( ne_of_gt ( Real.exp_pos x ) ), show ( n : ℝ ) ≥ ⌈ ( |s_0 x| + R + 1 ) / Real.exp x⌉₊ + 2 by exact_mod_cast hn ];
-        cases abs_cases ( s_0 x ) <;> nlinarith [ abs_le.mp hy, show ( n : ℝ ) ≥ ⌈ ( |s_0 x| + R + 1 ) / Real.exp x⌉₊ + 2 by exact_mod_cast hn, mul_div_cancel₀ y ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ) ];
-      · linarith;
-    obtain ⟨N₅, hN₅⟩ : ∃ N₅ : ℕ, ∀ n ≥ N₅, ∀ y : ℝ, |y| ≤ R → f_real (m_def x y n) - f_real ((n : ℝ) - 1) - x = (Real.log (m_def x y n / (n - 1)) - x) + (inv_term x y n) + (quad_term x y n) := by
-      use N₄ + 2; intros n hn y hy; rw [ Real.log_div ] <;> norm_num [ f_real, inv_term, quad_term ] ; ring ; linarith [ hN₄ n ( by linarith ) y hy ] ;
-      linarith [ hN₄ n ( by linarith ) y hy ];
-    -- Combine the expansion bounds from the provided solution.
-    obtain ⟨C, hC_pos, N, hC⟩ : ∃ C > 0, ∃ N : ℕ, ∀ n ≥ N, ∀ y : ℝ, |y| ≤ R → |(Real.log (m_def x y n / (n - 1)) - x) + (inv_term x y n) + (quad_term x y n) - ((c1_log x + c1_inv x) / n + (c2_log x y + c2_inv x + c2_quad x) / n^2)| ≤ C / n^3 := by
-      use C₁ + C₂ + C₃, by positivity, max N₁ (max N₂ (max N₃ N₄)) + N₅ + 1; intros n hn y hy; specialize hC₁ n ( by linarith [ Nat.le_max_left N₁ ( max N₂ ( max N₃ N₄ ) ), Nat.le_max_right N₁ ( max N₂ ( max N₃ N₄ ) ), Nat.le_max_left N₂ ( max N₃ N₄ ), Nat.le_max_right N₂ ( max N₃ N₄ ), Nat.le_max_left N₃ N₄, Nat.le_max_right N₃ N₄ ] ) y hy; specialize hC₂ n ( by linarith [ Nat.le_max_left N₁ ( max N₂ ( max N₃ N₄ ) ), Nat.le_max_right N₁ ( max N₂ ( max N₃ N₄ ) ), Nat.le_max_left N₂ ( max N₃ N₄ ), Nat.le_max_right N₂ ( max N₃ N₄ ), Nat.le_max_left N₃ N₄, Nat.le_max_right N₃ N₄ ] ) y hy; specialize hC₃ n ( by linarith [ Nat.le_max_left N₁ ( max N₂ ( max N₃ N₄ ) ), Nat.le_max_right N₁ ( max N₂ ( max N₃ N₄ ) ), Nat.le_max_left N₂ ( max N₃ N₄ ), Nat.le_max_right N₂ ( max N₃ N₄ ), Nat.le_max_left N₃ N₄, Nat.le_max_right N₃ N₄ ] ) y hy; ring_nf at *;
-      exact abs_le.mpr ⟨ by linarith [ abs_le.mp hC₁, abs_le.mp hC₂, abs_le.mp hC₃ ], by linarith [ abs_le.mp hC₁, abs_le.mp hC₂, abs_le.mp hC₃ ] ⟩;
-    obtain ⟨ n, hn₁, y, hy₁, hy₂ ⟩ := h_contra C hC_pos ( Max.max N N₅ ) ; specialize hC n ( le_trans ( le_max_left _ _ ) hn₁ ) y hy₁ ; specialize hN₅ n ( le_trans ( le_max_right _ _ ) hn₁ ) y hy₁ ; simp_all +decide [ add_assoc ] ;
-    convert hy₂.not_ge _;
-    convert hC using 1;
-    rw [ ← hN₅ ] ; unfold m_def ; ring_nf;
-    unfold c1_log c1_inv c2_log c2_inv c2_quad s_0 ; ring_nf;
-    rw [ ← Real.exp_nat_mul ] ; ring_nf
+lemma pade_error_pos_even (k : ℕ) (hk : Even k) :
+    (ePadeNum k : ℝ) - exp 1 * (ePadeDen k : ℝ) > 0 := by
+  -- From ePade_integral_identity k: (ePadeNum k : ℝ) - (ePadeDen k : ℝ) * exp 1 = (-1)^k / (k+1)! * padeBound k.
+  have h_ePade_integral_identity : (ePadeNum k : ℝ) - (ePadeDen k : ℝ) * Real.exp 1 = (-1 : ℝ) ^ k / (Nat.factorial (k + 1)) * padeBound k := by
+    exact ePade_integral_identity k |>.1;
+  simp_all +decide [ mul_comm ];
+  exact mul_pos ( padeBound_pos k ) ( by positivity )
 
 /-
-Corollary 2.3: If |f(m)-f(n-1) - x| <= epsilon/n^2 for arbitrarily small epsilon, then y must satisfy y = y^*.
+Upper bound on ε * q: from error_coeff_inv_lower.
 -/
-theorem cor_necessity_final (x : ℝ) (hx : x > 0) (R : ℝ) :
-  ∃ C > 0, ∀ n : ℕ, n ≥ 2 → ∀ y : ℝ, |y| ≤ R →
-  let m := Real.exp x * n - 1 + Real.exp x / 2 + y / n
-  let y_star := Real.sinh x / 12
-  (∀ ε > 0, ∃ N, ∀ n ≥ N, |f_real m - f_real (n - 1) - x| ≤ ε / n ^ 2) →
-  abs (y - y_star) = 0 := by
-    exact cor_necessity x hx R
-
-/-
-Lemma: m is positive for sufficiently large n.
--/
-theorem m_def_pos (x : ℝ) (hx : x > 0) (R : ℝ) : ∃ N, ∀ n ≥ N, ∀ y, |y| ≤ R → m_def x y n > 0 := by
-  -- Choose N such that for all n ≥ N, e^x * n - 1 - e^x/2 > (1 + e^x)/2 + R/n.
-  obtain ⟨N, hN⟩ : ∃ N : ℕ, ∀ n ≥ N, Real.exp x * n - 1 - Real.exp x / 2 > (1 + Real.exp x) / 2 + R / 2 := by
-    exact ⟨ ⌊ ( 1 + Real.exp x ) / 2 + R / 2 + 1 + Real.exp x / 2⌋₊ + 1, fun n hn => by nlinarith [ Nat.lt_of_floor_lt hn, Real.add_one_le_exp x ] ⟩;
-  use N + 2;
-  intros n hn y hy
-  have h_pos : Real.exp x * n - 1 - Real.exp x / 2 > (1 + Real.exp x) / 2 + R / 2 := hN n (by linarith)
-  have h_m_pos : m_def x y n > 0 := by
-    unfold m_def;
-    unfold s_0; rw [ add_div', gt_iff_lt, lt_div_iff₀ ] <;> nlinarith [ abs_le.mp hy, Real.exp_pos x, show ( n : ℝ ) ≥ 2 by norm_cast; linarith ] ;
-  exact h_m_pos
-
-/-
-The denominator $q_{3k+1}$ defined by the recurrence is always odd.
--/
-theorem lem_q_rec_odd_proven (k : ℕ) : Odd (q_rec (3 * k + 1)) := by
-  -- By definition of $q_rec$, we know that $q_rec (3 * k + 1)$ is odd.
-  apply lem_q_rec_odd
-
-/-
-The numerator $p_{3k+1}$ defined by the recurrence is always odd.
--/
-theorem lem_p_rec_odd_proven (k : ℕ) : Odd (p_rec (3 * k + 1)) := by
-  -- By definition of $p_rec$, we know that $p_rec (3 * k + 1)$ is odd.
-  apply lem_p_rec_odd
-
-/-
-The values of the continued fraction coefficients of e at indices 3k, 3k+1, 3k+2.
--/
-theorem e_coeff_values_proven (k : ℕ) :
-  e_coeff (3 * k + 2) = 2 * (k + 1) ∧
-  (k > 0 → e_coeff (3 * k) = 1) ∧
-  e_coeff (3 * k + 1) = 1 := by
-    exact e_coeff_values k
-
-/-
-Real.convergent is equivalent to GenContFract.convs for real numbers.
--/
-theorem real_convergent_eq_gen_cont_fract_convs (x : ℝ) (n : ℕ) :
-  Real.convergent x n = (GenContFract.of x).convs n := by
-    -- By definition of `Real.convergent`, we know that it is equal to the convergent of the continued fraction `GenContFract.of x`.
-    have h_convergent_eq : ∀ n, Real.convergent x n = (GenContFract.of x).convs n := by
-      intro n;
-      convert congr_arg _ ( Rat.num_div_den _ ) using 1;
-      convert Rat.cast_inj.mpr rfl;
-      rw [ Rat.num_div_den ];
-      · infer_instance;
-      · exact Real.convs_eq_convergent x n;
-    exact h_convergent_eq n
-
-/-
-The 'a' coefficients in the generalized continued fraction of a real number are always 1.
--/
-theorem gen_cont_fract_of_a_eq_one (x : ℝ) (n : ℕ) :
-  let g := GenContFract.of x
-  match g.s.get? n with
-  | some gp => gp.a = 1
-  | none => True := by
-    unfold GenContFract.of;
-    induction n <;> aesop
-
-/-
-The determinant formula for the generalized continued fraction of e: nums(n+1)*dens(n) - nums(n)*dens(n+1) = (-1)^n.
--/
-theorem gen_cont_fract_determinant_exp (n : ℕ) :
-  let g := GenContFract.of (Real.exp 1)
-  g.nums (n + 1) * g.dens n - g.nums n * g.dens (n + 1) = (-1 : ℝ) ^ n := by
-    induction' n with n ih <;> norm_num [ pow_succ, GenContFract.nums, GenContFract.dens ] at *;
-    · unfold GenContFract.of; norm_num [ Stream'.map, Stream'.get ] ;
-      unfold GenContFract.IntFractPair.seq1; norm_num [ Real.exp_pos ] ;
-      unfold GenContFract.conts ;
-      unfold Stream'.tail; norm_num [ GenContFract.IntFractPair.stream ] ;
-      unfold Stream'.get; norm_num [ GenContFract.IntFractPair.stream ] ;
-      unfold GenContFract.contsAux; norm_num [ GenContFract.IntFractPair.stream ] ;
-      unfold GenContFract.IntFractPair.of; norm_num [ Real.exp_pos ] ;
-      unfold GenContFract.nextConts; norm_num [ Int.fract_eq_iff ] ;
-      split_ifs <;> norm_num [ GenContFract.nextNum, GenContFract.nextDen ];
-      · obtain ⟨ z, hz ⟩ := ‹_›; have := Real.exp_one_gt_d9.le; norm_num at this; rcases z with ⟨ _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | z ⟩ <;> norm_num at * <;> linarith [ Real.exp_one_lt_d9.le ] ;
-      · ring;
-    · rw [ ← ih ];
-      simp +decide [ Stream'.map, GenContFract.of ];
-      simp +decide [ GenContFract.conts ];
-      erw [ Stream'.get ] ; norm_num [ GenContFract.IntFractPair.seq1 ] ; ring_nf;
-      rw [ show 3 + n = 2 + n + 1 by ring, show 2 + n = 1 + n + 1 by ring ] ; simp +decide [ GenContFract.contsAux ] ; ring_nf;
-      cases h : GenContFract.IntFractPair.stream ( Real.exp 1 ) ( 2 + n ) <;> simp +decide;
-      · have h_contra : ∀ n, GenContFract.IntFractPair.stream (Real.exp 1) n ≠ none := by
-          have h_irrational : Irrational (Real.exp 1) := by
-            by_contra h_contra
-            obtain ⟨p, q, hq_pos, hpq_eq⟩ : ∃ p q : ℕ, q > 0 ∧ Real.exp 1 = p / q := by
-              obtain ⟨ q, hq ⟩ := Classical.not_not.mp h_contra; exact ⟨ q.num.natAbs, q.den, Nat.cast_pos.mpr q.pos, by simpa [ abs_of_nonneg ( Rat.num_nonneg.mpr ( show 0 ≤ q by exact_mod_cast hq.symm ▸ Real.exp_nonneg _ ) ), Rat.cast_def ] using hq.symm ⟩ ;
-            -- Multiply both sides of the equation by $q!$ to obtain a contradiction.
-            have h_factorial : ∑ k ∈ Finset.range (q + 1), (q ! / k ! : ℝ) + ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) = p * q ! / q := by
-              have h_factorial : ∑' k : ℕ, (q ! / k ! : ℝ) = p * q ! / q := by
-                have h_factorial : ∑' k : ℕ, (q ! / k ! : ℝ) = Real.exp 1 * q ! := by
-                  norm_num [ div_eq_mul_inv, Real.exp_eq_exp_ℝ, NormedSpace.exp_eq_tsum ];
-                  rw [ mul_comm, tsum_mul_left ];
-                rw [ h_factorial, hpq_eq, div_mul_eq_mul_div ];
-              rw [ ← h_factorial, ← Summable.sum_add_tsum_nat_add ];
-              rotate_left;
-              use 0;
-              · exact Summable.mul_left _ <| by simpa using summable_nat_add_iff ( q + 1 ) |>.2 <| Real.summable_pow_div_factorial 1;
-              · rw [ eq_comm, ← Summable.sum_add_tsum_nat_add ];
-                rotate_left;
-                exact q + 1;
-                · exact Summable.mul_left _ <| by simpa using Real.summable_pow_div_factorial 1;
-                · norm_num [ add_assoc ];
-            -- The second sum is strictly between 0 and 1, hence it cannot be an integer.
-            have h_second_sum : 0 < ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) ∧ ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) < 1 := by
-              refine' ⟨ _, _ ⟩;
-              · refine' Summable.tsum_pos ..;
-                exacts [ Summable.mul_left _ <| by simpa using summable_nat_add_iff ( q + 1 ) |>.2 <| Real.summable_pow_div_factorial 1, fun _ => by positivity, 0, by positivity ];
-              · -- We'll use that the series $\sum_{k=q+1}^{\infty} \frac{q!}{k!}$ is a geometric series with the first term $\frac{q!}{(q+1)!} = \frac{1}{q+1}$ and common ratio $\frac{1}{q+2}$.
-                have h_geo_series : ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) ≤ ∑' k : ℕ, (1 / (q + 1) : ℝ) * (1 / (q + 2)) ^ k := by
-                  refine' Summable.tsum_le_tsum _ _ _;
-                  · field_simp;
-                    intro i; rw [ one_div_pow ] ; rw [ mul_comm ] ; rw [ ← div_eq_mul_one_div ] ; rw [ le_div_iff₀ ( by positivity ) ] ; norm_cast ; induction' i with i ih <;> norm_num [ Nat.factorial_succ, pow_succ' ] at *;
-                    rw [ show i + 1 + q = i + q + 1 by ring, Nat.factorial_succ ];
-                    nlinarith [ Nat.factorial_succ ( i + q ), pow_pos ( by linarith : 0 < q + 2 ) i ];
-                  · exact Summable.mul_left _ <| by simpa using summable_nat_add_iff ( q + 1 ) |>.2 <| Real.summable_pow_div_factorial 1;
-                  · exact Summable.mul_left _ <| summable_geometric_of_lt_one ( by positivity ) <| by rw [ div_lt_iff₀ ] <;> linarith;
-                refine' lt_of_le_of_lt h_geo_series _;
-                rw [ tsum_mul_left, tsum_geometric_of_lt_one ( by positivity ) ( by rw [ div_lt_iff₀ ] <;> linarith ) ];
-                field_simp;
-                rw [ div_lt_iff₀ ] <;> nlinarith only [ show ( q : ℝ ) ≥ 1 by norm_cast ];
-            -- The first sum is an integer, hence the second sum must also be an integer.
-            have h_first_sum_int : ∃ m : ℤ, ∑ k ∈ Finset.range (q + 1), (q ! / k ! : ℝ) = m := by
-              use ∑ k ∈ Finset.range (q + 1), (q ! / k ! : ℤ);
-              norm_num [ Finset.sum_div _ _ _ ];
-              exact Finset.sum_congr rfl fun x hx => by rw [ Int.cast_div ( mod_cast Nat.factorial_dvd_factorial ( Finset.mem_range_succ_iff.mp hx ) ) ( by positivity ) ] ; push_cast; ring;
-            obtain ⟨ m, hm ⟩ := h_first_sum_int;
-            have h_second_sum_int : ∃ n : ℤ, ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) = n := by
-              use p * q ! / q - m;
-              rw [ Int.cast_sub, Int.cast_div ] <;> norm_num;
-              · grind;
-              · exact dvd_mul_of_dvd_right ( mod_cast Nat.dvd_factorial ( by positivity ) ( by linarith ) ) _;
-              · linarith;
-            obtain ⟨ n, hn ⟩ := h_second_sum_int; exact h_second_sum.2.not_ge ( hn.symm ▸ mod_cast Int.le_of_lt_add_one ( by rw [ ← @Int.cast_lt ℝ ] ; push_cast; linarith [ show ( n : ℝ ) ≥ 1 by exact_mod_cast hn ▸ h_second_sum.1 ] ) ) ;
-          intro n; exact (by
-          induction' n with n ih <;> simp +decide [ GenContFract.IntFractPair.stream ];
-          cases h : GenContFract.IntFractPair.stream ( Real.exp 1 ) n <;> simp_all +decide;
-          have h_irrational : ∀ n, GenContFract.IntFractPair.stream (Real.exp 1) n ≠ none → Irrational (GenContFract.IntFractPair.stream (Real.exp 1) n).get!.fr := by
-            intro n hn; induction' n with n ih <;> simp +decide [ GenContFract.IntFractPair.stream ] at hn ⊢;
-            · exact h_irrational.sub_ratCast _;
-            · obtain ⟨ x, hx₁, hx₂ ⟩ := hn; simp_all +decide ;
-              exact_mod_cast ih.inv.sub_ratCast ⌊x.fr⁻¹⌋;
-          specialize h_irrational n ; aesop);
-        exact False.elim (h_contra (2 + n) h);
-      · unfold GenContFract.nextConts; ring_nf;
-        unfold GenContFract.nextNum GenContFract.nextDen; ring_nf;
-        ring!
-
-/-
-For any C > 0, and for large k, there exists an odd integer d such that d^2/k is close to C with error O(1/sqrt(k)).
--/
-theorem lem_square_approx (C : ℝ) (hC : C > 0) :
-  ∃ K : ℕ, ∀ k ≥ K,
-  ∃ d : ℤ, Odd d ∧ |(d : ℝ)^2 / k - C| ≤ (2 * Real.sqrt C + 1) / Real.sqrt k := by
-    -- Let's choose any $k$ such that $k > \frac{4C}{1} = 4C$.
-    use Nat.ceil (4 * C) + 1;
-    -- Let's choose any $k$ such that $k \geq \lceil 4C \rceil + 1$.
-    intro k hk
-    obtain ⟨d, hd_odd, hd_bound⟩ : ∃ d : ℤ, Odd d ∧ |d - Real.sqrt (k * C)| ≤ 1 := by
-      have := exists_odd_near ( Real.sqrt ( k * C ) );
-      exact this;
-    -- Using the bound on |d - sqrt(kC)|, we can derive the bound on |d^2/k - C|.
-    have h_bound : |(d : ℝ)^2 / k - C| ≤ (2 * Real.sqrt (k * C) + 1) / k := by
-      rw [ abs_le ] at *;
-      constructor <;> nlinarith [ show ( k : ℝ ) ≥ ⌈4 * C⌉₊ + 1 by exact_mod_cast hk, Real.sqrt_nonneg ( k * C ), Real.mul_self_sqrt ( show 0 ≤ ( k : ℝ ) * C by positivity ), mul_div_cancel₀ ( ( 2 * Real.sqrt ( k * C ) + 1 ) : ℝ ) ( show ( k : ℝ ) ≠ 0 by norm_cast; linarith ), mul_div_cancel₀ ( ( d : ℝ ) ^ 2 ) ( show ( k : ℝ ) ≠ 0 by norm_cast; linarith ) ];
-    refine' ⟨ d, hd_odd, h_bound.trans _ ⟩ ; rw [ div_le_div_iff₀ ] <;> norm_num;
-    · nlinarith only [ show ( k : ℝ ) ≥ ⌈4 * C⌉₊ + 1 by norm_cast, Nat.le_ceil ( 4 * C ), show ( 0 : ℝ ) < Real.sqrt C by positivity, show ( 0 : ℝ ) < Real.sqrt k by exact Real.sqrt_pos.mpr ( Nat.cast_pos.mpr ( by linarith ) ), Real.mul_self_sqrt ( show ( k : ℝ ) ≥ 0 by positivity ), Real.mul_self_sqrt ( show ( C : ℝ ) ≥ 0 by positivity ), sq_nonneg ( Real.sqrt k - 2 * Real.sqrt C ) ];
-    · linarith;
-    · linarith
-
-/-
-The ratio of consecutive denominators $q_{n+1}/q_n$ is bounded by $a_{n+1}$ and $a_{n+1} + 1$.
--/
-theorem lem_q_ratio_bounds (n : ℕ) (h : n ≥ 1) :
-  (e_coeff (n + 1) : ℝ) < (q_rec (n + 1) : ℝ) / q_rec n ∧
-  (q_rec (n + 1) : ℝ) / q_rec n ≤ (e_coeff (n + 1) : ℝ) + 1 := by
-    -- By definition of $q_rec$, we know that $q_rec (n + 1) = (e_coeff (n + 1)) * q_rec n + q_rec (n - 1)$.
-    have h_q_rec_def : ∀ n ≥ 1, q_rec (n + 1) = (e_coeff (n + 1) : ℤ) * q_rec n + q_rec (n - 1) := by
-      rintro ( _ | n ) <;> tauto
-    generalize_proofs at *; (
-    -- By definition of $q_rec$, we know that $q_rec n > 0$ for all $n \geq 0$.
-    have h_q_rec_pos : ∀ n ≥ 0, 0 < q_rec n := by
-      intro n hn; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> simp_all +decide ;
-      exact add_pos ( mul_pos ( Nat.cast_pos.mpr ( Nat.pos_of_ne_zero ( by unfold e_coeff; aesop ) ) ) ( ih _ ( by linarith ) ) ) ( ih _ ( by linarith ) )
-    generalize_proofs at *; (
-    rw [ h_q_rec_def n h, lt_div_iff₀, div_le_iff₀ ] <;> norm_cast;
-    · simp_all +decide [ add_mul ];
-      rcases n with ( _ | _ | n ) <;> simp_all +decide;
-      exact le_add_of_le_of_nonneg ( le_mul_of_one_le_left ( le_of_lt ( h_q_rec_pos _ ) ) ( mod_cast Nat.one_le_iff_ne_zero.mpr ( by unfold e_coeff; aesop ) ) ) ( le_of_lt ( h_q_rec_pos _ ) );
-    · exact h_q_rec_pos n ( Nat.zero_le n );
-    · exact h_q_rec_pos n ( Nat.zero_le n )))
-
-/-
-The determinant of the recurrence matrices satisfies $p_{n+1} q_n - p_n q_{n+1} = (-1)^n$.
--/
-theorem lem_det_rec (n : ℕ) : p_rec (n + 1) * q_rec n - p_rec n * q_rec (n + 1) = (-1) ^ n := by
-  induction' n with n ih <;> norm_num [ pow_succ', e_coeff_values ] at *;
-  · native_decide +revert;
-  · rw [ ← ih ];
-    rw [ show p_rec ( n + 2 ) = e_coeff ( n + 2 ) * p_rec ( n + 1 ) + p_rec n from rfl, show q_rec ( n + 2 ) = e_coeff ( n + 2 ) * q_rec ( n + 1 ) + q_rec n from rfl ] ; ring
-
-/-
-The difference between consecutive convergents is $1/(q_n q_{n+1})$.
--/
-theorem lem_convergent_diff (n : ℕ) :
-  |(p_rec n : ℝ) / q_rec n - (p_rec (n + 1) : ℝ) / q_rec (n + 1)| = 1 / ((q_rec n : ℝ) * (q_rec (n + 1) : ℝ)) := by
-    have h_det : (p_rec (n + 1) * q_rec n - p_rec n * q_rec (n + 1) : ℝ) = (-1 : ℝ) ^ n := by
-      exact_mod_cast lem_det_rec n;
-    rw [ div_sub_div, abs_div ];
-    · rw [ show ( p_rec n : ℝ ) * q_rec ( n + 1 ) - q_rec n * p_rec ( n + 1 ) = ( -1 ) ^ n * -1 by linarith, abs_mul, abs_neg, abs_one, abs_pow ] ; norm_num;
-      rw [ abs_of_nonneg, abs_of_nonneg ];
-      · -- By definition of $q_rec$, we know that $q_rec n$ is positive for all $n$.
-        have h_q_pos : ∀ n, 0 < q_rec n := by
-          intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-          exact add_pos_of_nonneg_of_pos ( mul_nonneg ( Nat.cast_nonneg _ ) ( le_of_lt ( ih _ ( by linarith ) ) ) ) ( ih _ ( by linarith ) );
-        exact_mod_cast le_of_lt ( h_q_pos n );
-      · -- By definition of $q_rec$, we know that $q_rec (n + 1)$ is positive.
-        have h_q_pos : ∀ n, 0 < q_rec n := by
-          intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-          exact add_pos_of_nonneg_of_pos ( mul_nonneg ( Nat.cast_nonneg _ ) ( le_of_lt ( ih _ ( by linarith ) ) ) ) ( ih _ ( by linarith ) );
-        exact_mod_cast le_of_lt ( h_q_pos _ );
-    · -- By definition of $q_rec$, we know that $q_rec n$ is positive for all $n$.
-      have h_q_pos : ∀ n, 0 < q_rec n := by
-        intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-        exact add_pos_of_nonneg_of_pos ( mul_nonneg ( Nat.cast_nonneg _ ) ( le_of_lt ( ih _ ( by linarith ) ) ) ) ( ih _ ( by linarith ) );
-      exact_mod_cast ne_of_gt ( h_q_pos n );
-    · -- By definition of $q_rec$, we know that $q_rec (n + 1) > 0$ for all $n$.
-      have h_q_pos : ∀ n, 0 < q_rec n := by
-        intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-        exact add_pos_of_nonneg_of_pos ( mul_nonneg ( Nat.cast_nonneg _ ) ( le_of_lt ( ih _ ( by linarith ) ) ) ) ( ih _ ( by linarith ) );
-      exact_mod_cast ne_of_gt ( h_q_pos _ )
-
-/-
-The sequence of even convergents $p_{2n}/q_{2n}$ is strictly increasing.
--/
-theorem lem_even_convergents_increasing (n : ℕ) :
-  (p_rec (2 * n) : ℝ) / q_rec (2 * n) < (p_rec (2 * n + 2) : ℝ) / q_rec (2 * n + 2) := by
-    rw [ div_lt_div_iff₀ ];
-    · -- By the determinant formula, we have $p_{n+2} q_n - p_n q_{n+2} = a_{n+2} (-1)^n$.
-      have h_det : p_rec (2 * n + 2) * q_rec (2 * n) - p_rec (2 * n) * q_rec (2 * n + 2) = (e_coeff (2 * n + 2) : ℝ) * (-1) ^ (2 * n) := by
-        convert lem_det_rec ( 2 * n ) using 1 ; ring_nf;
-        norm_num [ add_comm 1, add_comm 2, p_rec, q_rec ];
-        norm_cast ; ring_nf;
-        constructor <;> intro h <;> nlinarith [ show 0 < e_coeff ( 2 + n * 2 ) from Nat.pos_of_ne_zero ( by unfold e_coeff; aesop ) ];
-      norm_num [ e_coeff ] at *;
-      split_ifs at h_det <;> linarith;
-    · -- By definition of $q_rec$, we know that $q_rec (2 * n)$ is positive for all $n$.
-      have h_q_pos : ∀ n, 0 < (q_rec n : ℝ) := by
-        intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-        exact add_pos_of_nonneg_of_pos ( mul_nonneg ( Nat.cast_nonneg _ ) ( le_of_lt ( ih _ ( by linarith ) ) ) ) ( ih _ ( by linarith ) );
-      exact h_q_pos _;
-    · -- By definition of $q_rec$, we know that $q_rec (2 * n + 2)$ is positive.
-      have hq_pos : ∀ n, 0 < q_rec n := by
-        intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ *, Nat.add_mod, Nat.mul_mod ] ;
-        · exact zero_lt_one;
-        · exact Int.sign_eq_one_iff_pos.mp rfl;
-        · exact add_pos ( mul_pos ( Nat.cast_pos.mpr ( show 0 < e_coeff ( n + 2 ) from by { unfold e_coeff; split_ifs <;> omega } ) ) ( ih _ <| Nat.lt_succ_self _ ) ) ( ih _ <| Nat.lt_succ_of_lt <| Nat.lt_succ_self _ )
-      exact_mod_cast hq_pos (2 * n + 2)
-
-/-
-The sequence of odd convergents $p_{2n+1}/q_{2n+1}$ is strictly decreasing.
--/
-theorem lem_odd_convergents_decreasing (n : ℕ) :
-  (p_rec (2 * n + 3) : ℝ) / q_rec (2 * n + 3) < (p_rec (2 * n + 1) : ℝ) / q_rec (2 * n + 1) := by
-    -- Using the determinant formula, we can express the difference between consecutive convergents.
-    have h_diff : p_rec (2 * n + 3) * q_rec (2 * n + 1) - p_rec (2 * n + 1) * q_rec (2 * n + 3) = - (e_coeff (2 * n + 3) : ℝ) := by
-      convert lem_det_rec ( 2 * n + 1 ) using 1 ; ring_nf;
-      rw [ show 3 + n * 2 = 2 + n * 2 + 1 by ring, show 2 + n * 2 = 1 + n * 2 + 1 by ring ] ; norm_cast ; ring_nf;
-      rw [ show 3 + n * 2 = 2 + n * 2 + 1 by ring, show 2 + n * 2 = 1 + n * 2 + 1 by ring ] ; norm_num [ pow_succ, Int.negSucc_eq, p_rec, q_rec ] ; ring_nf;
-      constructor <;> intro h <;> nlinarith [ show ( e_coeff ( 3 + n * 2 ) : ℤ ) > 0 from mod_cast Nat.pos_of_ne_zero ( by unfold e_coeff; aesop ) ];
-    rw [ div_lt_div_iff₀ ] <;> norm_cast at *;
-    · linarith [ show ( e_coeff ( 2 * n + 3 ) : ℤ ) > 0 by exact_mod_cast Nat.pos_of_ne_zero ( by unfold e_coeff; aesop ) ];
-    · -- By definition of $q_rec$, we know that $q_rec (2 * n + 3)$ is positive.
-      have h_q_pos : ∀ n, 0 < q_rec n := by
-        intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-        exact add_pos_of_nonneg_of_pos ( mul_nonneg ( Nat.cast_nonneg _ ) ( le_of_lt ( ih _ ( by linarith ) ) ) ) ( ih _ ( by linarith ) )
-      exact h_q_pos (2 * n + 3);
-    · -- By definition of $q_rec$, we know that $q_rec (2 * n + 1)$ is positive.
-      have h_q_pos : ∀ n, 0 < q_rec n := by
-        intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-        exact add_pos_of_nonneg_of_pos ( mul_nonneg ( Nat.cast_nonneg _ ) ( le_of_lt ( ih _ ( by linarith ) ) ) ) ( ih _ ( by linarith ) )
-      exact h_q_pos (2 * n + 1)
-
-/-
-The even convergents are strictly less than the odd convergents.
--/
-theorem lem_even_lt_odd (n : ℕ) :
-  (p_rec (2 * n) : ℝ) / q_rec (2 * n) < (p_rec (2 * n + 1) : ℝ) / q_rec (2 * n + 1) := by
-    -- By the properties of the convergents, we know that $p_{2n+1} q_{2n} - p_{2n} q_{2n+1} = 1$.
-    have h_det : (p_rec (2 * n + 1) : ℝ) * (q_rec (2 * n) : ℝ) - (p_rec (2 * n) : ℝ) * (q_rec (2 * n + 1) : ℝ) = 1 := by
-      convert lem_det_rec ( 2 * n ) using 1 ; ring_nf;
-      norm_num [ pow_mul' ] ; norm_cast;
-    rw [ div_lt_div_iff₀ ];
-    · linarith;
-    · -- By definition of $q_rec$, we know that $q_rec (2 * n)$ is positive for all $n$.
-      have h_q_pos : ∀ n, 0 < q_rec n := by
-        intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-        exact add_pos ( mul_pos ( Nat.cast_pos.mpr ( Nat.pos_of_ne_zero ( by unfold e_coeff; aesop ) ) ) ( ih _ ( by linarith ) ) ) ( ih _ ( by linarith ) );
-      exact_mod_cast h_q_pos _;
-    · norm_cast;
-      -- By definition of $q_rec$, we know that $q_rec (2 * n + 1)$ is positive.
-      have h_q_pos : ∀ n, 0 < q_rec n := by
-        intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-        exact add_pos ( mul_pos ( Nat.cast_pos.mpr ( Nat.pos_of_ne_zero ( by unfold e_coeff; aesop ) ) ) ( ih _ ( by linarith ) ) ) ( ih _ ( by linarith ) )
-      exact h_q_pos (2 * n + 1)
-
-/-
-The recurrence relation for q_n holds.
--/
-theorem lem_q_recurrence (n : ℕ) :
-  (q_rec (n + 2) : ℝ) = (e_coeff (n + 2) : ℝ) * (q_rec (n + 1) : ℝ) + (q_rec n : ℝ) := by
-    norm_cast
-
-/-
-The sequence of denominators q_n is non-decreasing.
--/
-theorem lem_q_growth (n : ℕ) : q_rec n ≤ q_rec (n + 1) := by
-  -- We proceed by induction on $n$.
-  induction' n with n ih;
-  · exact Int.le_refl (q_rec 0);
-  · -- By definition of $q_rec$, we have $q_rec (n + 2) = e_coeff (n + 2) * q_rec (n + 1) + q_rec n$.
-    have h_q_rec_succ : q_rec (n + 2) = (e_coeff (n + 2) : ℤ) * q_rec (n + 1) + q_rec n := by
-      rfl;
-    -- Since $q_rec n$ is non-negative, we have $q_rec (n + 1) \leq q_rec (n + 1) + q_rec n$.
-    have h_nonneg : 0 ≤ q_rec n := by
-      -- By definition of $q_rec$, we know that $q_rec n$ is non-negative for all $n$.
-      have h_q_rec_nonneg : ∀ n, 0 ≤ q_rec n := by
-        intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> norm_num [ q_rec ] ;
-        exact add_nonneg ( mul_nonneg ( Nat.cast_nonneg _ ) ( ih _ ( Nat.lt_succ_self _ ) ) ) ( ih _ ( Nat.lt_succ_of_lt ( Nat.lt_succ_self _ ) ) );
-      exact h_q_rec_nonneg n;
-    exact h_q_rec_succ.symm ▸ le_add_of_le_of_nonneg ( le_mul_of_one_le_left ( by linarith ) ( mod_cast Nat.one_le_iff_ne_zero.mpr <| by unfold e_coeff; aesop ) ) h_nonneg
-
-/-
-The ratio q_{n+1}/q_n is between a_{n+1} and a_{n+1}+1.
--/
-theorem lem_q_ratio (n : ℕ) (h : n ≥ 1) :
-  (e_coeff (n + 1) : ℝ) ≤ (q_rec (n + 1) : ℝ) / q_rec n ∧
-  (q_rec (n + 1) : ℝ) / q_rec n ≤ (e_coeff (n + 1) : ℝ) + 1 := by
-    have := @lem_q_ratio_bounds;
-    exact ⟨ le_of_lt ( this n h |>.1 ), this n h |>.2 ⟩
-
-/-
-For $k \ge 1$, $2k+2 < q_{3k+2}/q_{3k+1} < 2k+3$.
--/
-theorem lem_q_ratio_bounds_explicit (k : ℕ) (hk : k ≥ 1) :
-  2 * (k : ℝ) + 2 < (q_rec (3 * k + 2) : ℝ) / q_rec (3 * k + 1) ∧
-  (q_rec (3 * k + 2) : ℝ) / q_rec (3 * k + 1) < 2 * (k : ℝ) + 3 := by
-    -- Substitute the recurrence relation into the ratio.
-    have h_sub : (q_rec (3 * k + 2) : ℝ) = 2 * (k + 1) * (q_rec (3 * k + 1) : ℝ) + (q_rec (3 * k) : ℝ) := by
-      convert lem_q_recurrence ( 3 * k ) using 1 ; ring_nf;
-      unfold e_coeff; norm_num; ring_nf;
-      norm_num [ Nat.add_div ] ; ring;
-    -- Since $k \ge 1$, we have $q_{3k} > 0$ and $q_{3k} < q_{3k+1}$ (strictly increasing denominators).
-    have h_pos : (q_rec (3 * k) : ℝ) > 0 ∧ (q_rec (3 * k) : ℝ) < (q_rec (3 * k + 1) : ℝ) := by
-      induction hk <;> simp_all +decide [ Nat.mul_succ, q_rec ];
-      · norm_cast;
-      · rename_i k hk ih; specialize ih; unfold e_coeff at *; simp_all +decide [Nat.add_mod] ;
-        norm_cast at * ; simp_all +decide [ Nat.add_div ];
-        exact ⟨ by norm_cast; nlinarith, by norm_cast; nlinarith ⟩;
-    exact ⟨ by rw [ lt_div_iff₀ ] <;> nlinarith, by rw [ div_lt_iff₀ ] <;> nlinarith ⟩
-
-/-
-tail 0 is e.
--/
-noncomputable def tail (n : ℕ) : ℝ :=
-  if n = 0 then Real.exp 1
-  else
-    let pn := p_rec (n - 1)
-    let qn := q_rec (n - 1)
-    let qn_prev := if n = 1 then 0 else q_rec (n - 2)
-    (1 : ℝ) / (qn ^ 2 * |Real.exp 1 - pn / qn|) - qn_prev / qn
-
-theorem tail_zero : tail 0 = Real.exp 1 := by
-  unfold tail; norm_num [ Real.exp_ne_zero ] ;
-
-/-
-Definition of r_rec using the recursive definitions of p and q.
--/
-noncomputable def r_rec (k : ℕ) : ℝ :=
-  (q_rec (3 * k + 1) : ℝ) ^ 2 * |Real.exp 1 - (p_rec (3 * k + 1) : ℝ) / q_rec (3 * k + 1)|
-
-/-
-The coefficient $a_n$ in the continued fraction of $e$ is always at least 1.
--/
-noncomputable def tail_val (n : ℕ) : ℝ :=
-  if n = 0 then Real.exp 1
-  else 1 / (tail_val (n - 1) - (e_coeff (n - 1) : ℝ))
-
-theorem lem_e_coeff_ge_one (n : ℕ) : e_coeff n ≥ 1 := by
-  unfold e_coeff; split_ifs <;> norm_num;
-  linarith [ Nat.zero_le ( n / 3 ) ]
-
-/-
-Definition of y* = sinh(1)/12.
--/
-noncomputable def y_star : ℝ := Real.sinh 1 / 12
-
-/-
-Definition of m depending on k and d.
--/
-noncomputable def m_sc (k d : ℕ) : ℤ := (d * p_seq (3 * k + 1) - 1) / 2
-
-/-
-Definition of n depending on k and d.
--/
-noncomputable def n_sc (k d : ℕ) : ℤ := (d * q_seq (3 * k + 1) + 1) / 2
-
-/-
-Definition of y depending on k and d (inlined to avoid syntax errors).
--/
-noncomputable def y_sc (k d : ℕ) : ℝ :=
-  -1/2 * ((-1 : ℝ)^(k + 1)) * r_seq k * (d : ℝ)^2 * ((n_sc k d : ℝ) / (2 * (n_sc k d : ℝ) - 1))
-
-/-
-The continued fraction of e is not terminated at any n.
--/
-theorem lem_exp_not_terminated (n : ℕ) : ¬ (GenContFract.of (Real.exp 1)).TerminatedAt n := by
-  by_contra h_terminated;
-  -- If the continued fraction of e were terminated at n, then e would be rational.
-  have h_rational : ∃ q : ℚ, Real.exp 1 = q := by
-    have h_rational : ∃ q : ℚ, (GenContFract.of (Real.exp 1)).convs n = q := by
-      exact GenContFract.exists_rat_eq_nth_conv (rexp 1) n;
-    have h_rational : (GenContFract.of (Real.exp 1)).convs n = Real.exp 1 := by
-      exact Eq.symm (GenContFract.of_correctness_of_terminatedAt h_terminated);
-    aesop;
-  have h_exp_not_rational : ¬ ∃ q : ℚ, Real.exp 1 = q := by
-    intro h
-    obtain ⟨ q, hq ⟩ := h
-    have h_contra : ∃ p k : ℕ, p > 0 ∧ k > 0 ∧ q = p / k := by
-      exact ⟨ q.num.natAbs, q.den, by simpa using ne_of_gt ( Rat.num_pos.mpr ( show 0 < q from by exact_mod_cast hq ▸ Real.exp_pos _ ) ), Nat.cast_pos.mpr q.pos, by simpa [ abs_of_nonneg ( Rat.num_nonneg.mpr ( show 0 ≤ q from by exact_mod_cast hq ▸ Real.exp_nonneg _ ) ) ] using q.num_div_den.symm ⟩
-    -- If $e$ were rational, then $e = \frac{p}{k}$ for some positive integers $p$ and $k$.
-    obtain ⟨ p, k, hp_pos, hk_pos, hpk ⟩ := h_contra
-    have h_expansion : Real.exp 1 * k ! = ∑ i ∈ Finset.range (k + 1), (k ! : ℝ) / (i ! : ℝ) + ∑' i : ℕ, (k ! : ℝ) / ((k + 1 + i)! : ℝ) := by
-      have h_expansion : Real.exp 1 * k ! = ∑' i : ℕ, (k ! : ℝ) / (i ! : ℝ) := by
-        norm_num [ div_eq_mul_inv, Real.exp_eq_exp_ℝ, NormedSpace.exp_eq_tsum ];
-        rw [ ← tsum_mul_right ] ; exact tsum_congr fun _ => by ring;
-      rw [ h_expansion, ← Summable.sum_add_tsum_nat_add ];
-      congr! 2;
-      · ac_rfl;
-      · exact Summable.mul_left _ <| by simpa using Real.summable_pow_div_factorial 1;
-    -- The second sum is strictly between 0 and 1, hence it cannot be an integer.
-    have h_second_sum_bounds : 0 < ∑' i : ℕ, (k ! : ℝ) / ((k + 1 + i)! : ℝ) ∧ ∑' i : ℕ, (k ! : ℝ) / ((k + 1 + i)! : ℝ) < 1 := by
-      constructor;
-      · refine' Summable.tsum_pos ..;
-        exacts [ Summable.mul_left _ <| by simpa [ add_comm, add_left_comm, add_assoc ] using summable_nat_add_iff ( k + 1 ) |>.2 <| Real.summable_pow_div_factorial 1, fun _ => by positivity, 0, by positivity ];
-      · -- We'll use that the series $\sum_{i=0}^{\infty} \frac{k!}{(k+1+i)!}$ is a geometric series with the first term $\frac{k!}{(k+1)!} = \frac{1}{k+1}$ and common ratio $\frac{1}{k+2}$.
-        have h_geo_series : ∑' i : ℕ, (k ! : ℝ) / ((k + 1 + i)! : ℝ) ≤ ∑' i : ℕ, (1 / (k + 1) : ℝ) * (1 / (k + 2)) ^ i := by
-          refine' Summable.tsum_le_tsum _ _ _;
-          · field_simp;
-            intro i; rw [ mul_comm ] ; induction i <;> simp_all +decide [ Nat.factorial, pow_succ' ];
-            field_simp at *;
-            nlinarith [ ( by positivity : 0 < ( k + 1 : ℝ ) * k ! * ( k + 2 ) ^ ‹_› ) ];
-          · exact Summable.mul_left _ <| by simpa using Summable.comp_injective ( Real.summable_pow_div_factorial 1 ) <| by intros a b; aesop;
-          · exact Summable.mul_left _ <| summable_geometric_of_lt_one ( by positivity ) <| by rw [ div_lt_iff₀ ] <;> linarith;
-        refine lt_of_le_of_lt h_geo_series ?_;
-        rw [ tsum_mul_left, tsum_geometric_of_lt_one ( by positivity ) ( by rw [ div_lt_iff₀ ] <;> linarith ) ];
-        field_simp;
-        rw [ div_lt_iff₀ ] <;> nlinarith only [ show ( k : ℝ ) ≥ 1 by norm_cast ];
-    -- Since $e * k!$ is an integer, the second sum must also be an integer.
-    have h_second_sum_integer : ∃ m : ℤ, ∑' i : ℕ, (k ! : ℝ) / ((k + 1 + i)! : ℝ) = m := by
-      have h_second_sum_integer : ∃ m : ℤ, Real.exp 1 * k ! = m := by
-        use p * (k - 1)!;
-        cases k <;> simp_all +decide [ Nat.factorial_succ, mul_assoc, mul_comm, mul_left_comm, div_eq_mul_inv ];
-        rw [ ← h_expansion ] ; simp +decide [Nat.cast_add_one_ne_zero];
-      obtain ⟨ m, hm ⟩ := h_second_sum_integer;
-      use m - ∑ i ∈ Finset.range (k + 1), (k ! : ℤ) / (i ! : ℤ);
-      simp +decide [ ← hm, h_expansion ];
-      rw [ Finset.sum_congr rfl fun i hi => Int.cast_div ( by exact_mod_cast Nat.factorial_dvd_factorial <| by linarith [ Finset.mem_range.mp hi ] ) ( by positivity ) ] ; norm_num;
-    obtain ⟨ m, hm ⟩ := h_second_sum_integer; rcases m with ⟨ _ | _ | m ⟩ <;> norm_num at hm <;> linarith;
-  exact h_exp_not_rational h_rational
-
-/-
-p_seq n and q_seq n are coprime.
--/
-theorem lem_coprime_pq (n : ℕ) : Nat.Coprime (Int.natAbs (p_seq n)) (q_seq n) := by
-  have hpq : ∀ n, Int.gcd (p_seq n) (q_seq n) = 1 := by
-    intro n
-    unfold p_seq q_seq
-    exact Rat.reduced _;
-  exact hpq n
-
-/-
-p_rec n and q_rec n are coprime.
--/
-theorem lem_coprime_rec (n : ℕ) : Nat.Coprime (Int.natAbs (p_rec n)) (Int.natAbs (q_rec n)) := by
-  -- By definition of $p_rec$ and $q_rec$, we know that $p_{n+1} q_n - p_n q_{n+1} = (-1)^n$.
-  have h_det : p_rec (n + 1) * q_rec n - p_rec n * q_rec (n + 1) = (-1 : ℤ) ^ n := by
-    exact lem_det_rec n;
-  refine' Nat.coprime_of_dvd' _;
-  intro k hk hk₁ hk₂; replace h_det := congr_arg ( ( ↑ ) : ℤ → ZMod k ) h_det; simp_all +decide [ ← ZMod.natCast_eq_zero_iff ] ;
-  cases' Nat.even_or_odd n with h h <;> simp_all +decide [ZMod.intCast_zmod_eq_zero_iff_dvd];
-  · haveI := Fact.mk hk; simp_all +decide [ ← ZMod.intCast_zmod_eq_zero_iff_dvd ] ;
-  · simp_all +decide [ ← ZMod.intCast_zmod_eq_zero_iff_dvd ]
-
-/-
-q_rec n is positive for all n.
--/
-theorem lem_q_rec_pos (n : ℕ) : q_rec n > 0 := by
-  induction' n using Nat.strong_induction_on with n ih;
-  rcases n with ( _ | _ | n ) <;> norm_num [ * ];
-  · exact zero_lt_one;
-  · exact Int.sign_eq_one_iff_pos.mp rfl;
-  · exact add_pos_of_nonneg_of_pos ( mul_nonneg ( Nat.cast_nonneg _ ) ( le_of_lt ( ih _ ( Nat.lt_succ_self _ ) ) ) ) ( ih _ ( Nat.lt_succ_of_lt ( Nat.lt_succ_self _ ) ) )
-
-/-
-For any positive A and T, there exists an odd integer d such that A*d^2 is close to T.
--/
-theorem lem_quadratic_approx (A T : ℝ) (hA : A > 0) (hT : T > 0) :
-  ∃ d : ℤ, Odd d ∧ |A * d^2 - T| ≤ 3 * Real.sqrt (A * T) + 3 * A := by
-    -- Let $x = \sqrt{T/A}$. Let $d$ be the odd integer closest to $x$. Then $|d-x| \le 1$.
-    set x := Real.sqrt (T / A)
-    obtain ⟨d, hd⟩ : ∃ d : ℤ, Odd d ∧ |(d : ℝ) - x| ≤ 1 := by
-      exact exists_odd_near x;
-    -- We have $|A d^2 - T| = A |d^2 - x^2| = A |d-x|(d+x) \le A(1)(2x+1) = 2\sqrt{AT} + A$.
-    have h_bound : |A * (d : ℝ) ^ 2 - T| ≤ A * (1) * (2 * x + 1) := by
-      have h_bound : |A * (d : ℝ) ^ 2 - T| = A * |(d : ℝ) - x| * |(d : ℝ) + x| := by
-        rw [ show A * ( d : ℝ ) ^ 2 - T = A * ( ( d : ℝ ) - x ) * ( ( d : ℝ ) + x ) by nlinarith [ Real.mul_self_sqrt ( show 0 ≤ T / A by positivity ), mul_div_cancel₀ T hA.ne' ] ] ; rw [ abs_mul, abs_mul, abs_of_pos hA ];
-      exact h_bound.symm ▸ mul_le_mul ( mul_le_mul_of_nonneg_left hd.2 hA.le ) ( by cases abs_cases ( ( d : ℝ ) + x ) <;> cases abs_cases ( ( d : ℝ ) - x ) <;> linarith [ Real.sqrt_nonneg ( T / A ) ] ) ( by positivity ) ( by positivity );
-    refine' ⟨ d, hd.1, h_bound.trans _ ⟩;
-    rw [ show A * T = A ^ 2 * ( T / A ) by nlinarith [ mul_div_cancel₀ T hA.ne' ], Real.sqrt_mul ( by positivity ), Real.sqrt_sq hA.le ] ; nlinarith [ Real.sqrt_nonneg ( T / A ), Real.mul_self_sqrt ( show 0 ≤ T / A by positivity ), mul_div_cancel₀ T hA.ne' ]
-
-/-
-If d is odd, the ratio n/(2n-1) is very close to 1/2, with error at most 1/(2d).
--/
-theorem lem_n_ratio_approx_odd (k d : ℕ) (hk : k ≥ 1) (hd : Odd d) :
-  let n := n_sc k d
-  |(n : ℝ) / (2 * n - 1) - 1 / 2| ≤ 1 / (2 * (d : ℝ)) := by
-    obtain ⟨ m, rfl ⟩ := hd;
-    rw [ abs_le ] ; constructor <;> norm_num [ n_sc ];
-    · field_simp;
-      rw [ div_add_one, le_div_iff₀ ] <;> norm_cast <;> norm_num [ Nat.add_mod, Nat.mul_mod, Nat.add_div ];
-      · rcases Nat.even_or_odd' ( q_seq ( 3 * k + 1 ) ) with ⟨ c, d | d ⟩ <;> push_cast [ d ] <;> ring_nf <;> norm_num [ Int.subNatNat_eq_coe ] at *;
-        · grind;
-        · grind;
-      · rw [ Int.subNatNat_eq_coe ] ; norm_num ; ring_nf;
-        -- Since $q_{3k+1}$ is always positive and odd, we have $q_{3k+1} \geq 1$.
-        have h_q_pos : 1 ≤ q_seq (1 + k * 3) := by
-          exact Nat.pos_of_ne_zero ( by erw [ show q_seq ( 1 + k * 3 ) = ( Real.convergent ( Real.exp 1 ) ( 1 + k * 3 ) |> Rat.den ) from rfl ] ; exact Nat.ne_of_gt ( Rat.pos _ ) );
-        grind;
-    · rw [ inv_mul_eq_div, div_add_div, div_le_div_iff₀ ] <;> norm_cast <;> norm_num [ Nat.add_div, Nat.mul_div_assoc, Nat.mul_mod, Nat.add_mod ];
-      · rcases Nat.even_or_odd' ( q_seq ( 3 * k + 1 ) ) with ⟨ c, d | d ⟩ <;> push_cast [ * ] <;> ring_nf <;> norm_num;
-        · unfold q_seq at d; simp_all +decide [ parity_simps ] ;
-          split_ifs at d <;> norm_cast at * ; simp_all +decide [ parity_simps ];
-          · cases c <;> cases d;
-          · norm_num [ show m * c * 4 + c * 2 = 2 * ( m * c * 2 + c ) by ring, Nat.add_div ] ; ring_nf;
-            rcases c with ( _ | _ | c ) <;> norm_num at *;
-            · (expose_names; exact False.elim (h d));
-            · nlinarith;
-            · nlinarith;
-        · norm_num [ Nat.add_div, Nat.mul_div_assoc, Nat.mul_mod, Nat.add_mod ] ; nlinarith;
-      · rw [ Int.subNatNat_eq_coe ] ; norm_num ; ring_nf;
-        -- Since $q_{3k+1}$ is always positive and odd, we have $q_{3k+1} \geq 1$.
-        have h_q_pos : 1 ≤ q_seq (1 + k * 3) := by
-          exact Nat.pos_of_ne_zero ( by erw [ show q_seq ( 1 + k * 3 ) = ( Real.convergent ( Real.exp 1 ) ( 1 + k * 3 ) |> Rat.den ) from rfl ] ; exact Nat.ne_of_gt ( Rat.pos _ ) );
-        grind
-
-/-
-The ratio $q_{3k+2}/q_{3k+1}$ is strictly between $2k+2$ and $2k+3$.
--/
-theorem lem_q_ratio_bounds_explicit_proven (k : ℕ) (hk : k ≥ 1) :
-  2 * (k : ℝ) + 2 < (q_rec (3 * k + 2) : ℝ) / q_rec (3 * k + 1) ∧
-  (q_rec (3 * k + 2) : ℝ) / q_rec (3 * k + 1) < 2 * (k : ℝ) + 3 := by
-    convert lem_q_ratio_bounds_explicit k hk using 1
-
-/-
-There exists a constant C>0 such that for every integer n>=1, |f(n) - f(n+1) + 1/(n+1)| <= C/n^5.
--/
-theorem lem_f_diff_bound_aux : ∃ C > 0, ∀ n : ℕ, n ≥ 1 → |f n - f (n + 1) + 1 / (n + 1)| ≤ C / n ^ 5 := by
-  by_contra! h_contra;
-  obtain ⟨ C, hC_pos, hC ⟩ : ∃ C > 0, ∀ n : ℕ, n ≥ 2 → |f n - f (n - 1) - 1 / n| ≤ C / n ^ 5 := by
-    exact lem_f_diff_bound;
-  -- By substituting $n+1$ for $n$ in the hypothesis $hC$, we can derive the required inequality for $n \geq 1$.
-  have h_subst : ∀ n : ℕ, n ≥ 1 → |f (n + 1) - f n - 1 / (n + 1)| ≤ C / (n + 1) ^ 5 := by
-    exact fun n hn => mod_cast hC _ ( Nat.succ_le_succ hn );
-  obtain ⟨ n, hn₁, hn₂ ⟩ := h_contra C hC_pos;
-  exact hn₂.not_ge ( le_trans ( by rw [ abs_sub_comm ] ; ring_nf at *; linarith ) ( h_subst n hn₁ ) |> le_trans <| by gcongr ; norm_num )
-
-/-
-The sequence H_n - f(n) tends to 0 as n goes to infinity.
--/
-theorem lem_diff_tendsto_zero : Filter.Tendsto (fun n => H n - f n) Filter.atTop (nhds 0) := by
-  -- We'll use the fact that the difference between the harmonic series and the natural logarithm converges to the Euler-Mascheroni constant.
-  have h_harmonic_log : Filter.Tendsto (fun n => H n - Real.log n) Filter.atTop (nhds (Real.eulerMascheroniConstant)) := by
-    convert Real.tendsto_harmonic_sub_log using 1;
-  convert h_harmonic_log.sub ( show Filter.Tendsto ( fun n : ℕ => f n - Real.log n ) Filter.atTop ( nhds ( Real.eulerMascheroniConstant ) ) from ?_ ) using 2 <;> norm_num [ f ] ; ring_nf!;
-  simpa using Filter.Tendsto.add ( tendsto_const_nhds.add ( tendsto_inverse_atTop_nhds_zero_nat.mul tendsto_const_nhds ) ) ( tendsto_inverse_atTop_nhds_zero_nat.pow 2 |> Filter.Tendsto.mul_const _ )
-
-/-
-There exists a constant C>0 such that for every integer n>=1, |H_n - f(n)| <= C/n^4.
--/
-theorem lem_EM : ∃ C > 0, ∀ n : ℕ, n ≥ 1 → |H n - f n| ≤ C / n ^ 4 := by
-  -- By combining the results from `lem_f_diff_bound_aux` and `lem_diff_tendsto_zero`, we can show that $|H_n - f(n)| \leq C/n^4$ for some constant $C$.
-  obtain ⟨C, hC_pos, hC_bound⟩ : ∃ C > 0, ∀ n ≥ 1, |(H n - f n) - (H (n + 1) - f (n + 1))| ≤ C / n ^ 5 := by
-    obtain ⟨ C, hC_pos, hC_bound ⟩ := lem_f_diff_bound_aux;
-    use C, hC_pos;
-    intro n hn; specialize hC_bound n hn; simp_all +decide [ abs_le, H ] ;
-    constructor <;> linarith [ show ( harmonic n : ℝ ) = ∑ k ∈ Finset.range n, ( 1 / ( k + 1 : ℝ ) ) by exact mod_cast by simp +decide [ harmonic ] ] ;
-  -- By induction, we can show that $|H_n - f(n)| \leq \sum_{k=n}^\infty |(H_k - f(k)) - (H_{k+1} - f(k+1))|$.
-  have h_induction : ∀ n ≥ 1, |H n - f n| ≤ ∑' k : ℕ, C / (n + k) ^ 5 := by
-    intro n hn
-    have h_sum : |H n - f n| ≤ ∑' k : ℕ, |(H (n + k) - f (n + k)) - (H (n + k + 1) - f (n + k + 1))| := by
-      have h_sum : Filter.Tendsto (fun m => ∑ k ∈ Finset.range m, (H (n + k) - f (n + k) - (H (n + k + 1) - f (n + k + 1)))) Filter.atTop (nhds (H n - f n)) := by
-        have h_telescope : ∀ m : ℕ, ∑ k ∈ Finset.range m, ((H (n + k) - f (n + k)) - (H (n + k + 1) - f (n + k + 1))) = (H n - f n) - (H (n + m) - f (n + m)) := by
-          exact fun m => by induction m <;> norm_num [ add_assoc, Finset.sum_range_succ ] at * ; linarith;
-        rw [ Filter.tendsto_congr h_telescope ] ; simpa using tendsto_const_nhds.sub ( lem_diff_tendsto_zero.comp ( Filter.tendsto_atTop_mono ( fun m => by simp +arith +decide ) tendsto_natCast_atTop_atTop ) ) ;
-      have h_sum_abs : Summable (fun k : ℕ => |(H (n + k) - f (n + k)) - (H (n + k + 1) - f (n + k + 1))|) := by
-        have h_sum_abs : Summable (fun k : ℕ => C / (n + k : ℝ) ^ 5) := by
-          exact Summable.mul_left _ <| by exact_mod_cast Summable.comp_injective ( Real.summable_nat_pow_inv.2 <| by norm_num ) <| by intros a b; aesop;
-        exact Summable.of_nonneg_of_le ( fun k => abs_nonneg _ ) ( fun k => by simpa using hC_bound ( n + k ) ( by linarith ) ) h_sum_abs;
-      exact le_of_tendsto' ( Filter.Tendsto.abs h_sum ) fun m => by simpa using Finset.abs_sum_le_sum_abs _ _ |> le_trans <| Summable.sum_le_tsum ( Finset.range m ) ( fun _ _ => abs_nonneg _ ) h_sum_abs;
-    refine' le_trans h_sum ( Summable.tsum_le_tsum _ _ _ );
-    · exact fun k => mod_cast hC_bound _ ( by linarith );
-    · refine' Summable.of_nonneg_of_le ( fun k => abs_nonneg _ ) ( fun k => hC_bound ( n + k ) ( by linarith ) ) _;
-      exact Summable.mul_left _ <| by exact_mod_cast Summable.comp_injective ( Real.summable_nat_pow_inv.2 <| by norm_num ) <| by intros a b; aesop;
-    · exact Summable.mul_left _ <| by exact_mod_cast Summable.comp_injective ( Real.summable_nat_pow_inv.2 <| by norm_num ) <| by intros a b; aesop;
-  -- We can bound the sum $\sum_{k=n}^\infty \frac{C}{(n+k)^5}$ by comparing it to an integral.
-  have h_integral_bound : ∀ n ≥ 1, ∑' k : ℕ, C / (n + k : ℝ) ^ 5 ≤ C / (n : ℝ) ^ 5 + C / 4 * (1 / (n : ℝ) ^ 4) := by
-    intros n hn
-    have h_integral_bound_step : ∀ k ≥ 1, C / (n + k : ℝ) ^ 5 ≤ C / 4 * (1 / (n + k - 1 : ℝ) ^ 4 - 1 / (n + k : ℝ) ^ 4) := by
-      intro k hk; rw [ div_sub_div, div_mul_div_comm, div_le_div_iff₀ ] <;> try positivity;
-      · nlinarith [ show 0 < C * ( n + k ) ^ 4 by positivity, show 0 < C * ( n + k ) ^ 5 by positivity, show 0 < C * ( n + k - 1 ) ^ 4 by exact mul_pos hC_pos ( pow_pos ( by linarith ) _ ), show 0 < C * ( n + k - 1 ) ^ 5 by exact mul_pos hC_pos ( pow_pos ( by linarith ) _ ), pow_two_nonneg ( ( n + k ) ^ 2 - ( n + k - 1 ) ^ 2 ) ];
-      · exact mul_pos zero_lt_four ( mul_pos ( pow_pos ( by linarith ) 4 ) ( pow_pos ( by linarith ) 4 ) );
-      · exact pow_ne_zero _ ( by linarith );
-    -- Applying the integral bound step to each term in the sum, we get:
-    have h_sum_integral_bound : ∀ N : ℕ, ∑ k ∈ Finset.range (N + 1), C / (n + k : ℝ) ^ 5 ≤ C / n ^ 5 + C / 4 * (1 / n ^ 4 - 1 / (n + N : ℝ) ^ 4) := by
-      intro N; induction' N with N ih <;> norm_num [ Finset.sum_range_succ ] at *;
-      convert add_le_add ih ( h_integral_bound_step ( N + 1 ) ( by linarith ) ) using 1 ; ring;
-    -- Taking the limit of the sum as $N$ approaches infinity, we get:
-    have h_limit : Filter.Tendsto (fun N : ℕ => ∑ k ∈ Finset.range (N + 1), C / (n + k : ℝ) ^ 5) Filter.atTop (nhds (∑' k : ℕ, C / (n + k : ℝ) ^ 5)) := by
-      refine' ( Summable.hasSum _ ) |> HasSum.tendsto_sum_nat |> Filter.Tendsto.comp <| Filter.tendsto_add_atTop_nat 1;
-      have h_summable : Summable (fun k : ℕ => C / (k : ℝ) ^ 5) := by
-        exact Summable.mul_left _ <| Real.summable_nat_pow_inv.2 <| by norm_num;
-      rw [ ← summable_nat_add_iff 1 ] at *;
-      exact Summable.of_nonneg_of_le ( fun _ => div_nonneg hC_pos.le <| pow_nonneg ( by positivity ) _ ) ( fun _ => div_le_div_of_nonneg_left ( by positivity ) ( by positivity ) <| pow_le_pow_left₀ ( by positivity ) ( by linarith ) _ ) h_summable;
-    exact le_of_tendsto_of_tendsto' h_limit tendsto_const_nhds fun N => le_trans ( h_sum_integral_bound N ) ( add_le_add_left ( mul_le_mul_of_nonneg_left ( sub_le_self _ <| by positivity ) <| by positivity ) _ );
-  refine' ⟨ C + C / 4, by positivity, fun n hn => le_trans ( h_induction n <| mod_cast hn ) <| le_trans ( h_integral_bound n <| mod_cast hn ) _ ⟩ ; ring_nf ; norm_num [ hn ];
-  nlinarith [ show 0 < C * ( n ^ 4 : ℝ ) ⁻¹ by positivity, show 0 < C * ( n ^ 5 : ℝ ) ⁻¹ by positivity, show ( n ^ 4 : ℝ ) ⁻¹ ≥ ( n ^ 5 : ℝ ) ⁻¹ by gcongr <;> norm_cast ]
-
-/-
-The number $e$ can be expressed in terms of the $(n+1)$-th tail of its continued fraction and the $n$-th and $(n-1)$-th convergents.
--/
-theorem lem_exp_eq_tail_formula (n : ℕ) (h : n ≥ 1) :
-  Real.exp 1 = ((tail_val (n + 1) : ℝ) * (p_rec n : ℝ) + (p_rec (n - 1) : ℝ)) /
-               ((tail_val (n + 1) : ℝ) * (q_rec n : ℝ) + (q_rec (n - 1) : ℝ)) := by
-                 -- By definition of `tail_val`, we know that `tail_val (n + 1)` is the tail of the continued fraction expansion of `e` starting from the `(n + 1)`-th term.
-                 have h_tail : ∀ n, tail_val (n + 1) = 1 / (tail_val n - (e_coeff n : ℝ)) := by
-                   intro n
-                   rw [tail_val];
-                   rfl;
-                 -- By definition of `tail_val`, we know that `tail_val 0 = e`.
-                 have h_tail_zero : tail_val 0 = Real.exp 1 := by
-                   unfold tail_val; norm_num;
-                 induction h <;> simp_all +decide ; ring_nf;
-                 · unfold e_coeff p_rec q_rec; norm_num [ h_tail_zero ] ; ring_nf;
-                   -- Substitute A = (-2 + Real.exp 1)⁻¹ and simplify the expression.
-                   set A : ℝ := (-2 + Real.exp 1)⁻¹
-                   have hA : 1 + A > 0 := by
-                     exact add_pos_of_pos_of_nonneg zero_lt_one ( inv_nonneg.mpr ( by have := Real.exp_one_gt_d9.le; norm_num1 at *; linarith ) )
-                   field_simp [hA]
-                   ring_nf;
-                   by_cases h : -1 + A = 0 <;> simp_all +decide [ mul_comm];
-                   · -- If $-1 + A = 0$, then $A = 1$, which implies $(-2 + \exp 1)^{-1} = 1$, leading to $\exp 1 = 3$, contradicting the known value of $\exp 1$.
-                     have h_contra : Real.exp 1 = 3 := by
-                       grind;
-                     exact absurd h_contra <| by exact ne_of_lt <| Real.exp_one_lt_d9.trans_le <| by norm_num;
-                   · field_simp [h];
-                     rw [ eq_div_iff ] <;> cases lt_or_gt_of_ne h <;> nlinarith [ Real.add_one_le_exp 1, mul_inv_cancel₀ ( show -2 + Real.exp 1 ≠ 0 from by have := Real.exp_one_gt_d9.le; norm_num1 at *; linarith ) ];
-                 · rename_i k hk₁ hk₂;
-                   rw [ show p_rec ( k + 1 ) = ( e_coeff ( k + 1 ) : ℤ ) * p_rec k + p_rec ( k - 1 ) from ?_, show q_rec ( k + 1 ) = ( e_coeff ( k + 1 ) : ℤ ) * q_rec k + q_rec ( k - 1 ) from ?_ ];
-                   · by_cases h : ( tail_val k - e_coeff k : ℝ ) ⁻¹ - e_coeff ( k + 1 ) = 0 <;> simp +decide [h] ; ring_nf;
-                     · simp_all +decide [ sub_eq_iff_eq_add ];
-                       -- Since $e$ is irrational, the equation $e = \frac{a}{b}$ cannot hold for any integers $a$ and $b$.
-                       have h_irrational : Irrational (Real.exp 1) := by
-                         by_contra h_contra;
-                         -- If $e$ were rational, then $e = \frac{p}{q}$ for some coprime positive integers $p$ and $q$.
-                         obtain ⟨p, q, h_coprime, h_eq⟩ : ∃ p q : ℕ, Nat.gcd p q = 1 ∧ Real.exp 1 = p / q := by
-                           have := Classical.not_not.1 h_contra; rcases this with ⟨ q, hq ⟩ ; exact ⟨ q.num.natAbs, q.den, q.reduced, by simpa [ abs_of_nonneg ( Rat.num_nonneg.mpr ( show 0 ≤ q by exact_mod_cast hq.symm ▸ Real.exp_nonneg _ ) ), Rat.cast_def ] using hq.symm ⟩ ;
-                         -- Multiply both sides of the equation by $q!$ to obtain a contradiction.
-                         have h_factorial : ∑ k ∈ Finset.range (q + 1), (q ! / k ! : ℝ) + ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) = p * (q - 1)! := by
-                           have h_factorial : ∑' k : ℕ, (q ! / k ! : ℝ) = p * (q - 1)! := by
-                             have h_factorial : ∑' k : ℕ, (q ! / k ! : ℝ) = Real.exp 1 * q ! := by
-                               norm_num [ div_eq_mul_inv, Real.exp_eq_exp_ℝ, NormedSpace.exp_eq_tsum ];
-                               rw [ mul_comm, tsum_mul_left ];
-                             rcases q <;> simp_all +decide [ Nat.factorial_succ, mul_comm, div_eq_mul_inv ];
-                             rw [ ← hk₂ ] ; ring_nf;
-                             -- Combine like terms and simplify the expression.
-                             field_simp
-                             ring;
-                           rw [ ← h_factorial, ← Summable.sum_add_tsum_nat_add ];
-                           rotate_left;
-                           use 0;
-                           · exact Summable.mul_left _ <| by simpa using summable_nat_add_iff ( q + 1 ) |>.2 <| Real.summable_pow_div_factorial 1;
-                           · rw [ eq_comm, ← Summable.sum_add_tsum_nat_add ];
-                             congr! 1;
-                             · norm_num [ add_assoc ];
-                             · exact Summable.mul_left _ <| by simpa using Real.summable_pow_div_factorial 1;
-                         -- The first sum is an integer, and the second sum is a positive number less than 1.
-                         have h_sum_bounds : ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) < 1 := by
-                           -- We'll use that the series $\sum_{k=q+1}^{\infty} \frac{q!}{k!}$ is a geometric series with the first term $\frac{q!}{(q+1)!} = \frac{1}{q+1}$ and common ratio $\frac{1}{q+2}$.
-                           have h_geo_series : ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) ≤ ∑' k : ℕ, (1 / (q + 1) : ℝ) * (1 / (q + 2)) ^ k := by
-                             refine' Summable.tsum_le_tsum _ _ _;
-                             · field_simp;
-                               intro i; rw [ mul_comm ] ; induction i <;> simp_all +decide [ Nat.factorial, pow_succ' ];
-                               norm_num [ Nat.succ_add, Nat.factorial_succ ] at *;
-                               field_simp at *;
-                               nlinarith [ sq ( q : ℝ ), show ( 0 : ℝ ) ≤ ( q + 1 ) * q ! * ( q + 2 ) ^ ‹_› by positivity ];
-                             · exact Summable.mul_left _ <| by simpa using summable_nat_add_iff ( q + 1 ) |>.2 <| Real.summable_pow_div_factorial 1;
-                             · exact Summable.mul_left _ <| summable_geometric_of_lt_one ( by positivity ) <| by rw [ div_lt_iff₀ ] <;> linarith;
-                           refine lt_of_le_of_lt h_geo_series ?_;
-                           rw [ tsum_mul_left, tsum_geometric_of_lt_one ( by positivity ) ( by rw [ div_lt_iff₀ ] <;> linarith ) ];
-                           field_simp;
-                           rw [ div_lt_iff₀ ] <;> nlinarith only [ show ( q : ℝ ) ≥ 1 by norm_cast; exact Nat.pos_of_ne_zero ( by rintro rfl; norm_num at * ) ];
-                         -- The first sum is an integer, and the second sum is a positive number less than 1, leading to a contradiction.
-                         have h_contradiction : ∃ m : ℤ, ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) = m := by
-                           use p * (q - 1)! - ∑ k ∈ Finset.range (q + 1), (q ! / k ! : ℤ);
-                           simp +decide [ ← h_factorial ];
-                           rw [ Finset.sum_congr rfl fun i hi => Int.cast_div ( by exact_mod_cast Nat.factorial_dvd_factorial ( by linarith [ Finset.mem_range.mp hi ] ) ) ( by positivity ) ] ; norm_num;
-                         obtain ⟨ m, hm ⟩ := h_contradiction; rcases m with ⟨ _ | _ | m ⟩ <;> norm_num at hm <;> try linarith;
-                         · rw [ Summable.tsum_eq_zero_add ] at hm;
-                           · exact ne_of_gt ( add_pos_of_pos_of_nonneg ( by positivity ) ( tsum_nonneg fun _ => by positivity ) ) hm;
-                           · exact Summable.mul_left _ <| by simpa using summable_nat_add_iff ( q + 1 ) |>.2 <| Real.summable_pow_div_factorial 1;
-                         · linarith [ show ( 0 : ℝ ) ≤ ∑' k : ℕ, ( q ! : ℝ ) / ( k + q + 1 ) ! from tsum_nonneg fun _ => by positivity ];
-                       exact False.elim <| h_irrational ⟨ ( e_coeff ( k + 1 ) * p_rec k + p_rec ( k - 1 ) ) / ( e_coeff ( k + 1 ) * q_rec k + q_rec ( k - 1 ) ), by push_cast; linarith ⟩;
-                     · field_simp [h];
-                       ring;
-                   · rcases k with ( _ | k ) <;> tauto;
-                   · rcases k with ( _ | _ | k ) <;> tauto
-
-/-
-The difference $e - p_n/q_n$ is given by $(-1)^n / (q_n (\alpha_{n+1} q_n + q_{n-1}))$.
--/
-theorem lem_exp_diff_formula (n : ℕ) (h : n ≥ 1) :
-  Real.exp 1 - (p_rec n : ℝ) / q_rec n = (-1 : ℝ)^n / ((q_rec n : ℝ) * ((tail_val (n + 1) : ℝ) * q_rec n + q_rec (n - 1))) := by
-    have := @lem_exp_eq_tail_formula n h;
-    have h_det : p_rec n * q_rec (n - 1) - p_rec (n - 1) * q_rec n = (-1 : ℝ) ^ (n - 1) := by
-      convert lem_det_rec ( n - 1 ) using 1 ; cases n <;> norm_num [ pow_succ' ] at *;
-      norm_cast;
-    rw [ this, div_sub_div ];
-    · cases n <;> simp_all +decide [ pow_succ' ] ; ring_nf;
-      rw [ ← h_det ] ; ring_nf;
-    · intro h_zero
-      have := this.symm
-      field_simp [h_zero] at this;
-      norm_num [ h_zero ] at this ; linarith [ Real.exp_pos 1 ];
-    · exact_mod_cast ne_of_gt ( lem_q_rec_pos n )
-
-/-
-The value of the n-th tail of the continued fraction of e is irrational for all n.
--/
-theorem lem_tail_irrational (n : ℕ) : Irrational (tail_val n) := by
-  induction' n with n ih <;> unfold tail_val <;> norm_num at *;
-  · by_contra h_contra
-    obtain ⟨p, q, hq_pos, hpq_eq⟩ : ∃ p q : ℕ, q > 0 ∧ Real.exp 1 = p / q := by
-      unfold Irrational at h_contra;
-      -- Obtain such a q from h_contra.
-      obtain ⟨q, hq⟩ : ∃ q : ℚ, Real.exp 1 = q := by
-        grind;
-      exact ⟨ q.num.natAbs, q.den, Nat.cast_pos.mpr q.pos, by simpa [ abs_of_nonneg ( Rat.num_nonneg.mpr ( show 0 ≤ q by exact_mod_cast hq ▸ Real.exp_nonneg _ ) ), Rat.cast_def ] using hq ⟩
-    have h_factorial : ∑ k ∈ Finset.range (q + 1), (q ! / k ! : ℝ) + ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) = q ! * (p / q) := by
-      have h_factorial : ∑' k : ℕ, (q ! / k ! : ℝ) = q ! * (p / q) := by
-        rw [ ← hpq_eq, Real.exp_eq_exp_ℝ ];
-        norm_num [ div_eq_mul_inv, tsum_mul_left, NormedSpace.exp_eq_tsum ];
-      rw [ ← h_factorial, ← Summable.sum_add_tsum_nat_add ];
-      case k => exact 0;
-      · rw [ eq_comm, ← Summable.sum_add_tsum_nat_add ];
-        congr! 1;
-        · norm_num [ add_assoc ];
-        · exact Summable.mul_left _ <| by simpa using Real.summable_pow_div_factorial 1;
-      · exact Summable.mul_left _ <| by simpa using summable_nat_add_iff ( q + 1 ) |>.2 <| Real.summable_pow_div_factorial 1;
-    have h_int : ∃ m : ℤ, ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) = m := by
-      use q ! * p / q - ∑ k ∈ Finset.range (q + 1), (q ! / k ! : ℤ);
-      rw [ Int.cast_sub, Int.cast_div ] <;> norm_num [ h_factorial ];
-      · convert eq_sub_of_add_eq' h_factorial using 1 ; ring_nf;
-        exact congrArg _ ( Finset.sum_congr rfl fun x hx => by rw [ Int.cast_div ( mod_cast Nat.factorial_dvd_factorial ( by linarith [ Finset.mem_range.mp hx ] ) ) ( by positivity ) ] ; push_cast; ring );
-      · exact dvd_mul_of_dvd_left ( mod_cast Nat.dvd_factorial ( by positivity ) ( by linarith ) ) _;
-      · linarith
-    have h_sum_lt_one : ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) < 1 := by
-      -- We'll use that the series $\sum_{k=q+1}^{\infty} \frac{q!}{k!}$ is a geometric series with the first term $\frac{q!}{(q+1)!} = \frac{1}{q+1}$ and common ratio $\frac{1}{q+2}$.
-      have h_geo_series : ∑' k : ℕ, (q ! / (k + q + 1)! : ℝ) ≤ ∑' k : ℕ, (1 / (q + 1) : ℝ) * (1 / (q + 2)) ^ k := by
-        refine' Summable.tsum_le_tsum _ _ _ <;> norm_num +zetaDelta at *;
-        · intro i; rw [ ← mul_inv ] ; rw [ inv_eq_one_div, div_le_div_iff₀ ] <;> norm_cast <;> first | positivity | induction' i with i ih <;> norm_num [ Nat.factorial, pow_succ' ] at * ; ring_nf at * ; nlinarith;
-          rw [ Nat.succ_add ] ; nlinarith [ Nat.factorial_succ ( i + q ), pow_pos ( by linarith : 0 < q + 2 ) i ] ;
-        · exact Summable.mul_left _ <| by simpa using summable_nat_add_iff ( q + 1 ) |>.2 <| Real.summable_pow_div_factorial 1;
-        · exact Summable.mul_left _ <| by simpa using summable_geometric_of_lt_one ( by positivity ) <| inv_lt_one_of_one_lt₀ <| by linarith;
-      refine lt_of_le_of_lt h_geo_series ?_ ; rw [ tsum_mul_left, tsum_geometric_of_lt_one ( by positivity ) ( by rw [ div_lt_iff₀ ] <;> norm_cast <;> linarith ) ] ; norm_num ; ring_nf ; (
-      rw [ ← mul_inv, inv_lt_one₀ ] <;> nlinarith only [ show ( q : ℝ ) ≥ 1 by norm_cast, inv_mul_cancel₀ ( by positivity : ( 2 + q : ℝ ) ≠ 0 ) ] ;);
-    have h_contra : ∃ m : ℤ, 0 < m ∧ m < 1 := by
-      obtain ⟨m, hm⟩ := h_int
-      have hm_pos : 0 < m := by
-        exact_mod_cast hm ▸ show 0 < ∑' k : ℕ, ( q ! : ℝ ) / ( k + q + 1 ) ! from lt_of_lt_of_le ( by positivity ) ( Summable.le_tsum ( show Summable _ from by exact Summable.mul_left _ <| by simpa using summable_nat_add_iff ( q + 1 ) |>.2 <| Real.summable_pow_div_factorial 1 ) 0 <| fun _ _ => by positivity ) ;
-      have hm_lt_one : m < 1 := by
-        exact_mod_cast hm ▸ h_sum_lt_one
-      exact ⟨m, hm_pos, hm_lt_one⟩
-    exact h_contra.elim fun m hm => by linarith [hm.1, hm.2] ;
-  · assumption
-
-/-
-Formula for tail_val (n+1) in terms of e and convergents.
--/
-theorem lem_tail_val_formula (n : ℕ) (h : n ≥ 1) :
-  tail_val (n + 1) = - (p_rec (n - 1) - Real.exp 1 * q_rec (n - 1)) / (p_rec n - Real.exp 1 * q_rec n) := by
-    rw [ eq_div_iff ];
-    · have := @lem_exp_eq_tail_formula n h;
-      rw [ eq_div_iff ] at this <;> first | linarith | intro H ; norm_num [ H ] at this;
-    · -- By definition of $p_rec$ and $q_rec$, we know that $p_rec n$ and $q_rec n$ are coprime integers.
-      have h_coprime : Nat.Coprime (Int.natAbs (p_rec n)) (Int.natAbs (q_rec n)) := by
-        exact lem_coprime_rec n;
-      rw [ sub_ne_zero ];
-      by_contra h_contra;
-      -- Since $e$ is irrational, $p_n / q_n$ cannot equal $e$, leading to a contradiction.
-      have h_irrational : Irrational (Real.exp 1) := by
-        have := @lem_tail_irrational 0;
-        unfold tail_val at this; aesop;
-      exact h_irrational ⟨ p_rec n / q_rec n, by push_cast [ h_contra ] ; rw [ mul_div_cancel_right₀ _ ( by aesop ) ] ⟩
-
-/-
-For all $n$, `tail_val n = e_coeff n + 1 / tail_val (n+1)`.
--/
-theorem lem_tail_val_recurrence (n : ℕ) :
-  tail_val n = (e_coeff n : ℝ) + 1 / tail_val (n + 1) := by
-    -- By definition of `tail_val`, we have `tail_val (n + 1) = 1 / (tail_val n - e_coeff n)`.
-    have h_tail_def : tail_val (n + 1) = 1 / (tail_val n - e_coeff n) := by
-      have h_tail_def : ∀ n, tail_val (n + 1) = 1 / (tail_val n - e_coeff n) := by
-        intro n
-        rw [tail_val];
-        rfl;
-      exact h_tail_def n;
-    grind
-
-/-
-r_seq k is strictly positive for all k.
--/
-theorem r_seq_pos (k : ℕ) : r_seq k > 0 := by
-  refine' mul_pos _ ( sq_pos_of_pos _ );
-  · -- Since $e$ is irrational, $e - p/q$ is never zero for any rational $p/q$.
-    have h_irr : Irrational (Real.exp 1) := by
-      have := @lem_tail_irrational 0;
-      unfold tail_val at this; aesop;
-    exact abs_pos.mpr ( sub_ne_zero.mpr <| by exact fun h => h_irr <| by use ( p_seq ( 3 * k + 1 ) : ℚ ) / q_seq ( 3 * k + 1 ) ; aesop );
-  · exact Nat.cast_pos.mpr ( Nat.pos_of_ne_zero ( Rat.den_nz _ ) )
-
-/-
-y_star is strictly positive.
--/
-theorem y_star_pos : y_star > 0 := by
-  exact div_pos ( Real.sinh_pos_iff.mpr zero_lt_one ) ( by norm_num )
-
-/-
-The ratio of denominators satisfies
-\[ 0 < \frac{q_{3k}}{q_{3k+1}} < 1. \]
--/
-theorem lem_q_ratio_bound_tight (k : ℕ) (hk : k ≥ 1) :
-  0 < (q_rec (3 * k) : ℝ) / q_rec (3 * k + 1) ∧ (q_rec (3 * k) : ℝ) / q_rec (3 * k + 1) < 1 := by
-    refine' ⟨ div_pos ( mod_cast _ ) ( mod_cast _ ), div_lt_one _ |>.2 _ ⟩ <;> norm_cast;
-    · exact lem_q_rec_pos (3 * k);
-    · exact lem_q_rec_pos (3 * k + 1);
-    · exact lem_q_rec_pos (3 * k + 1);
-    · induction k <;> simp_all +decide [ Nat.mul_succ, le_add_iff_nonneg_left ];
-      rename_i k ih; rw [ show q_rec ( 3 * k + 4 ) = e_coeff ( 3 * k + 4 ) * q_rec ( 3 * k + 3 ) + q_rec ( 3 * k + 2 ) from rfl ] ; rw [ show q_rec ( 3 * k + 3 ) = e_coeff ( 3 * k + 3 ) * q_rec ( 3 * k + 2 ) + q_rec ( 3 * k + 1 ) from rfl ] ; simp +decide [ e_coeff ] ; ring_nf;
-      exact lem_q_rec_pos _
-
-/-
-The difference between consecutive convergents is $(-1)^n / (q_n q_{n+1})$.
--/
-theorem lem_signed_convergent_diff (n : ℕ) :
-  (p_rec (n + 1) : ℝ) / q_rec (n + 1) - (p_rec n : ℝ) / q_rec n = (-1 : ℝ)^n / ((q_rec n : ℝ) * (q_rec (n + 1) : ℝ)) := by
+lemma eps_q_upper (k : ℕ) (hk : 1 ≤ k) :
+    ((ePadeNum k : ℝ) - exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) ≤
+      1 / (2 * ↑k + 2) := by
+  by_cases heven : Even k;
+  · have := ePade_integral_identity k;
+    simp_all +decide [ mul_comm ];
     field_simp;
-    rw [ div_sub_div, mul_comm ];
-    · congr 1 ; norm_cast ; ring_nf;
-      convert lem_det_rec n using 1 ; ring_nf;
-    · exact_mod_cast ne_of_gt ( lem_q_rec_pos _ );
-    · exact_mod_cast ne_of_gt ( lem_q_rec_pos n )
+    have := error_coeff_inv_lower k hk;
+    rw [ le_div_iff₀ ] at this <;> nlinarith [ show 0 < padeBound k from padeBound_pos k, show 0 < ( ePadeDen k : ℝ ) from mod_cast ePadeDen_pos k ];
+  · -- Since $k$ is odd, we have $(ePadeNum k - \exp 1 * ePadeDen k) < 0$.
+    have h_neg : (ePadeNum k : ℝ) - (Real.exp 1) * (ePadeDen k) < 0 := by
+      have := ePade_integral_identity k;
+      simp_all +decide [ mul_comm ];
+      exact mul_neg_of_pos_of_neg ( padeBound_pos k ) ( div_neg_of_neg_of_pos ( by norm_num ) ( by positivity ) );
+    nlinarith [ show ( 0 : ℝ ) ≤ 1 / ( 2 * k + 2 ) by positivity, show ( ePadeDen k : ℝ ) > 0 by exact_mod_cast ePadeDen_pos k ]
 
 /-
-If a sequence is strictly increasing and converges to L, then every element is strictly less than L.
+Lower bound on ε * q: from error_coeff_inv_upper.
 -/
-theorem lem_strict_mono_limit_lt {α : Type*} [LinearOrder α] [TopologicalSpace α] [OrderTopology α]
-  {f : ℕ → α} {L : α} (h_mono : StrictMono f) (h_lim : Filter.Tendsto f Filter.atTop (nhds L)) :
-  ∀ n, f n < L := by
-    intro m
-    by_cases h_ge : ∃ n, f n ≥ L;
-    · obtain ⟨ n, hn ⟩ := h_ge;
-      have h_ge : ∀ m ≥ n + 1, f m ≥ f (n + 1) := by
-        exact fun m hm => h_mono.monotone hm;
-      have h_ge : L ≥ f (n + 1) := by
-        exact le_of_tendsto_of_tendsto tendsto_const_nhds h_lim ( Filter.eventually_atTop.mpr ⟨ n + 1, h_ge ⟩ );
-      exact absurd h_ge ( not_le_of_gt ( lt_of_le_of_lt hn ( h_mono ( Nat.lt_succ_self _ ) ) ) );
-    · exact lt_of_not_ge fun h => h_ge ⟨ m, h ⟩
+lemma eps_q_lower (k : ℕ) (hk : 1 ≤ k) (hk_even : Even k) :
+    1 / (2 * ↑k + 4) ≤
+      ((ePadeNum k : ℝ) - exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) := by
+  rw [ div_le_iff₀ ( by positivity ) ];
+  have := @error_coeff_inv_upper k hk;
+  rw [ div_le_iff₀ ] at this;
+  · have := @ePade_integral_identity k;
+    simp_all +decide [ mul_comm, div_eq_mul_inv ] ;
+    nlinarith [ inv_pos.mpr ( by positivity : 0 < ( k + 1 |> Nat.factorial : ℝ ) ), mul_inv_cancel₀ ( by positivity : ( k + 1 |> Nat.factorial : ℝ ) ≠ 0 ) ];
+  · exact mul_pos ( padeBound_pos k ) ( mod_cast ePadeDen_pos k )
 
 /-
-The sequence of denominators q_n tends to infinity.
+For even k, ePadeNum k > ePadeDen k (since p/q > e > 1).
 -/
-theorem lem_q_tendsto_atTop : Filter.Tendsto (fun n => (q_rec n : ℝ)) Filter.atTop Filter.atTop := by
-  have h_q_recurrence : ∀ n, q_rec (n + 2) ≥ q_rec (n + 1) + q_rec n := by
-    -- By definition of $q_rec$, we have $q_rec (n + 2) = e_coeff (n + 2) * q_rec (n + 1) + q_rec n$.
-    have h_q_recurrence : ∀ n, q_rec (n + 2) = e_coeff (n + 2) * q_rec (n + 1) + q_rec n := by
-      exact fun n => rfl;
-    intro n; rw [ h_q_recurrence ] ; nlinarith [ show ( e_coeff ( n + 2 ) : ℤ ) ≥ 1 from mod_cast lem_e_coeff_ge_one _, show ( q_rec ( n + 1 ) : ℤ ) ≥ 0 from mod_cast lem_q_rec_pos _ |> le_of_lt ] ;
-  -- By induction, we can show that $q_n \geq F_n$ for all $n$, where $F_n$ is the $n$-th Fibonacci number.
-  have h_fib_lower_bound : ∀ n, q_rec n ≥ Nat.fib n := by
-    intro n; induction' n using Nat.strong_induction_on with n ih; rcases n with ( _ | _ | n ) <;> simp_all +decide [ Nat.fib_add_two ] ;
-    linarith [ ih n ( by linarith ), ih ( n + 1 ) ( by linarith ), h_q_recurrence n ];
-  refine' Filter.tendsto_atTop_mono ( fun n => Int.cast_le.mpr ( h_fib_lower_bound n ) ) _;
-  exact tendsto_natCast_atTop_atTop.comp ( Filter.tendsto_atTop_atTop.mpr fun x => ⟨ x + 2, fun n hn => by linarith [ Nat.le_fib_add_one n ] ⟩ )
+lemma ePadeNum_gt_ePadeDen (k : ℕ) : ePadeNum k > ePadeDen k := by
+  -- By induction on $k$, we can show that $ePadeNum k > ePadeDen k$ and $eSecNum k > eSecDen k$ for all $k$.
+  have h_ind : ∀ k, ePadeNum k > ePadeDen k ∧ eSecNum k > eSecDen k := by
+    intro k
+    induction' k with k ih
+    aesop
+    generalize_proofs at *; (
+    simp_all +decide [ ePadeNum_succ, ePadeDen_succ, eSecNum_succ, eSecDen_succ ] ; constructor <;> nlinarith;)
+  exact (h_ind k).left
+
+/-
+For even k, ePadeNum k ≥ 3.
+-/
+lemma ePadeNum_ge_three (k : ℕ) : ePadeNum k ≥ 3 := by
+  induction k <;> simp_all +decide [ePadeNum];
+  rename_i n hn;
+  -- By definition of $eCFState$, we know that $(eCFState (n + 1)).1 = (4 * n + 5) * (eCFState n).1 + 2 * (eCFState n).2.2.1$.
+  have h_def : (eCFState (n + 1)).1 = (4 * n + 5) * (eCFState n).1 + 2 * (eCFState n).2.2.1 := by
+    rfl;
+  have h_eCFState_pos : ∀ k, 0 < (eCFState k).2.2.1 := by
+    intro k; induction k <;> simp_all +decide [ eCFState ] ;
+    rename_i k hk;
+    have h_eCFState_pos : ∀ k, 0 < (eCFState k).1 ∧ 0 < (eCFState k).2.1 ∧ 0 < (eCFState k).2.2.1 ∧ 0 < (eCFState k).2.2.2 := by
+      intro k; induction k <;> simp_all +decide [ eCFState ] ;
+      exact ⟨ by nlinarith, by nlinarith, by nlinarith, by nlinarith ⟩;
+    exact add_pos ( mul_pos ( by positivity ) ( h_eCFState_pos k |>.1 ) ) ( h_eCFState_pos k |>.2.2.1 );
+  nlinarith [ h_eCFState_pos n ]
+
+/-- The y-value function: y(d) = d * ε * (d * q + 1) / 4 where ε = p - e*q. -/
+private noncomputable def y_func (k : ℕ) (d : ℕ) : ℝ :=
+  (d : ℝ) * ((ePadeNum k : ℝ) - exp 1 * (ePadeDen k : ℝ)) *
+    ((d : ℝ) * (ePadeDen k : ℝ) + 1) / 4
+
+/-
+y_func is unbounded (goes to ∞).
+-/
+lemma y_func_unbounded (k : ℕ) (hk : Even k) :
+    ∀ B : ℝ, ∃ d : ℕ, Odd d ∧ B ≤ y_func k d := by
+  intro B
+  obtain ⟨D, hD⟩ : ∃ D : ℤ, D > 0 ∧ D^2 * ((ePadeNum k : ℝ) - (Real.exp 1) * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) / 4 ≥ B := by
+    -- Since the numerator grows without bound as $D$ increases, we can find some $D$ such that the numerator is greater than or equal to $B$.
+    have h_num_unbounded : Filter.Tendsto (fun D : ℤ => D^2 * ((ePadeNum k : ℝ) - (Real.exp 1) * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) / 4) Filter.atTop Filter.atTop := by
+      have h_coeff_pos : 0 < ((ePadeNum k : ℝ) - (Real.exp 1) * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) := by
+        have h_pos : 0 < (ePadeNum k : ℝ) - (Real.exp 1) * (ePadeDen k : ℝ) := by
+          exact pade_error_pos_even k hk;
+        exact mul_pos h_pos ( mod_cast ePadeDen_pos k );
+      norm_num [ mul_assoc ] at * ; exact Filter.Tendsto.atTop_div_const ( by positivity ) ( Filter.Tendsto.atTop_mul_const ( by positivity ) <| Filter.tendsto_pow_atTop ( by positivity ) |> Filter.Tendsto.comp <| tendsto_intCast_atTop_atTop ) ;
+    exact Filter.eventually_atTop.mp ( h_num_unbounded.eventually_ge_atTop B ) |> fun ⟨ D, hD ⟩ ↦ ⟨ Max.max D 1, by positivity, hD _ <| le_max_left _ _ ⟩;
+  refine' ⟨ 2 * D.natAbs + 1, _, _ ⟩ <;> norm_num [ abs_of_pos hD.1 ];
+  unfold y_func;
+  norm_num [ abs_of_pos hD.1 ];
+  have := pade_error_pos_even k hk;
+  nlinarith [ show ( D : ℝ ) ≥ 1 by exact_mod_cast hD.1, show ( ePadeDen k : ℝ ) ≥ 1 by exact_mod_cast ePadeDen_pos k, mul_le_mul_of_nonneg_left ( show ( D : ℝ ) ≥ 1 by exact_mod_cast hD.1 ) this.le, mul_le_mul_of_nonneg_left ( show ( ePadeDen k : ℝ ) ≥ 1 by exact_mod_cast ePadeDen_pos k ) this.le ]
+
+/-- For even k, there exists an odd d with y_func k d ≥ sinh 1/12. -/
+lemma y_func_exceeds_target (k : ℕ) (hk : Even k) :
+    ∃ d : ℕ, Odd d ∧ sinh 1 / 12 ≤ y_func k d := by
+  exact y_func_unbounded k hk (sinh 1 / 12)
+
+/-
+The step size bound for the y-function: y(d) - y(d-2) ≤ d * ε * q for d ≥ 3.
+-/
+lemma y_func_step_bound (k : ℕ) (d : ℕ) (hd : 3 ≤ d) (hk_even : Even k) :
+    y_func k d - y_func k (d - 2) ≤
+      (d : ℝ) * ((ePadeNum k : ℝ) - exp 1 * (ePadeDen k : ℝ)) *
+        (ePadeDen k : ℝ) := by
+  rcases d with ( _ | _ | d ) <;> norm_num at *;
+  unfold y_func;
+  norm_num [ Nat.succ_eq_add_one ] ; ring_nf ; norm_num;
+  have := pade_error_pos_even k hk_even;
+  nlinarith [ show ( ePadeDen k : ℝ ) ≥ 1 by exact_mod_cast ePadeDen_pos k ]
+
+/-
+For odd d and even k, y_func k d equals the parametric y-value
+    when m = (d * ePadeNum k - 1)/2 and n = (d * ePadeDen k + 1)/2.
+-/
+lemma y_func_eq_y (k d : ℕ)
+    (m n : ℕ) (hm : (2 : ℤ) * m + 1 = d * ePadeNum k)
+    (hn : (2 : ℤ) * n = d * ePadeDen k + 1) :
+    ((↑m : ℝ) - exp 1 * ↑n + exp 1 / 2 + 1 / 2) * ↑n = y_func k d := by
+  unfold y_func; ring_nf;
+  -- Substitute m and n from hm and hn into the left-hand side and simplify.
+  have h_sub : (m : ℝ) = (d * ePadeNum k - 1) / 2 ∧ (n : ℝ) = (d * ePadeDen k + 1) / 2 := by
+    constructor <;> push_cast [ ← @Int.cast_inj ℝ ] at * <;> linarith;
+  rw [ h_sub.1, h_sub.2 ] ; ring;
+
+/-
+Bound on d₀ from y_func k d₀ ≥ sinh 1/12: d₀ ≤ C * √k.
+-/
+lemma d_bound_from_y (k d : ℕ) (hk : 2 ≤ k) (hk_even : Even k)
+    (_hd_pos : 1 ≤ d)
+    (hy : sinh 1 / 12 ≤ y_func k d)
+    (hstep : y_func k d - sinh 1 / 12 ≤
+      (d : ℝ) * ((ePadeNum k : ℝ) - exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ)) :
+    |y_func k d - sinh 1 / 12| ≤ 20 / Real.sqrt ↑k := by
+  rw [ abs_of_nonneg ( sub_nonneg_of_le hy ) ];
+  have h_bound : d ≤ 40 * Real.sqrt k := by
+    have h_bound : d ^ 2 ≤ 4 * (Real.sinh 1 / 12 + d / (2 * k + 2)) * (2 * k + 4) := by
+      have h_bound : y_func k d ≥ d^2 * ((ePadeNum k : ℝ) - Real.exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) / 4 := by
+        unfold y_func; ring_nf; norm_num;
+        have := pade_error_pos_even k hk_even; nlinarith [ ( by norm_cast : ( 1 :ℝ ) ≤ d ), Real.exp_pos 1 ] ;
+      have h_bound : ((ePadeNum k : ℝ) - Real.exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) ≥ 1 / (2 * k + 4) := by
+        have := @eps_q_lower k ( by linarith ) hk_even; aesop;
+      have h_bound : y_func k d ≤ Real.sinh 1 / 12 + d / (2 * k + 2) := by
+        have h_bound : ((ePadeNum k : ℝ) - Real.exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) ≤ 1 / (2 * k + 2) := by
+          have := eps_q_upper k ( by linarith ) ; aesop;
+        ring_nf at *; nlinarith;
+      simp +zetaDelta at *;
+      rw [ inv_eq_one_div, div_le_iff₀ ] at h_bound <;> nlinarith [ ( by norm_cast : ( 2 : ℝ ) ≤ k ) ];
+    -- We'll use that $\sinh(1) < 1.2$ to simplify the expression.
+    have h_sinh_bound : Real.sinh 1 < 1.2 := by
+      rw [ Real.sinh_eq ] ; norm_num;
+      have := Real.exp_one_lt_d9.le ; have := Real.exp_neg_one_gt_d9.le ; norm_num1 at * ; linarith;
+    rw [ ← Real.sqrt_sq ( Nat.cast_nonneg d ) ] ; ring_nf at * ; norm_num at *;
+    field_simp at *;
+    rw [ ← div_le_iff₀ ( by positivity ) ] ; ring_nf at * ; norm_num at *;
+    exact Real.le_sqrt_of_sq_le ( by nlinarith [ show ( k : ℝ ) ≥ 2 by norm_cast, show ( d : ℝ ) ≥ 1 by norm_cast, pow_two_nonneg ( ( d : ℝ ) - 2 * k ) ] );
+  -- Using the upper bound on ε*q, we have y_func k d - sinh 1 / 12 ≤ d / (2k + 2).
+  have h_upper_bound : y_func k d - Real.sinh 1 / 12 ≤ d / (2 * k + 2) := by
+    have h_eps_q_upper : ((ePadeNum k : ℝ) - Real.exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) ≤ 1 / (2 * k + 2) := by
+      convert eps_q_upper k ( by linarith ) using 1;
+    exact hstep.trans ( by convert mul_le_mul_of_nonneg_left h_eps_q_upper ( Nat.cast_nonneg d ) using 1 <;> ring );
+  exact h_upper_bound.trans ( by rw [ div_le_div_iff₀ ] <;> nlinarith [ show ( k : ℝ ) ≥ 2 by norm_cast, Real.sqrt_nonneg k, Real.sq_sqrt <| Nat.cast_nonneg k ] )
+
+/-!
+## Step lower bound for y_func
+
+When we move from d to d+2 (both odd), the y_func increases by at least ε_k * q_k ≥ 1/(2k+4).
+This gives a quantitative lower bound on y − y* when using d₀+2 instead of d₀.
+-/
+
+/-
+Lower bound on the step y_func(d+2) - y_func(d) for even k.
+-/
+lemma y_func_step_lower (k : ℕ) (d : ℕ) (hk_even : Even k) :
+    ((ePadeNum k : ℝ) - exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) ≤
+      y_func k (d + 2) - y_func k d := by
+  unfold y_func;
+  norm_num ; ring_nf ; norm_num;
+  have := pade_error_pos_even k hk_even;
+  nlinarith [ show ( ePadeDen k : ℝ ) ≥ 1 by exact_mod_cast ePadeDen_pos k, show ( ePadeNum k : ℝ ) ≥ 3 by exact_mod_cast ePadeNum_ge_three k, mul_le_mul_of_nonneg_left ( show ( ePadeDen k : ℝ ) ≥ 1 by exact_mod_cast ePadeDen_pos k ) this.le ]
+
+/-
+The d₀+2 upper bound on y - sinh(1)/12 for the strengthened construction.
+-/
+lemma y_func_d_plus_2_upper_bound (k d₀ : ℕ) (hk : 2 ≤ k) (hk_even : Even k)
+    (hd₀_bound : |y_func k d₀ - sinh 1 / 12| ≤ 20 / Real.sqrt ↑k) :
+    y_func k (d₀ + 2) - sinh 1 / 12 ≤ 60 / Real.sqrt ↑k := by
+  -- By definition of $y_func$, we have $y_func k (d₀ + 2) - y_func k d₀ \leq (d₀ + 2) * eps_q$.
+  have h_step_bound : y_func k (d₀ + 2) - y_func k d₀ ≤ (d₀ + 2) * ((ePadeNum k : ℝ) - Real.exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) := by
+    unfold y_func;
+    norm_num [ mul_add, mul_assoc, mul_comm, mul_left_comm ] ; ring_nf;
+    have := pade_error_pos_even k hk_even;
+    nlinarith [ show ( ePadeDen k : ℝ ) ≥ 1 by exact_mod_cast ePadeDen_pos k ];
+  -- From the bound on $d₀$, we have $d₀^2 * 1 / (2k + 4) / 4 ≤ y_func k d₀ ≤ sinh (1) / 12 + 20 / Real.sqrt k$.
+  have h_d₀_bound : (d₀ : ℝ) ^ 2 * 1 / (2 * k + 4) / 4 ≤ sinh 1 / 12 + 20 / Real.sqrt k := by
+    have h_d₀_bound : y_func k d₀ ≥ (d₀ : ℝ) ^ 2 * ((ePadeNum k : ℝ) - Real.exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) / 4 := by
+      unfold y_func;
+      nlinarith only [ show ( 0 : ℝ ) ≤ d₀ * ( ePadeNum k - Real.exp 1 * ePadeDen k ) by exact mul_nonneg ( Nat.cast_nonneg _ ) ( le_of_lt ( pade_error_pos_even k hk_even ) ) ];
+    have h_eps_q_bound : ((ePadeNum k : ℝ) - Real.exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) ≥ 1 / (2 * k + 4) := by
+      convert eps_q_lower k ( by linarith ) hk_even using 1;
+    ring_nf at *; nlinarith [ abs_le.mp hd₀_bound ] ;
+  -- Using the bound on $d₀$, we get $d₀ \leq 16 * Real.sqrt k$.
+  have h_d₀_le : (d₀ : ℝ) ≤ 16 * Real.sqrt k := by
+    -- Using the bound on $d₀$, we get $d₀^2 \leq 4 * (2k + 4) * (sinh(1)/12 + 20 / \sqrt{k})$.
+    have h_d₀_sq_bound : (d₀ : ℝ) ^ 2 ≤ 4 * (2 * k + 4) * (sinh 1 / 12 + 20 / Real.sqrt k) := by
+      rw [ div_div, div_le_iff₀ ] at h_d₀_bound <;> first | positivity | linarith;
+    -- We'll use that $sinh(1) / 12 < 0.1$ and $20 / \sqrt{k} \leq 20 / \sqrt{2}$ for $k \geq 2$.
+    have h_sinh_bound : sinh 1 / 12 < 0.1 := by
+      rw [ div_lt_iff₀ ] <;> norm_num [ Real.sinh_eq ];
+      have := Real.exp_one_lt_d9.le ; have := Real.exp_neg_one_gt_d9.le ; norm_num1 at * ; linarith
+    have h_sqrt_bound : 20 / Real.sqrt k ≤ 20 / Real.sqrt 2 := by
+      gcongr ; norm_cast;
+    nlinarith [ show ( k : ℝ ) ≥ 2 by norm_cast, Real.sqrt_nonneg k, Real.sq_sqrt ( Nat.cast_nonneg k ), show ( 20 : ℝ ) / Real.sqrt 2 ≤ 15 by rw [ div_le_iff₀ ] <;> nlinarith only [ Real.sqrt_nonneg 2, Real.sq_sqrt zero_le_two ] ];
+  -- Using the bound on $d₀$, we get $step \leq (16 * Real.sqrt k + 2) * 1 / (2 * k + 2)$.
+  have h_step_le : y_func k (d₀ + 2) - y_func k d₀ ≤ (16 * Real.sqrt k + 2) * 1 / (2 * k + 2) := by
+    have h_step_le : ((ePadeNum k : ℝ) - Real.exp 1 * (ePadeDen k : ℝ)) * (ePadeDen k : ℝ) ≤ 1 / (2 * k + 2) := by
+      convert eps_q_upper k ( by linarith ) using 1;
+    rw [ mul_div_assoc ] ; nlinarith [ show ( 0 :ℝ ) ≤ 1 / ( 2 * k + 2 ) by positivity ] ;
+  -- Using the bound on $step$, we get $step \leq 9 / Real.sqrt k$.
+  have h_step_le_9 : y_func k (d₀ + 2) - y_func k d₀ ≤ 9 / Real.sqrt k := by
+    exact h_step_le.trans ( by rw [ div_le_div_iff₀ ] <;> nlinarith only [ show ( k : ℝ ) ≥ 2 by norm_cast, Real.sqrt_nonneg k, Real.sq_sqrt ( Nat.cast_nonneg k ) ] );
+  ring_nf at *; linarith [ abs_le.mp hd₀_bound ] ;
+
+/-
+Strengthened CF construction: for even k (large enough), find m, n with
+    a quantitative lower bound on y − sinh(1)/12 ≥ 1/(2k+4), in addition to
+    the upper bound.
+
+Helper: for any odd d with d ≥ 1, even k with k ≥ 2, we can construct m, n from d
+    with the right properties.
+-/
+lemma construct_mn_from_d (k d : ℕ) (hk : 2 ≤ k)
+    (hd_odd : Odd d) (hd_pos : 3 ≤ d)
+    (hy_lower : 1 / (2 * ↑k + 4) ≤ y_func k d - sinh 1 / 12)
+    (hy_upper : y_func k d - sinh 1 / 12 ≤ 60 / Real.sqrt ↑k) :
+    ∃ m n : ℕ, 0 < n ∧ n ≤ m ∧ k ≤ n ∧ 3 ^ k ≤ n ∧
+      let y := ((↑m : ℝ) - exp 1 * ↑n + exp 1 / 2 + 1 / 2) * ↑n
+      1 / (2 * ↑k + 4) ≤ y - sinh 1 / 12 ∧ y - sinh 1 / 12 ≤ 60 / Real.sqrt ↑k := by
+  obtain ⟨m, n, hm, hn⟩ : ∃ m n : ℕ, 2 * m + 1 = d * (ePadeNum k).toNat ∧ 2 * n = d * (ePadeDen k).toNat + 1 := by
+    have h_odd_prod : Odd (d * (ePadeNum k).toNat) ∧ Odd (d * (ePadeDen k).toNat) := by
+      have h_odd_num : Odd (ePadeNum k) := by
+        exact Int.odd_iff.mpr ( Int.emod_two_ne_zero.mp fun h => ePadeNum_odd k <| Int.dvd_of_emod_eq_zero h )
+      have h_odd_den : Odd (ePadeDen k) := by
+        exact Int.odd_iff.mpr ( Int.emod_two_ne_zero.mp fun h => by have := ePadeDen_odd k; simp_all +decide [parity_simps] )
+      exact ⟨hd_odd.mul (by
+      cases h : ePadeNum k <;> simp_all +decide [ parity_simps ] ; linarith [ Int.negSucc_lt_zero ‹_›, ePadeNum_ge_three k ] ;), hd_odd.mul (by
+      cases h : ePadeDen k <;> simp_all +decide [ parity_simps ];
+      linarith [ Int.negSucc_lt_zero ‹_›, ePadeDen_pos k ])⟩;
+    rcases h_odd_prod.1 with ⟨ m, hm ⟩ ; rcases h_odd_prod.2 with ⟨ n, hn ⟩ ; exact ⟨ m, n + 1, by linarith, by linarith ⟩ ;
+  refine' ⟨ m, n, _, _, _, _, _ ⟩;
+  · grind +splitImp;
+  · nlinarith [ show ( ePadeNum k |> Int.toNat ) > ( ePadeDen k |> Int.toNat ) from by linarith [ Int.toNat_of_nonneg ( show 0 ≤ ePadeNum k from by linarith [ ePadeNum_ge_three k ] ), Int.toNat_of_nonneg ( show 0 ≤ ePadeDen k from by linarith [ ePadeDen_pos k ] ), ePadeNum_gt_ePadeDen k ] ];
+  · have h_den_ge : (ePadeDen k : ℝ) ≥ 3 ^ k := ePadeDen_exp_growth k
+    have h_den_ge_2k : (ePadeDen k : ℝ) ≥ 2 * k + 1 := by
+      exact le_trans (by norm_cast; exact Nat.recOn k (by norm_num) fun n ihn => by norm_num [Nat.pow_succ'] at *; linarith [Nat.one_le_pow n 3 zero_lt_three]) h_den_ge
+    norm_cast at *
+    norm_num at *; nlinarith [Int.toNat_of_nonneg (show 0 ≤ ePadeDen k from by linarith)]
+  · -- 3^k ≤ n
+    have h_den_ge : (ePadeDen k).toNat ≥ 3 ^ k := by
+      have h1 : (ePadeDen k : ℝ) ≥ 3 ^ k := ePadeDen_exp_growth k
+      have h3 : (3 : ℝ) ^ k ≤ ((ePadeDen k).toNat : ℝ) := h1.trans (by exact_mod_cast Int.self_le_toNat _)
+      exact_mod_cast h3
+    -- d ≥ 3 so d * q ≥ 3 * 3^k = 3^{k+1} ≥ 2 * 3^k
+    have : d * (ePadeDen k).toNat ≥ 3 * 3 ^ k := by nlinarith
+    -- 2*n = d*q+1, so 2*n ≥ 3*3^k+1 ≥ 2*3^k
+    nlinarith [Nat.one_le_pow k 3 (by norm_num)]
+  · have h_y_eq_y_func : ((m : ℝ) - Real.exp 1 * (n : ℝ) + Real.exp 1 / 2 + 1 / 2) * (n : ℝ) = y_func k d := by
+      apply y_func_eq_y k d m n (by
+      grind) (by
+      grind);
+    aesop
+
+theorem choose_d_construction_strong :
+    ∃ C₂ : ℝ, C₂ > 0 ∧ ∃ K₀ : ℕ, ∀ k : ℕ, K₀ ≤ k → Even k →
+      ∃ m n : ℕ, 0 < n ∧ n ≤ m ∧ k ≤ n ∧ 3 ^ k ≤ n ∧
+        let y := ((↑m : ℝ) - exp 1 * ↑n + exp 1 / 2 + 1 / 2) * ↑n
+        1 / (2 * ↑k + 4) ≤ y - sinh 1 / 12 ∧ y - sinh 1 / 12 ≤ C₂ / Real.sqrt ↑k := by
+  -- Use the original construction to find d₀, then bump to d₀+2.
+  refine ⟨60, by norm_num, 2, fun k hk hk_even => ?_⟩
+  -- Get d₀ from the original construction
+  obtain ⟨d₀, hd₀_odd, hd₀_ge⟩ : ∃ d₀ : ℕ, Odd d₀ ∧
+      sinh 1 / 12 ≤ y_func k d₀ ∧
+      ∀ d : ℕ, Odd d → d < d₀ → y_func k d < sinh 1 / 12 := by
+    have h_exists : ∃ d₀ : ℕ, Odd d₀ ∧ sinh 1 / 12 ≤ y_func k d₀ :=
+      y_func_exceeds_target k hk_even
+    exact ⟨Nat.find h_exists, (Nat.find_spec h_exists).1,
+           (Nat.find_spec h_exists).2,
+           fun d hd hlt => by
+             by_contra h
+             push_neg at h
+             exact Nat.find_min h_exists hlt ⟨hd, h⟩⟩
+  -- Get the bound on d₀
+  have hd₀_pos : 1 ≤ d₀ := Nat.pos_of_ne_zero (by rintro rfl; exact absurd hd₀_odd (by decide))
+  have hd₀_bound : |y_func k d₀ - sinh 1 / 12| ≤ 20 / Real.sqrt ↑k := by
+    apply d_bound_from_y k d₀ hk hk_even hd₀_pos hd₀_ge.1
+    -- Need: y_func k d₀ - sinh 1/12 ≤ d₀ * ε * q
+    by_cases hd₀_ge_3 : 3 ≤ d₀
+    · have hd0_sub2_odd : Odd (d₀ - 2) := by
+        obtain ⟨m, hm⟩ := hd₀_odd
+        cases m with
+        | zero => omega
+        | succ n => exact ⟨n, by omega⟩
+      have hd0_sub2_lt : d₀ - 2 < d₀ := by omega
+      exact (y_func_step_bound k d₀ hd₀_ge_3 hk_even).trans' (by linarith [hd₀_ge.2 (d₀ - 2) hd0_sub2_odd hd0_sub2_lt])
+    · interval_cases d₀ <;> norm_num at *
+      unfold y_func at *
+      have h_sinh_bound : Real.sinh 1 > 1 := by
+        norm_num [Real.sinh_eq]
+        have := Real.exp_one_gt_d9.le; have := Real.exp_neg_one_lt_d9.le; norm_num1 at *; linarith
+      nlinarith [show (k : ℝ) ≥ 2 by norm_cast, show (ePadeDen k : ℝ) ≥ 1 by exact_mod_cast ePadeDen_pos k]
+  -- Use d₀' = d₀ + 2
+  set d₀' := d₀ + 2
+  have hd₀'_odd : Odd d₀' := hd₀_odd.add_even even_two
+  have hd₀'_pos : 3 ≤ d₀' := by omega
+  -- Lower bound on y_func k d₀' - sinh(1)/12
+  have hy_lower : 1 / (2 * ↑k + 4) ≤ y_func k d₀' - sinh 1 / 12 := by
+    have h_step := y_func_step_lower k d₀ hk_even
+    have h_eps := eps_q_lower k (by linarith) hk_even
+    linarith [hd₀_ge.1]
+  -- Upper bound
+  have hy_upper : y_func k d₀' - sinh 1 / 12 ≤ 60 / Real.sqrt ↑k :=
+    y_func_d_plus_2_upper_bound k d₀ hk hk_even hd₀_bound
+  -- Construct m, n
+  exact construct_mn_from_d k d₀' hk hd₀'_odd hd₀'_pos hy_lower hy_upper
+
+
+/-! ## Part 5: Harmonic numbers and Euler–Maclaurin approximation -/
+
+/-
+**Note**: The paper contains a sign typo in the parametrization of m.
+The paper writes m = eˣ n - 1 + eˣ/2 + y/n, but the correct formula
+(consistent with the identity e = (2m+1)/(2n-1) - 2y/(n(2n-1))) is:
+  m = eˣ n - eˣ/2 - 1/2 + y/n,  equivalently  m + 1/2 = eˣ(n - 1/2) + y/n.
+We use the corrected formula throughout.
+-/
+
+/-! ## Section 1: Definitions and basic expansion -/
+
+/-- The real-valued harmonic number H_n = ∑_{k=1}^{n} 1/k. -/
+def harmonicReal (n : ℕ) : ℝ :=
+  ∑ k ∈ Finset.range n, (↑(k + 1) : ℝ)⁻¹
+
+/-- The partial harmonic sum equals the difference of harmonic numbers. -/
+theorem harmonicPartialSum_eq_diff {n m : ℕ} (h : 1 ≤ n) (h' : n ≤ m) :
+    harmonicPartialSum n m = harmonicReal m - harmonicReal (n - 1) := by
+  unfold harmonicPartialSum harmonicReal;
+  erw [ Finset.sum_Ico_eq_sub _ _ ];
+  · cases n <;> simp_all +decide [ Finset.sum_range_succ' ];
+  · grind +extAll
+
+/-- The Euler–Mascheroni approximation function:
+    f(x) = log x + γ + 1/(2x) - 1/(12x²)
+    where γ is the Euler–Mascheroni constant. -/
+def eulerMaclaurinApprox (x : ℝ) : ℝ :=
+  Real.log x + Real.eulerMascheroniConstant + 1 / (2 * x) - 1 / (12 * x ^ 2)
+
+@[simp] theorem eulerMaclaurinApprox_eq_eulerMaclaurinApprox' (x : ℝ) :
+    eulerMaclaurinApprox x = eulerMaclaurinApprox' x := by
+  rfl
+
+/-
+There exists C > 0 such that for every n ≥ 1,
+   |H_n - f(n)| ≤ C / n⁴.
+-/
+theorem harmonicReal_approx :
+    ∃ C : ℝ, C > 0 ∧ ∀ n : ℕ, 0 < n →
+      |harmonicReal n - eulerMaclaurinApprox n| ≤ C / (n : ℝ) ^ 4 := by
+  -- Let's denote the Euler-Mascheroni constant by γ.
+  set γ := Real.eulerMascheroniConstant;
+  -- Define the remainder term $R_n$ as $R_n = H_n - \ln(n) - \gamma - \frac{1}{2n} + \frac{1}{12n^2}$.
+  set R : ℕ → ℝ := fun n => harmonicReal n - (Real.log n + γ + 1 / (2 * n) - 1 / (12 * n^2));
+  -- We'll use the fact that $R_n$ is bounded by a constant times $1/n^4$.
+  have h_bound : ∃ C > 0, ∀ n : ℕ, 1 ≤ n → |R n - R (n + 1)| ≤ C / (n : ℝ) ^ 5 := by
+    -- We'll use the fact that $R_n - R_{n+1}$ can be bounded by a constant times $1/n^5$.
+    have h_diff_bound : ∃ C > 0, ∀ n : ℕ, 1 ≤ n → |(1 / (n + 1 : ℝ)) - (Real.log (n + 1) - Real.log n) - (1 / (2 * (n + 1 : ℝ)) - 1 / (2 * n)) + (1 / (12 * (n + 1 : ℝ) ^ 2) - 1 / (12 * n ^ 2))| ≤ C / (n : ℝ) ^ 5 := by
+      -- We'll use the fact that $R_n - R_{n+1}$ can be bounded by a constant times $1/n^5$. We'll expand the logarithmic term using the Taylor series.
+      have h_log_expand : ∀ n : ℕ, 1 ≤ n → |Real.log (n + 1) - Real.log n - (1 / (n : ℝ) - 1 / (2 * n^2) + 1 / (3 * n^3) - 1 / (4 * n^4))| ≤ 1 / (n : ℝ) ^ 5 := by
+        -- We'll use the fact that $Real.log (1 + x) = x - x^2 / 2 + x^3 / 3 - x^4 / 4 + O(x^5)$ for $x$ close to $0$.
+        have h_log_approx : ∀ x : ℝ, 0 < x ∧ x ≤ 1 → |Real.log (1 + x) - (x - x^2 / 2 + x^3 / 3 - x^4 / 4)| ≤ x^5 := by
+          -- Let's choose any $x$ such that $0 < x \leq 1$.
+          intro x hx
+          have h_log_approx : ∀ t ∈ Set.Icc (0 : ℝ) x, |deriv (fun x => Real.log (1 + x) - (x - x^2 / 2 + x^3 / 3 - x^4 / 4)) t| ≤ x^4 := by
+            intro t ht; norm_num [ add_comm, show t + 1 ≠ 0 from by linarith [ ht.1 ] ];
+            rw [ abs_le ] ; constructor <;> nlinarith [ ht.1, ht.2, pow_nonneg ht.1 3, pow_nonneg ht.1 2, mul_inv_cancel₀ ( by linarith [ ht.1 ] : ( t + 1 ) ≠ 0 ), pow_le_pow_left₀ ( by linarith [ ht.1 ] ) ht.2 4 ];
+          -- Apply the mean value theorem to the interval $[0, x]$.
+          obtain ⟨c, hc⟩ : ∃ c ∈ Set.Ioo 0 x, deriv (fun x => Real.log (1 + x) - (x - x^2 / 2 + x^3 / 3 - x^4 / 4)) c = (Real.log (1 + x) - (x - x^2 / 2 + x^3 / 3 - x^4 / 4)) / x := by
+            have := exists_deriv_eq_slope ( f := fun x => Real.log ( 1 + x ) - ( x - x ^ 2 / 2 + x ^ 3 / 3 - x ^ 4 / 4 ) ) hx.1;
+            simpa using this ( ContinuousOn.sub ( ContinuousOn.log ( continuousOn_const.add continuousOn_id ) fun y hy => by linarith [ hy.1 ] ) ( ContinuousOn.sub ( ContinuousOn.add ( ContinuousOn.sub continuousOn_id ( ContinuousOn.div_const ( continuousOn_pow 2 ) _ ) ) ( ContinuousOn.div_const ( continuousOn_pow 3 ) _ ) ) ( ContinuousOn.div_const ( continuousOn_pow 4 ) _ ) ) ) ( fun y hy => DifferentiableAt.differentiableWithinAt ( by norm_num [ add_comm, show y + 1 ≠ 0 from by linarith [ hy.1 ] ] ) );
+          have := h_log_approx c ⟨ hc.1.1.le, hc.1.2.le ⟩ ; rw [ hc.2, abs_div, abs_of_nonneg hx.1.le ] at this; rw [ div_le_iff₀ ] at this <;> nlinarith [ pow_pos hx.1 4 ] ;
+        intro n hn; specialize h_log_approx ( 1 / n ) ⟨ by positivity, by simpa using inv_le_one_of_one_le₀ <| mod_cast hn ⟩ ; simp_all +decide ;
+        convert h_log_approx using 1 ; rw [ show ( n + 1 : ℝ ) = n * ( 1 + ( n : ℝ ) ⁻¹ ) by nlinarith only [ mul_inv_cancel₀ ( by positivity : ( n : ℝ ) ≠ 0 ) ], Real.log_mul ( by positivity ) ( by positivity ) ] ; ring_nf;
+      refine' ⟨ 100, by norm_num, fun n hn => _ ⟩ ; specialize h_log_expand n hn ; rw [ abs_le ] at * ; constructor <;> ring_nf at * <;> norm_num at *;
+      · field_simp at *;
+        nlinarith [ ( by norm_cast : ( 1 :ℝ ) ≤ n ), pow_pos ( by positivity : 0 < ( n :ℝ ) ) 3, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 4, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 5, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 6, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 7, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 8, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 9, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 10 ];
+      · field_simp at *;
+        nlinarith [ ( by norm_cast : ( 1 :ℝ ) ≤ n ), pow_pos ( by positivity : 0 < ( n :ℝ ) ) 3, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 4, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 5, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 6, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 7, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 8, pow_pos ( by positivity : 0 < ( n :ℝ ) ) 9 ];
+    convert h_diff_bound using 6 ; ring_nf;
+    simp +zetaDelta at *;
+    unfold harmonicReal; norm_num [ add_comm, add_left_comm, Finset.sum_range_succ ] ; ring_nf;
+    grind +splitImp;
+  -- Since $R_n$ is bounded, we can use the fact that it converges to 0.
+  have h_conv : Filter.Tendsto R Filter.atTop (nhds 0) := by
+    -- We'll use the fact that $H_n - \ln(n)$ converges to $\gamma$.
+    have h_harmonic_log : Filter.Tendsto (fun n : ℕ => harmonicReal n - Real.log n) Filter.atTop (nhds γ) := by
+      convert Real.tendsto_harmonic_sub_log using 1;
+      norm_num [ harmonicReal ];
+      norm_num [ harmonic ];
+    convert h_harmonic_log.sub ( show Filter.Tendsto ( fun n : ℕ => γ + 1 / ( 2 * ( n : ℝ ) ) - 1 / ( 12 * ( n : ℝ ) ^ 2 ) ) Filter.atTop ( nhds ( γ + 0 - 0 ) ) from Filter.Tendsto.sub ( tendsto_const_nhds.add <| tendsto_const_nhds.div_atTop <| tendsto_natCast_atTop_atTop.const_mul_atTop zero_lt_two ) <| tendsto_const_nhds.div_atTop <| Filter.Tendsto.const_mul_atTop ( by norm_num ) <| Filter.tendsto_pow_atTop ( by norm_num ) |> Filter.Tendsto.comp <| tendsto_natCast_atTop_atTop ) using 2 <;> ring!;
+  -- Using the bound on $R_n - R_{n+1}$ and the fact that $R_n$ converges to 0, we can show that $R_n$ is bounded by a constant times $1/n^4$.
+  obtain ⟨C, hC_pos, hC_bound⟩ := h_bound;
+  have h_final_bound : ∃ C' > 0, ∀ n : ℕ, 1 ≤ n → |R n| ≤ C' / (n : ℝ) ^ 4 := by
+    -- Using the bound on $R_n - R_{n+1}$ and the fact that $R_n$ converges to 0, we can show that $R_n$ is bounded by a constant times $1/n^4$ by summing the differences.
+    have h_sum_bound : ∀ n : ℕ, 1 ≤ n → |R n| ≤ ∑' k : ℕ, |R (n + k) - R (n + k + 1)| := by
+      intros n hn
+      have h_sum : ∀ N : ℕ, |R n| ≤ ∑ k ∈ Finset.range N, |R (n + k) - R (n + k + 1)| + |R (n + N)| := by
+        intro N
+        induction' N with N ih;
+        · norm_num;
+        · rw [ Finset.sum_range_succ ];
+          linarith! [ abs_sub_abs_le_abs_sub ( R ( n + N ) ) ( R ( n + N + 1 ) ) ];
+      -- Taking the limit of both sides of the inequality as $N$ approaches infinity, we get the desired result.
+      have h_lim : Filter.Tendsto (fun N => ∑ k ∈ Finset.range N, |R (n + k) - R (n + k + 1)| + |R (n + N)|) Filter.atTop (nhds (∑' k : ℕ, |R (n + k) - R (n + k + 1)|)) := by
+        have h_lim : Summable (fun k : ℕ => |R (n + k) - R (n + k + 1)|) := by
+          exact Summable.of_nonneg_of_le ( fun k => abs_nonneg _ ) ( fun k => hC_bound _ ( by linarith ) ) ( by simpa using Summable.mul_left _ <| Real.summable_nat_pow_inv.2 ( by norm_num ) |> Summable.comp_injective <| add_right_injective n );
+        simpa using Filter.Tendsto.add ( h_lim.hasSum.tendsto_sum_nat ) ( Filter.Tendsto.abs ( h_conv.comp ( Filter.tendsto_atTop_mono ( fun N => by simp +arith +decide ) Filter.tendsto_id ) ) );
+      exact le_of_tendsto_of_tendsto' tendsto_const_nhds h_lim h_sum;
+    -- Using the bound on $R_n - R_{n+1}$, we can sum the series to get a bound on $R_n$.
+    have h_sum_bound : ∀ n : ℕ, 1 ≤ n → |R n| ≤ C * ∑' k : ℕ, (1 / (n + k : ℝ) ^ 5) := by
+      intro n hn; rw [ ← tsum_mul_left ] ; refine le_trans ( h_sum_bound n hn ) ?_; refine' Summable.tsum_le_tsum _ _ _;
+      · exact fun k => le_trans ( hC_bound _ ( by linarith ) ) ( by push_cast; ring_nf; norm_num );
+      · exact Summable.of_nonneg_of_le ( fun k => abs_nonneg _ ) ( fun k => hC_bound ( n + k ) ( by linarith ) ) ( by simpa using Summable.mul_left _ <| Real.summable_nat_pow_inv.2 ( by norm_num ) |> Summable.comp_injective <| add_right_injective n );
+      · exact Summable.mul_left _ <| by exact_mod_cast Summable.comp_injective ( Real.summable_one_div_nat_pow.2 <| by norm_num ) fun x y h => by simpa using h;
+    -- We'll use the fact that $\sum_{k=0}^{\infty} \frac{1}{(n+k)^5}$ is bounded above by $\frac{1}{n^4}$.
+    have h_sum_bound : ∀ n : ℕ, 1 ≤ n → ∑' k : ℕ, (1 / (n + k : ℝ) ^ 5) ≤ 1 / (n : ℝ) ^ 4 + 1 / (4 * (n : ℝ) ^ 4) := by
+      -- We'll use the fact that $\sum_{k=0}^{\infty} \frac{1}{(n+k)^5}$ is bounded above by $\frac{1}{n^4}$ to conclude the proof.
+      intros n hn
+      have h_sum_bound : ∑' k : ℕ, (1 / (n + k : ℝ) ^ 5) ≤ 1 / (n : ℝ) ^ 5 + ∑' k : ℕ, (1 / (n + k + 1 : ℝ) ^ 5) := by
+        rw [ Summable.tsum_eq_zero_add ] <;> norm_num [ add_assoc ];
+        exact_mod_cast Summable.comp_injective ( Real.summable_nat_pow_inv.2 ( by norm_num ) ) fun x y h => by simpa using h;
+      -- We'll use the fact that $\sum_{k=0}^{\infty} \frac{1}{(n+k+1)^5}$ is bounded above by $\frac{1}{4n^4}$.
+      have h_sum_bound : ∑' k : ℕ, (1 / (n + k + 1 : ℝ) ^ 5) ≤ 1 / (4 * (n : ℝ) ^ 4) := by
+        -- We'll use the fact that $\sum_{k=0}^{\infty} \frac{1}{(n+k+1)^5}$ is bounded above by $\frac{1}{4n^4}$ to conclude the proof.
+        have h_sum_bound : ∀ k : ℕ, (1 / (n + k + 1 : ℝ) ^ 5) ≤ (1 / (4 * (n + k : ℝ) ^ 4)) - (1 / (4 * (n + k + 1 : ℝ) ^ 4)) := by
+          intro k; rw [ div_sub_div, div_le_div_iff₀ ] <;> try positivity;
+          exact le_of_sub_nonneg ( by ring_nf; positivity );
+        -- By summing the inequalities from h_sum_bound, we get the desired result.
+        have h_sum_ineq : ∀ N : ℕ, ∑ k ∈ Finset.range N, (1 / (n + k + 1 : ℝ) ^ 5) ≤ (1 / (4 * (n : ℝ) ^ 4)) - (1 / (4 * (n + N : ℝ) ^ 4)) := by
+          intro N; induction N <;> norm_num [ add_assoc, Finset.sum_range_succ ] at * ; linarith [ h_sum_bound ‹_› ] ;
+        exact le_of_tendsto_of_tendsto' ( Summable.hasSum ( by exact_mod_cast Summable.comp_injective ( Real.summable_one_div_nat_pow.2 ( by norm_num ) ) fun x y h => by simpa using h ) |> HasSum.tendsto_sum_nat ) tendsto_const_nhds fun N => le_trans ( h_sum_ineq N ) ( sub_le_self _ <| by positivity );
+      refine le_trans ‹_› ?_;
+      exact add_le_add ( by gcongr <;> norm_cast ) h_sum_bound;
+    use C * (1 + 1 / 4);
+    exact ⟨ by linarith, fun n hn => by have := ‹∀ n : ℕ, 1 ≤ n → |R n| ≤ C * ∑' k : ℕ, 1 / ( n + k : ℝ ) ^ 5› n hn; have := h_sum_bound n hn; rw [ div_add_div, le_div_iff₀ ] at * <;> first | positivity | nlinarith [ pow_pos ( by positivity : 0 < ( n : ℝ ) ) 4, pow_pos ( by positivity : 0 < ( n : ℝ ) ) 5, pow_pos ( by positivity : 0 < ( n : ℝ ) ) 6, pow_pos ( by positivity : 0 < ( n : ℝ ) ) 7, pow_pos ( by positivity : 0 < ( n : ℝ ) ) 8, pow_pos ( by positivity : 0 < ( n : ℝ ) ) 9, pow_pos ( by positivity : 0 < ( n : ℝ ) ) 10 ] ⟩;
+  exact ⟨ h_final_bound.choose, h_final_bound.choose_spec.1, fun n hn => h_final_bound.choose_spec.2 n hn ⟩
+
+/-! ## Section 2: Local expansion and a one-parameter correction -/
+
+/-
+With the corrected parametrization, we have
+    f(m) - f(n-1) - x = ((24 e⁻ˣ y + e⁻²ˣ - 1) / 24) · (1/n²) + O(1/n³).
+-/
+set_option maxHeartbeats 800000 in
+theorem second_order_expansion (x : ℝ) (hx : x > 0) (M : ℝ) (hM : M > 0) :
+    ∃ C : ℝ, C > 0 ∧ ∃ N₀ : ℕ, ∀ n : ℕ, N₀ ≤ n → ∀ y : ℝ, |y| ≤ M →
+      let m := Real.exp x * ↑n - Real.exp x / 2 - 1 / 2 + y / ↑n
+      |eulerMaclaurinApprox m - eulerMaclaurinApprox (↑n - 1) - x -
+        ((24 * Real.exp (-x) * y + Real.exp (-2 * x) - 1) / 24) * (1 / (↑n) ^ 2)| ≤
+        C / (↑n) ^ 3 := by
+  obtain ⟨ K, hK₀, hK ⟩ := u_bound x hx M hM;
+  obtain ⟨N₀, hN₀⟩ : ∃ N₀ : ℕ, 2 ≤ N₀ ∧ ∀ n : ℕ, N₀ ≤ n → K / (n : ℝ) ≤ 1 / 2 := by
+    exact ⟨ ⌈2 * K⌉₊ + 2, by linarith, fun n hn => by rw [ div_le_iff₀ ] <;> nlinarith [ Nat.le_ceil ( 2 * K ), show ( n : ℝ ) ≥ ⌈2 * K⌉₊ + 2 by exact_mod_cast hn ] ⟩;
+  -- Choose $C$ to be the sum of the constants from the error bounds.
+  obtain ⟨C₁, hC₁⟩ : ∃ C₁ > 0, ∀ n : ℕ, N₀ ≤ n → ∀ y : ℝ, |y| ≤ M →
+    let u := (-(1 + Real.exp x) / 2 + y / (n : ℝ)) / (Real.exp x * (n : ℝ))
+    let a := Real.exp (-x)
+    let A := -(1 + a) / 2
+    let B := y * a
+    |(Real.log (1 + u) - Real.log (1 - 1 / (n : ℝ))) + (a / (2 * (n : ℝ)) * (1 / (1 + u)) - 1 / (2 * (n : ℝ)) * (1 / (1 - 1 / (n : ℝ)))) + (-(a ^ 2 / (12 * (n : ℝ) ^ 2)) * (1 / (1 + u) ^ 2) + 1 / (12 * (n : ℝ) ^ 2) * (1 / (1 - 1 / (n : ℝ)) ^ 2)) - ((u - u ^ 2 / 2 + 1 / (n : ℝ) + 1 / (2 * (n : ℝ) ^ 2)) + (a * (1 - u) / (2 * (n : ℝ)) - (1 + 1 / (n : ℝ)) / (2 * (n : ℝ))) + (-(a ^ 2 / (12 * (n : ℝ) ^ 2)) * (1 - 2 * u) + 1 / (12 * (n : ℝ) ^ 2) * (1 + 2 / (n : ℝ))))| ≤ C₁ / (n : ℝ) ^ 3 := by
+      obtain ⟨C₁, hC₁⟩ : ∃ C₁ > 0, ∀ n : ℕ, N₀ ≤ n → ∀ y : ℝ, |y| ≤ M →
+        let u := (-(1 + Real.exp x) / 2 + y / (n : ℝ)) / (Real.exp x * (n : ℝ))
+        let a := Real.exp (-x)
+        let A := -(1 + a) / 2
+        let B := y * a
+        |u|^3 + 2 / (n : ℝ) ^ 3 + a * u ^ 2 / (n : ℝ) + (a ^ 2 + 1) * u ^ 2 / (n : ℝ) ^ 2 + 1 / (n : ℝ) ^ 4 ≤ C₁ / (n : ℝ) ^ 3 := by
+          refine' ⟨ K ^ 3 + 2 + Real.exp ( -x ) * K ^ 2 + ( Real.exp ( -x ) ^ 2 + 1 ) * K ^ 2 + 1, _, _ ⟩ <;> norm_num;
+          · positivity;
+          · intro n hn y hy; specialize hK n ( by linarith ) y hy; norm_num at *;
+            refine' le_trans ( add_le_add ( add_le_add ( add_le_add ( add_le_add ( pow_le_pow_left₀ ( abs_nonneg _ ) hK 3 ) ( le_rfl ) ) ( div_le_div_of_nonneg_right ( mul_le_mul_of_nonneg_left ( show ( ( ( -Real.exp x + -1 ) / 2 + y / n ) / ( Real.exp x * n ) ) ^ 2 ≤ K ^ 2 / n ^ 2 by
+                                                                                                                                                                                                      convert pow_le_pow_left₀ ( abs_nonneg _ ) hK 2 using 1 <;> norm_num [ div_pow ] ) <| by positivity ) <| by positivity ) ) ( div_le_div_of_nonneg_right ( mul_le_mul_of_nonneg_left ( show ( ( ( -Real.exp x + -1 ) / 2 + y / n ) / ( Real.exp x * n ) ) ^ 2 ≤ K ^ 2 / n ^ 2 by
+                                                                                                                                                                                                                                                                                                                                                                                                          convert pow_le_pow_left₀ ( abs_nonneg _ ) hK 2 using 1 <;> norm_num [ div_pow ] ) <| by positivity ) <| by positivity ) ) ( le_rfl ) ) _;
+            ring_nf; norm_num;
+            rcases n with ( _ | _ | n ) <;> norm_num at *;
+            · linarith;
+            · field_simp;
+              nlinarith [ show 0 ≤ K ^ 2 * Real.exp ( -x ) by positivity, show 0 ≤ K ^ 2 * Real.exp ( -x ) ^ 2 by positivity, show 0 ≤ K ^ 3 by positivity, Real.exp_pos ( -x ), Real.exp_le_one_iff.mpr ( show -x ≤ 0 by linarith ) ];
+      refine' ⟨ C₁, hC₁.1, fun n hn y hy => le_trans _ ( hC₁.2 n hn y hy ) ⟩;
+      convert taylor_error_bound n ( by linarith ) _ _ _ _ _ using 1 <;> norm_num [ Real.exp_neg ];
+      · ring;
+      · positivity;
+      · exact inv_le_one_of_one_le₀ <| Real.one_le_exp hx.le;
+      · convert le_trans ( hK n ( by linarith ) y hy ) ( hN₀.2 n hn ) using 1 ; ring_nf;
+  obtain ⟨C₂, hC₂⟩ : ∃ C₂ > 0, ∀ n : ℕ, N₀ ≤ n → ∀ y : ℝ, |y| ≤ M →
+    let u := (-(1 + Real.exp x) / 2 + y / (n : ℝ)) / (Real.exp x * (n : ℝ))
+    let a := Real.exp (-x)
+    let A := -(1 + a) / 2
+    let B := y * a
+    |(u - u ^ 2 / 2 + 1 / (n : ℝ) + 1 / (2 * (n : ℝ) ^ 2)) + (a * (1 - u) / (2 * (n : ℝ)) - (1 + 1 / (n : ℝ)) / (2 * (n : ℝ))) + (-(a ^ 2 / (12 * (n : ℝ) ^ 2)) * (1 - 2 * u) + 1 / (12 * (n : ℝ) ^ 2) * (1 + 2 / (n : ℝ))) - (24 * Real.exp (-x) * y + Real.exp (-2 * x) - 1) / 24 * (1 / (n : ℝ) ^ 2)| ≤ C₂ / (n : ℝ) ^ 3 := by
+      -- Let's choose $C₂$ to be the sum of the constants from the taylor_approx_exact lemma.
+      obtain ⟨C₂, hC₂⟩ : ∃ C₂ > 0, ∀ n : ℕ, N₀ ≤ n → ∀ y : ℝ, |y| ≤ M →
+        let u := (-(1 + Real.exp x) / 2 + y / (n : ℝ)) / (Real.exp x * (n : ℝ))
+        let a := Real.exp (-x)
+        let A := -(1 + a) / 2
+        let B := y * a
+        let R₃ := -(A * B) - a * B / 2 + a ^ 2 * A / 6 + 1 / 6
+        let R₄ := -B ^ 2 / 2 + a ^ 2 * B / 6
+        |R₃ / (n : ℝ) ^ 3 + R₄ / (n : ℝ) ^ 4| ≤ C₂ / (n : ℝ) ^ 3 := by
+          -- Let's choose $C₂$ to be the sum of the constants from the taylor_approx_exact lemma and the bounds on $R₃$ and $R₄$.
+          obtain ⟨C₂, hC₂⟩ : ∃ C₂ > 0, ∀ n : ℕ, N₀ ≤ n → ∀ y : ℝ, |y| ≤ M →
+            let u := (-(1 + Real.exp x) / 2 + y / (n : ℝ)) / (Real.exp x * (n : ℝ))
+            let a := Real.exp (-x)
+            let A := -(1 + a) / 2
+            let B := y * a
+            let R₃ := -(A * B) - a * B / 2 + a ^ 2 * A / 6 + 1 / 6
+            let R₄ := -B ^ 2 / 2 + a ^ 2 * B / 6
+            |R₃| ≤ C₂ ∧ |R₄| ≤ C₂ := by
+              refine' ⟨ 1 + ( Real.exp ( -x ) + 1 ) ^ 2 * ( M + 1 ) ^ 2 + ( Real.exp ( -x ) + 1 ) ^ 2 * ( M + 1 ) ^ 2, by positivity, fun n hn y hy => ⟨ _, _ ⟩ ⟩ <;> norm_num [ abs_le ] at *;
+              · constructor <;> nlinarith [ Real.exp_pos ( -x ), Real.exp_le_one_iff.mpr ( show -x ≤ 0 by linarith ), mul_le_mul_of_nonneg_left hy.1 ( Real.exp_nonneg ( -x ) ), mul_le_mul_of_nonneg_left hy.2 ( Real.exp_nonneg ( -x ) ), pow_two_nonneg ( Real.exp ( -x ) - 1 ), pow_two_nonneg ( Real.exp ( -x ) + 1 ), pow_two_nonneg ( M + 1 ) ];
+              · constructor <;> nlinarith [ show 0 ≤ Real.exp ( -x ) ^ 2 * ( M + 1 ) ^ 2 by positivity, show 0 ≤ Real.exp ( -x ) ^ 2 * ( M + 1 ) by positivity, show 0 ≤ Real.exp ( -x ) ^ 2 by positivity, show 0 ≤ Real.exp ( -x ) by positivity, Real.exp_pos ( -x ), Real.exp_le_one_iff.mpr ( show -x ≤ 0 by linarith ), mul_le_mul_of_nonneg_left hy.1 ( Real.exp_nonneg ( -x ) ), mul_le_mul_of_nonneg_left hy.2 ( Real.exp_nonneg ( -x ) ) ];
+          refine' ⟨ C₂ + C₂, add_pos hC₂.1 hC₂.1, fun n hn y hy => _ ⟩ ; norm_num [ abs_le ] at *;
+          rcases n with ( _ | _ | n ) <;> norm_num at *;
+          · linarith [ hN₀.1 ];
+          · field_simp;
+            constructor <;> nlinarith [ hC₂.2 ( n + 1 + 1 ) hn y hy.1 hy.2, Real.exp_pos ( -x ), Real.exp_le_one_iff.mpr ( show -x ≤ 0 by linarith ) ];
+      use C₂, hC₂.1;
+      intro n hn y hy; specialize hC₂; have := hC₂.2 n hn y hy; simp_all +decide [ div_eq_mul_inv, mul_assoc, mul_comm, mul_left_comm ] ;
+      convert hC₂.2 n hn y hy using 1 ; ring_nf;
+      norm_num [ sq, mul_assoc, Real.exp_ne_zero ] ; ring_nf;
+      norm_num [ Real.exp_neg, Real.exp_mul ] ; ring_nf;
+  refine' ⟨ C₁ + C₂, add_pos hC₁.1 hC₂.1, N₀, fun n hn y hy => _ ⟩;
+  have h_diff : let m := Real.exp x * n - Real.exp x / 2 - 1 / 2 + y / n
+    eulerMaclaurinApprox m - eulerMaclaurinApprox (n - 1) - x =
+    (Real.log (1 + (-(1 + Real.exp x) / 2 + y / (n : ℝ)) / (Real.exp x * (n : ℝ))) - Real.log (1 - 1 / (n : ℝ))) +
+    (Real.exp (-x) / (2 * (n : ℝ)) * (1 / (1 + (-(1 + Real.exp x) / 2 + y / (n : ℝ)) / (Real.exp x * (n : ℝ)))) - 1 / (2 * (n : ℝ)) * (1 / (1 - 1 / (n : ℝ)))) +
+    (-(Real.exp (-x) ^ 2 / (12 * (n : ℝ) ^ 2)) * (1 / (1 + (-(1 + Real.exp x) / 2 + y / (n : ℝ)) / (Real.exp x * (n : ℝ))) ^ 2) + 1 / (12 * (n : ℝ) ^ 2) * (1 / (1 - 1 / (n : ℝ)) ^ 2)) := by
+      apply f_diff_rewrite' x n (by linarith) y (by
+      have := hK n ( by linarith ) y hy;
+      linarith [ abs_le.mp this, hN₀.2 n hn ]);
+  simp_all +decide [ add_div ];
+  exact abs_le.mpr ⟨ by linarith [ abs_le.mp ( hC₁.2 n hn y hy ), abs_le.mp ( hC₂.2 n hn y hy ) ], by linarith [ abs_le.mp ( hC₁.2 n hn y hy ), abs_le.mp ( hC₂.2 n hn y hy ) ] ⟩
+
+/-
+The lower bound holds for the pairs from the strong construction:
+    H_m - H_{n-1} ≥ 1 when the coefficient is ≥ 1/(2k+4) and n is large enough.
+-/
+lemma harmonic_lower_bound_from_coeff
+    (C_E C_H : ℝ) (hC_H : C_H > 0)
+    (k n m : ℕ) (hn_pos : 0 < n) (hn_le_m : n ≤ m) (hk_ge : 2 ≤ k)
+    (h_euler : |eulerMaclaurinApprox m - eulerMaclaurinApprox (n - 1) - 1 -
+      ((24 * Real.exp (-1) * ((↑m - Real.exp 1 * ↑n + Real.exp 1 / 2 + 1 / 2) * ↑n) +
+        Real.exp (-2) - 1) / 24) * (1 / (↑n) ^ 2)| ≤ C_E / (↑n) ^ 3)
+    (h_harm_m : |harmonicReal m - eulerMaclaurinApprox m| ≤ C_H / (↑m) ^ 4)
+    (h_harm_n : |harmonicReal (n - 1) - eulerMaclaurinApprox (n - 1)| ≤ 16 * C_H / (↑n) ^ 4)
+    (h_coeff_lower : 1 / (2 * ↑k + 4) ≤
+      ((↑m : ℝ) - Real.exp 1 * ↑n + Real.exp 1 / 2 + 1 / 2) * ↑n - Real.sinh 1 / 12)
+    (h_n_large : C_E + 17 * C_H ≤ Real.exp (-1) / (2 * ↑k + 4) * ↑n) :
+    1 ≤ harmonicReal m - harmonicReal (n - 1) := by
+  -- From h_coeff_lower: y - sinh(1)/12 ≥ 1/(2k+4), so coeff ≥ exp(-1)/(2k+4).
+  have h_coeff_lower'' : (24 * Real.exp (-1) * ((m : ℝ) - Real.exp 1 * n + Real.exp 1 / 2 + 1 / 2) * n + Real.exp (-2) - 1) / 24 * (1 / (n : ℝ) ^ 2) ≥ Real.exp (-1) / ((2 * k + 4) * (n : ℝ) ^ 2) := by
+    have h_coeff_lower'' : (24 * Real.exp (-1) * ((m : ℝ) - Real.exp 1 * n + Real.exp 1 / 2 + 1 / 2) * n + Real.exp (-2) - 1) / 24 ≥ Real.exp (-1) / (2 * k + 4) := by
+      rw [ show ( -2 : ℝ ) = -1 + -1 by norm_num, Real.exp_add ];
+      rw [ show ( Real.sinh 1 : ℝ ) = ( Real.exp 1 - Real.exp ( -1 ) ) / 2 by rw [ Real.sinh_eq ] ] at h_coeff_lower ; ring_nf at * ; nlinarith [ Real.exp_pos 1, Real.exp_pos ( -1 ), Real.exp_neg 1, mul_inv_cancel₀ ( ne_of_gt ( Real.exp_pos 1 ) ) ];
+    simpa only [ div_mul_eq_div_mul_one_div ] using mul_le_mul_of_nonneg_right h_coeff_lower'' ( by positivity );
+  -- From h_n_large: C_E + 17*C_H ≤ exp(-1)/(2k+4) * n, so exp(-1)/(2k+4) * n - C_E ≥ 17*C_H ≥ 0.
+  have h_n_bound'' : Real.exp (-1) / ((2 * k + 4) * (n : ℝ) ^ 2) - C_E / (n : ℝ) ^ 3 ≥ 17 * C_H / (n : ℝ) ^ 4 := by
+    field_simp at *;
+    nlinarith [ show ( n : ℝ ) ≥ 1 by norm_cast, show ( k : ℝ ) ≥ 2 by norm_cast, mul_le_mul_of_nonneg_left ( show ( n : ℝ ) ≥ 1 by norm_cast ) ( show ( 0 : ℝ ) ≤ 2 * k + 4 by positivity ) ];
+  -- From h_harm_m and h_harm_n: H_m - H_{n-1} ≥ f(m) - f(n-1) - C_H/m⁴ - 16C_H/n⁴ ≥ f(m) - f(n-1) - 17C_H/n⁴.
+  have h_harmonic_bound : harmonicReal m - harmonicReal (n - 1) ≥ eulerMaclaurinApprox m - eulerMaclaurinApprox (n - 1) - 17 * C_H / (n : ℝ) ^ 4 := by
+    have h_upper_bound : harmonicReal m ≥ eulerMaclaurinApprox m - C_H / (m : ℝ) ^ 4 ∧ harmonicReal (n - 1) ≤ eulerMaclaurinApprox (n - 1) + 16 * C_H / (n : ℝ) ^ 4 := by
+      exact ⟨ by linarith only [ abs_le.mp h_harm_m ], by linarith only [ abs_le.mp h_harm_n ] ⟩;
+    have h_upper_bound : C_H / (m : ℝ) ^ 4 ≤ C_H / (n : ℝ) ^ 4 := by
+      gcongr;
+    ring_nf at *; linarith;
+  ring_nf at *; linarith [ abs_le.mp h_euler ] ;
+
+/-
+Upper bound on the harmonic difference from the construction.
+-/
+lemma harmonic_upper_bound_from_coeff
+    (c C_E C_H C₂ : ℝ) (hC_H : C_H > 0)
+    (k n m : ℕ) (hn_pos : 0 < n) (hn_le_m : n ≤ m)
+    (h_euler : |eulerMaclaurinApprox m - eulerMaclaurinApprox (n - 1) - 1 -
+      ((24 * Real.exp (-1) * ((↑m - Real.exp 1 * ↑n + Real.exp 1 / 2 + 1 / 2) * ↑n) +
+        Real.exp (-2) - 1) / 24) * (1 / (↑n) ^ 2)| ≤ C_E / (↑n) ^ 3)
+    (h_harm_m : |harmonicReal m - eulerMaclaurinApprox m| ≤ C_H / (↑m) ^ 4)
+    (h_harm_n : |harmonicReal (n - 1) - eulerMaclaurinApprox (n - 1)| ≤ 16 * C_H / (↑n) ^ 4)
+    (h_coeff_upper : ((↑m : ℝ) - Real.exp 1 * ↑n + Real.exp 1 / 2 + 1 / 2) * ↑n -
+      Real.sinh 1 / 12 ≤ C₂ / Real.sqrt ↑k)
+    (h_bound : C₂ / (Real.exp 1 * Real.sqrt ↑k) + C_E / ↑n + 17 * C_H / ↑n ^ 2 ≤ c) :
+    harmonicReal m - harmonicReal (n - 1) ≤ 1 + c / (↑n) ^ 2 := by
+  have h_upper_bound : (harmonicReal m - harmonicReal (n - 1)) ≤ (eulerMaclaurinApprox m - eulerMaclaurinApprox (n - 1)) + C_H / (m : ℝ) ^ 4 + 16 * C_H / (n : ℝ) ^ 4 := by
+    linarith [ abs_le.mp h_harm_m, abs_le.mp h_harm_n ];
+  -- Substitute the upper bound for the coefficient into the inequality.
+  have h_coeff_upper_bound : eulerMaclaurinApprox m - eulerMaclaurinApprox (n - 1) - 1 ≤ (C₂ / (Real.exp 1 * Real.sqrt k)) * (1 / (n : ℝ) ^ 2) + C_E / (n : ℝ) ^ 3 := by
+    have h_coeff_upper_bound : (24 * Real.exp (-1) * ((m - Real.exp 1 * n + Real.exp 1 / 2 + 1 / 2) * n) + Real.exp (-2) - 1) / 24 ≤ (C₂ / (Real.exp 1 * Real.sqrt k)) := by
+      convert mul_le_mul_of_nonneg_left h_coeff_upper ( show 0 ≤ Real.exp ( -1 ) by positivity ) using 1 <;> norm_num [ Real.exp_neg, Real.sinh_eq ] ; ring_nf;
+      · norm_num [ ← Real.exp_nat_mul ];
+      · ring;
+    nlinarith [ abs_le.mp h_euler, show ( 0 : ℝ ) ≤ 1 / n ^ 2 by positivity ];
+  -- Substitute the upper bound for the coefficient into the inequality and simplify.
+  have h_simplified : harmonicReal m - harmonicReal (n - 1) ≤ 1 + (C₂ / (Real.exp 1 * Real.sqrt k)) * (1 / (n : ℝ) ^ 2) + C_E / (n : ℝ) ^ 3 + 17 * C_H / (n : ℝ) ^ 4 := by
+    have h_simplified : C_H / (m : ℝ) ^ 4 ≤ C_H / (n : ℝ) ^ 4 := by
+      gcongr;
+    ring_nf at *; linarith;
+  refine le_trans h_simplified ?_;
+  convert add_le_add_left ( mul_le_mul_of_nonneg_right h_bound ( by positivity : ( 0 : ℝ ) ≤ 1 / n ^ 2 ) ) 1 using 1 ; ring;
+  ring
+
+set_option maxHeartbeats 6400000 in
+/-- **Main Theorem**: For every c > 0 there exist infinitely many pairs
+    (n, m) of positive integers such that 1 ≤ ∑_{ℓ=n}^{m} 1/ℓ ≤ 1 + c/n². -/
+theorem main_theorem (c : ℝ) (hc : c > 0) :
+    ∀ N : ℕ, ∃ m n : ℕ, N ≤ n ∧
+      1 ≤ harmonicPartialSum n m ∧ harmonicPartialSum n m ≤ 1 + c / (↑n) ^ 2 := by
+  intro N
+  -- Get the strong construction
+  obtain ⟨C₂, hC₂_pos, K₀, hK₀⟩ := choose_d_construction_strong
+  -- Get the harmonic approximation constant
+  obtain ⟨C_H, hC_H_pos, hC_H⟩ := harmonicReal_approx
+  -- Get the second-order expansion
+  obtain ⟨C_E, hC_E_pos, N_E, hN_E⟩ : ∃ C_E : ℝ, C_E > 0 ∧ ∃ N_E : ℕ, ∀ n : ℕ, N_E ≤ n →
+      ∀ y : ℝ, |y| ≤ Real.sinh 1 / 12 + C₂ + 1 →
+      |eulerMaclaurinApprox (Real.exp 1 * n - Real.exp 1 / 2 - 1 / 2 + y / n) -
+        eulerMaclaurinApprox (n - 1) - 1 -
+        ((24 * Real.exp (-1) * y + Real.exp (-2) - 1) / 24) * (1 / (↑n) ^ 2)| ≤
+        C_E / (↑n) ^ 3 := by
+    have := @second_order_expansion 1 (by norm_num) (Real.sinh 1 / 12 + C₂ + 1) (by positivity)
+    aesop
+  -- Choose k large enough
+  obtain ⟨k, hk_K0, hk_NE, hk_N, hk_ge2, hk_upper, hk_lower, hk_even⟩ :
+      ∃ k : ℕ, K₀ ≤ k ∧ N_E ≤ k ∧ N ≤ k ∧ 2 ≤ k ∧
+        k ≥ Nat.ceil ((4 * (C₂ / Real.exp 1 + C_E + 20 * C_H + 1) ^ 2) / c ^ 2) + 1 ∧
+        (C_E + 17 * C_H) * Real.exp 1 * (2 * k + 4) ≤ 3 ^ k ∧
+        Even k := by
+    -- Choose k large enough to satisfy all conditions using the fact that 3^k grows faster than any polynomial.
+    have h_exp_growth : Filter.Tendsto (fun k : ℕ => (C_E + 17 * C_H) * Real.exp 1 * (2 * k + 4) / 3 ^ k) Filter.atTop (nhds 0) := by
+      -- We can factor out the constant $(C_E + 17 * C_H) * \exp 1$ and use the fact that $3^k$ grows exponentially faster than $k$.
+      suffices h_factor : Filter.Tendsto (fun k : ℕ => (2 * k + 4 : ℝ) / 3 ^ k) Filter.atTop (nhds 0) by
+        convert h_factor.const_mul ( ( C_E + 17 * C_H ) * Real.exp 1 ) using 2 <;> ring;
+      refine' squeeze_zero_norm' _ tendsto_inv_atTop_nhds_zero_nat;
+      norm_num;
+      exact ⟨ 20, fun n hn => by rw [ inv_eq_one_div, div_le_div_iff₀ ] <;> norm_cast <;> induction hn <;> norm_num [ Nat.pow_succ ] at * ; nlinarith ⟩;
+    obtain ⟨ k, hk ⟩ := Filter.eventually_atTop.mp ( h_exp_growth.eventually ( gt_mem_nhds zero_lt_one ) );
+    refine' ⟨ 2 * ( k + K₀ + N_E + N + ⌈4 * ( C₂ / Real.exp 1 + C_E + 20 * C_H + 1 ) ^ 2 / c ^ 2⌉₊ + 1 ), _, _, _, _, _, _ ⟩ <;> try linarith;
+    exact ⟨ by have := hk ( 2 * ( k + K₀ + N_E + N + ⌈4 * ( C₂ / Real.exp 1 + C_E + 20 * C_H + 1 ) ^ 2 / c ^ 2⌉₊ + 1 ) ) ( by linarith ) ; rw [ div_lt_one ( by positivity ) ] at this; exact_mod_cast this.le, by simp +decide [ parity_simps ] ⟩
+  -- Get the pair (m, n) from the strong construction
+  obtain ⟨m, n, hn_pos, hn_le_m, hk_le_n, h3k_le_n, hy_lower, hy_upper⟩ := hK₀ k hk_K0 hk_even
+  -- Get the second-order expansion for this pair
+  have h_euler : |eulerMaclaurinApprox m - eulerMaclaurinApprox (↑n - 1) - 1 -
+      ((24 * Real.exp (-1) * ((↑m - Real.exp 1 * ↑n + Real.exp 1 / 2 + 1 / 2) * ↑n) +
+        Real.exp (-2) - 1) / 24) * (1 / (↑n) ^ 2)| ≤ C_E / (↑n) ^ 3 := by
+    convert hN_E n (by linarith) ((↑m - Real.exp 1 * ↑n + Real.exp 1 / 2 + 1 / 2) * ↑n) ?_ using 1
+    · norm_num [hn_pos.ne']
+    · rw [abs_le] at *
+      have h_sqrt_ge : (Real.sqrt k : ℝ) ≥ 1 := Real.le_sqrt_of_sq_le (mod_cast by linarith)
+      have h_C2_div : (C₂ : ℝ) / Real.sqrt k ≤ C₂ := div_le_self hC₂_pos.le h_sqrt_ge
+      have h_sinh_pos := Real.sinh_pos_iff.mpr zero_lt_one
+      have hy_ge : ((↑m : ℝ) - Real.exp 1 * ↑n + Real.exp 1 / 2 + 1 / 2) * ↑n ≥
+        Real.sinh 1 / 12 := by
+        nlinarith [show (0 : ℝ) < 1 / (2 * (↑k : ℝ) + 4) by positivity]
+      constructor <;> nlinarith [show (0 : ℝ) < 1 / (2 * (↑k : ℝ) + 4) by positivity]
+  -- Get the harmonic approximation bounds
+  have h_harm_m : |harmonicReal m - eulerMaclaurinApprox m| ≤ C_H / (↑m) ^ 4 :=
+    hC_H m (by linarith)
+  have h_harm_n : |harmonicReal (n - 1) - eulerMaclaurinApprox (n - 1)| ≤ 16 * C_H / (↑n) ^ 4 := by
+    rcases n with (_ | _ | n) <;> norm_num at *
+    · omega
+    · have := hC_H (n + 1) (Nat.succ_pos _); norm_num at *
+      exact le_trans this (by field_simp; nlinarith only [sq (n : ℝ), show (n : ℝ) ≥ 0 by positivity])
+  -- Verify n is large enough for the lower bound
+  have h_n_large : C_E + 17 * C_H ≤ Real.exp (-1) / (2 * ↑k + 4) * ↑n := by
+    rw [ div_mul_eq_mul_div, le_div_iff₀ ] <;> try positivity;
+    rw [ Real.exp_neg ];
+    rw [ inv_mul_eq_div, le_div_iff₀ ( Real.exp_pos _ ) ];
+    linarith [ ( by norm_cast : ( 3 : ℝ ) ^ k ≤ n ) ]
+  -- Apply the lower bound lemma
+  have h_lower : 1 ≤ harmonicReal m - harmonicReal (n - 1) :=
+    harmonic_lower_bound_from_coeff C_E C_H hC_H_pos k n m hn_pos hn_le_m
+      hk_ge2 h_euler h_harm_m h_harm_n hy_lower h_n_large
+  -- Apply the upper bound lemma
+  have h_upper_bound_cond : C₂ / (Real.exp 1 * Real.sqrt ↑k) + C_E / ↑n + 17 * C_H / ↑n ^ 2 ≤ c := by
+    have h_upper : C₂ / (Real.exp 1 * Real.sqrt k) + (C_E + 17 * C_H) / n ≤ c := by
+      -- By combining the bounds and using the properties of the square root and exponential functions, we can show that the sum of the two terms is less than or equal to c.
+      have h_combined : 2 * (C₂ / Real.exp 1 + C_E + 20 * C_H + 1) / Real.sqrt k ≤ c := by
+        rw [ div_le_iff₀ ( by positivity ) ];
+        have := Nat.lt_of_ceil_lt hk_upper;
+        rw [ div_lt_iff₀ ] at this <;> nlinarith [ show 0 < c * Real.sqrt k by positivity, Real.mul_self_sqrt ( Nat.cast_nonneg k ) ];
+      refine le_trans ?_ h_combined;
+      field_simp;
+      have h_combined : Real.sqrt k ≤ n := by
+        rw [ Real.sqrt_le_left ] <;> norm_cast <;> nlinarith only [ hk_ge2, hk_le_n, h3k_le_n, show 3 ^ k ≥ k ^ 2 by exact Nat.le_induction ( by norm_num ) ( fun n hn ih => by norm_num [ Nat.pow_succ ] at * ; nlinarith only [ hn, ih ] ) k hk_ge2 ];
+      nlinarith [ show 0 < C₂ * n by positivity, show 0 < Real.exp 1 * n by positivity, show 0 < Real.exp 1 * C_E by positivity, show 0 < Real.exp 1 * C_H by positivity, Real.sqrt_nonneg k, Real.sq_sqrt ( Nat.cast_nonneg k ) ];
+    refine le_trans ?_ h_upper ; ring_nf ; norm_num [ hn_pos.ne' ] ; ring_nf ; norm_num [ hn_pos.ne' ] ; (
+    exact mul_le_mul_of_nonneg_right ( inv_anti₀ ( by positivity ) ( by norm_cast; nlinarith ) ) hC_H_pos.le);
+  have h_upper : harmonicReal m - harmonicReal (n - 1) ≤ 1 + c / (↑n) ^ 2 :=
+    harmonic_upper_bound_from_coeff c C_E C_H C₂ hC_H_pos k n m hn_pos
+      hn_le_m h_euler h_harm_m h_harm_n hy_upper h_upper_bound_cond
+  -- Convert to harmonicPartialSum
+  refine ⟨m, n, by linarith, ?_, ?_⟩
+  · rw [harmonicPartialSum_eq_diff (by omega) hn_le_m]; linarith
+  · rw [harmonicPartialSum_eq_diff (by omega) hn_le_m]; linarith
+
+#print axioms main_theorem
