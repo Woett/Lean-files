@@ -366,12 +366,6 @@ lemma padeBound_ibp (k : ℕ) :
 
 /-
 IBP identity: T(k) = (k+1)·(S(k) - 2·P(k)).
-    Proof: write T(k) = ∫₀¹ t·[t^{k+1}(1-t)^{k+1}]·eᵗ dt.
-    IBP with u = t^{k+1}(1-t)^{k+1}, dv = t·eᵗ dt, v = (t-1)eᵗ.
-    [u·v]₀¹ = 0, u' = (k+1)t^k(1-t)^k(1-2t).
-    So T(k) = (k+1)∫₀¹ (1-t)eᵗ · t^k(1-t)^k(1-2t) dt
-    = (k+1)∫₀¹ t^k(1-t)^{k+1}(1-2t)eᵗ dt
-    = (k+1)(S(k) - 2P(k)).
 -/
 set_option maxHeartbeats 800000 in
 lemma mixedBound_ibp (k : ℕ) :
@@ -412,15 +406,13 @@ lemma mixedBound_ibp (k : ℕ) :
       · apply_rules [ Continuous.intervalIntegrable ] ; continuity;
       · exact Continuous.intervalIntegrable ( by continuity ) _ _
 
-/-- Combined recurrence: P(k+1) = -(4k+5)(k+2)·P(k) + 2(k+1)(k+2)·S(k).
-    Derived algebraically from padeBound_ibp and mixedBound_ibp. -/
+/-- Combined recurrence: P(k+1) = -(4k+5)(k+2)·P(k) + 2(k+1)(k+2)·S(k). -/
 lemma padeBound_recurrence (k : ℕ) :
     padeBound (k + 1) = -(4 * ↑k + 5) * (↑(k + 2) : ℝ) * padeBound k
       + 2 * (↑(k + 1) : ℝ) * (↑(k + 2) : ℝ) * secBound k := by
   rw [padeBound_ibp, mixedBound_ibp]; push_cast; ring
 
-/-- Combined recurrence: S(k+1) = (2k+3)·P(k) - (k+1)·S(k).
-    Derived from secBound_decomp and mixedBound_ibp. -/
+/-- Combined recurrence: S(k+1) = (2k+3)·P(k) - (k+1)·S(k). -/
 lemma secBound_recurrence (k : ℕ) :
     secBound (k + 1) = (2 * ↑k + 3) * padeBound k
       - (↑(k + 1) : ℝ) * secBound k := by
@@ -468,7 +460,6 @@ lemma eSecDen_pos : ∀ k, 0 < eSecDen k := by
 
 /-
 The Padé–secondary factorial identity: eSecDen k · P(k) + (k+1) · ePadeDen k · S(k) = (k+1)!.
-    Derived from the integral identities and the determinant.
 -/
 lemma pade_sec_factorial_identity (k : ℕ) :
     (eSecDen k : ℝ) * padeBound k + (↑(k + 1) : ℝ) * (ePadeDen k : ℝ) * secBound k =
