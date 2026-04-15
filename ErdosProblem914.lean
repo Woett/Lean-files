@@ -270,6 +270,7 @@ lemma weight_function_contradiction
   have mu_simplified : ∑ z ∈ A, ∑ y ∈ B, (if y ∈ Solo z then (q : ℚ) / ((Solo z).card : ℚ) else 0) = ∑ z ∈ A, ∑ y ∈ Solo z, (q : ℚ) / ((Solo z).card : ℚ) := by
     simp +contextual [Finset.inter_eq_right.mpr (hS_sub _ _)];
   nlinarith [ ( by norm_cast : ( 1 : ℚ ) ≤ q ), ( by norm_cast : ( q : ℚ ) < t ), ( by norm_cast : ( 1 : ℚ ) ≤ s ) ]
+
 namespace HajnalSzemeredi
 
 open Finset Function SimpleGraph
