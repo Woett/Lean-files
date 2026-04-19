@@ -2,7 +2,7 @@ import Mathlib
 
 /-!
 Below you can find a formalization, obtained by Aristotle from Harmonic
-(aristotle@harmonic.fun), of the following two theorems by Verdenius:
+(aristotle-harmonic@harmonic.fun), of the following two theorems by Verdenius:
 
 **Theorem**. For every positive integer `n`, there exists a polynomial `f(x)` of degree `n` with all nonzero integer
 coefficients such that `f(x)²` has fewer than `(1/5)(102 · n^{log₉ 6} - 12)`
