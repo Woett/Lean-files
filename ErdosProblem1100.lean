@@ -6,6 +6,9 @@ Erdős, P. and Hall, R. R., On some unconventional problems on the divisors of i
 I noticed that the $o(1)$-term in the exponent can be made explicit, which gives $\tau_\perp(n) > \exp( \frac{(1/2 - o(1))(\log \log n)^2}{\log \log \log n} )$ infinitely often. Assuming the prime number theorem in the form that the product of all primes in the interval $(x, 2x]$ is $e^{(1 + o(1))x}$, below you can find a formalized proof of this bound, which was obtained by Aristotle from Harmonic (aristotle-harmonic@harmonic.fun).
 
 See https://www.erdosproblems.com/1100 for more information.
+
+Lean version: leanprover/lean4:v4.24.0 (I think)
+Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7 (I think)
 -/
 
 import Mathlib
