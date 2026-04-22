@@ -9,7 +9,11 @@ In 2008, an alternative proof was given by H. A. Kierstead and A. V. Kostochka.
 
 Kierstead, H. A. and Kostochka, A. V., A Short Proof of the Hajnal–Szemerédi Theorem on Equitable Colouring. Combinatorics, Probability and Computing, Vol. 17 (2008), 265--270.
 
-It is the latter proof Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) managed to formalize, the result of which you can find below.
+It is the latter proof Aristotle from Harmonic (aristotle-harmonic@harmonic.fun)
+managed to formalize, the result of which you can find below.
+
+Lean version: leanprover/lean4:v4.28.0
+Mathlib version: 8f9d9cff6bd728b17a24e163c9402775d9e6a365
 -/
 
 import Mathlib
