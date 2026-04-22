@@ -349,11 +349,11 @@ lemma sum_pair_pigeonhole (S low : ℕ) (hlow : 1 ≤ low) (hSlow : 2 * low ≤ 
 
 /-
 **Main resultv2** For any infinite strictly increasing sequence `s` of positive
-    integers satisfying `s(k+1) ≤ 2·s(k) + 1`, and any `A ⊆ {1,…,n}` with
+    integers satisfying `s(k+1) ≤ 2·s(k) + 2`, and any `A ⊆ {1,…,n}` with
     `2|A| > n + s(0)`, there exist `a, b ∈ A` and `i` such that `a + b = s(i)`.
 -/
 theorem general_upper_bound (s : ℕ → ℕ) (hs_pos : ∀ k, 0 < s k)
-    (hs_mono : StrictMono s) (hs_growth : ∀ k, s (k + 1) ≤ 2 * s k + 1)
+    (hs_mono : StrictMono s) (hs_growth : ∀ k, s (k + 1) ≤ 2 * s k + 2)
     (n : ℕ) (hn : 0 < n) (A : Finset ℕ) (hA_sub : A ⊆ Finset.Icc 1 n)
     (hA_card : 2 * A.card > n + s 0) :
     ∃ i, ∃ a ∈ A, ∃ b ∈ A, a + b = s i := by
@@ -455,7 +455,7 @@ lemma upper_density_exceeds (A : Set ℕ)
 
 theorem general_upper_bound_unbounded
     (s : ℕ → ℕ) (hs_pos : ∀ k, 0 < s k)
-    (hs_mono : StrictMono s) (hs_growth : ∀ k, s (k + 1) ≤ 2 * s k + 1)
+    (hs_mono : StrictMono s) (hs_growth : ∀ k, s (k + 1) ≤ 2 * s k + 2)
     (A : Set ℕ)
     (hA_density : 1 / 2 < Filter.limsup (fun n : ℕ => (countIn A n : ℝ) / ↑n) Filter.atTop) :
     ∀ M : ℕ, ∃ i, M < s i ∧ ∃ a ∈ A, ∃ b ∈ A, a + b = s i := by
@@ -484,13 +484,13 @@ theorem general_upper_bound_unbounded
 
 /-
 **Corollary**: For any sequence `s` of positive integers with
-    `s(k+1) ≤ 2·s(k) + 1` and any set `A` of positive integers with
+    `s(k+1) ≤ 2·s(k) + 2` and any set `A` of positive integers with
     upper density > 1/2, the sumset `A + A` contains infinitely many
     elements of `s`.
 -/
 theorem general_upper_bound_infinite
     (s : ℕ → ℕ) (hs_pos : ∀ k, 0 < s k)
-    (hs_mono : StrictMono s) (hs_growth : ∀ k, s (k + 1) ≤ 2 * s k + 1)
+    (hs_mono : StrictMono s) (hs_growth : ∀ k, s (k + 1) ≤ 2 * s k + 2)
     (A : Set ℕ)
     (hA_density : 1 / 2 < Filter.limsup (fun n : ℕ => (countIn A n : ℝ) / ↑n) Filter.atTop) :
     Set.Infinite {i : ℕ | ∃ a ∈ A, ∃ b ∈ A, a + b = s i} := by
