@@ -1,9 +1,9 @@
 /-
 Solving Erdős problem 1136 (https://www.erdosproblems.com/1136), Helmut Müller
-proved that the set A of positive integers whose odd part is ≡ 3 (mod 4) has the
-property that no two elements (possibly equal) sum to a power of 2, and that A
-has natural density 1/2. He also showed that any set of positive integers with
-this sum-free property has density ≤ 1/2.
+proved that the set A of positive integers whose odd part is congruent to 3 (mod
+4) has the property that no two elements (possibly equal) sum to a power of two,
+   and that A has natural density 1/2. He also showed that any set of positive
+   integers with this sum-free property has density ≤ 1/2.
 
 Müller, Helmut, Über ein additiv-zahlentheoretisches Problem von P. Erdős. Mitt.
 Math. Ges. Hamburg (2011), 75--78.
@@ -16,16 +16,29 @@ verified here:
 
 https://live.lean-lang.org/#project=mathlib-v4.28.0&url=https%3A%2F%2Fgist.githubusercontent.com%2FLorenzoLuccioli%2F08616fb4e219e0dbba282bedabcf524b%2Fraw%2Fa2051b19d529d149e10ad670f70864f5671e823f%2FErdos1136.lean
 
-The formalization below also contains a more general upper bound result, as well
-as another construction of a power-of-2 sum-free set with natural density 1/2,
-namely the greedy construction! Simply let a_k be the smallest positive integer
-such that a_j + a_k is not a power of 2 for all 1 ≤ j ≤ k, and let A = {a_k : k
-≥ 1}. Surprisingly, this works as well. And by the way, instead of the powers of
-2, this greedy construction also works for every sequence s_1, s_2, … with s_k ≥
-2s_{k-1} for all k.
+The formalization below also contains the following more general upper bound
+result:
 
-Lean version: leanprover/lean4:v4.28.0
-Mathlib version: 8f9d9cff6bd728b17a24e163c9402775d9e6a365
+Let S = {s_1 < s_2 < ⋯ } ⊆ ℕ be any infinite set of positive integers for which
+
+s_{k+1} ≤ 2s_k + 2
+
+holds for all k. Then for any positive integer n and any set A ⊆ ℕ satisfying
+
+|A| > (n + s_1)/2
+
+we have (A+A) ∩ S ≠ ∅. In particular, if A has upper density larger than 1/2,
+then A+A contains infinitely many elements of S.
+
+Finally, we also provide another construction of a power-of-two sum-free set
+with natural density 1/2, namely the greedy construction! Simply let a_k be the
+smallest positive integer such that a_j + a_k is not a power of two for all 1 ≤
+j ≤ k, and let A = {a_k : k ≥ 1}. Surprisingly, this works as well. And by the
+way, instead of the powers of two, this greedy construction also works for every
+sequence s_1, s_2, … with s_k ≥ 2s_{k-1} for all k.
+
+Lean version: leanprover/lean4:v4.28.0 Mathlib version:
+8f9d9cff6bd728b17a24e163c9402775d9e6a365
 -/
 
 import Mathlib
