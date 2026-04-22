@@ -16,7 +16,7 @@ verified here:
 
 https://live.lean-lang.org/#project=mathlib-v4.28.0&url=https%3A%2F%2Fgist.githubusercontent.com%2FLorenzoLuccioli%2F08616fb4e219e0dbba282bedabcf524b%2Fraw%2Fa2051b19d529d149e10ad670f70864f5671e823f%2FErdos1136.lean
 
-The formalization below finished with a proof of the following more general
+The formalization below finishes with a proof of the following more general
 upper bound:
 
 Let S = {s_1 < s_2 < ⋯ } ⊆ ℕ be any infinite set of positive integers for which
