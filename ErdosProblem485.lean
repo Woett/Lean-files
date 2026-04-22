@@ -2,15 +2,21 @@ import Mathlib
 
 /-!
 Below you can find a formalization, obtained by Aristotle from Harmonic
-(aristotle-harmonic@harmonic.fun), of the following two theorems by Verdenius:
+(aristotle@harmonic.fun), of the following two theorems by Verdenius:
 
-**Theorem**. For every positive integer $n$ there exists a polynomial $f(x)$ of degree $n$ with all non-zero integer
-coefficients such that $f(x)²$ has fewer than $(1/5)(102 · n^{log_9 6} - 12) \ll n^{0.816}$ non-zero coefficients.
+**Theorem**. For every positive integer `n`, there exists a polynomial `f(x)` of
+degree `n` with all nonzero integer coefficients such that `f(x)²` has fewer
+than `(1/5)(102 · n^{log₉ 6} - 12)` nonzero coefficients.
 
-**Theorem**. For every positive integer $n$, there exists a polynomial $f(x)$ of degree $n$ with all non-zero real
-coefficients such that $f(x)²$ has fewer than $(1/7)(170 · n^{log_{13} 8} - 14) \ll n^{0.811}$ non-zero coefficients.
+**Theorem**. For every positive integer `n`, there exists a polynomial `f(x)` of
+degree `n` with all nonzero real coefficients such that `f(x)²` has fewer than
+`(1/7)(170 · n^{log_{13} 8} - 14)` nonzero coefficients.
 
-W. Verdenius, On the number of terms of the square and the cube of polynomials, Indag. Math. 11 (1949), 546–565.
+W. Verdenius, On the number of terms of the square and the cube of polynomials,
+Indag. Math. 11 (1949), 546–565.
+
+Lean version: leanprover/lean4:v4.28.0
+Mathlib version: 8f9d9cff6bd728b17a24e163c9402775d9e6a365
 -/
 
 open Polynomial Finset
