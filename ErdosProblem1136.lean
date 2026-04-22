@@ -16,11 +16,16 @@ verified here:
 
 https://live.lean-lang.org/#project=mathlib-v4.28.0&url=https%3A%2F%2Fgist.githubusercontent.com%2FLorenzoLuccioli%2F08616fb4e219e0dbba282bedabcf524b%2Fraw%2Fa2051b19d529d149e10ad670f70864f5671e823f%2FErdos1136.lean
 
-The formalization below also contains a more general upper bound result, which I
-think is aweseome.
+The formalization below also contains a more general upper bound result, as well
+as another construction of a power-of-2 sum-free set with natural density 1/2,
+namely the greedy construction! Simply let a_k be the smallest positive integer
+such that a_j + a_k is not a power of 2 for all 1 ≤ j ≤ k, and let A = {a_k : k
+≥ 1}. Surprisingly, this works as well. And by the way, instead of the powers of
+2, this greedy construction also works for every sequence s_1, s_2, … with s_k ≥
+2s_{k-1} for all k.
 
-Lean version: leanprover/lean4:v4.28.0 Mathlib version:
-8f9d9cff6bd728b17a24e163c9402775d9e6a365
+Lean version: leanprover/lean4:v4.28.0
+Mathlib version: 8f9d9cff6bd728b17a24e163c9402775d9e6a365
 -/
 
 import Mathlib
@@ -503,3 +508,304 @@ theorem general_upper_bound_infinite
   exact (not_lt_of_ge hsi_le) hi
 
 #print axioms general_upper_bound_infinite
+
+noncomputable section greedy
+open Finset Filter Nat Classical
+open scoped Topology
+
+-- ============================================================================
+-- Greedy approach
+-- ============================================================================
+
+def inA (m : ℕ) : Prop :=
+  m ≥ 1 ∧ (∀ k : ℕ, 2 * m ≠ 2 ^ k) ∧
+  (∀ a : ℕ, 1 ≤ a → a < m → inA a → ∀ k : ℕ, m + a ≠ 2 ^ k)
+termination_by m
+
+/-- The set A = {m | inA m} -/
+def setA : Set ℕ := {m | inA m}
+
+-- ============================================================================
+-- Basic properties from the definition
+-- ============================================================================
+
+lemma inA_pos {m : ℕ} (h : inA m) : m ≥ 1 := by
+  unfold inA at h; exact h.1
+
+lemma inA_not_two_mul_pow {m : ℕ} (h : inA m) (k : ℕ) : 2 * m ≠ 2 ^ k := by
+  unfold inA at h; exact h.2.1 k
+
+lemma inA_no_pair {m a : ℕ} (hm : inA m) (ha1 : 1 ≤ a) (ha2 : a < m) (ha : inA a) (k : ℕ) :
+    m + a ≠ 2 ^ k := by
+  unfold inA at hm; exact hm.2.2 a ha1 ha2 ha k
+
+lemma not_inA_pow2 (n : ℕ) : ¬ inA (2 ^ n) := by
+  intro h; exact inA_not_two_mul_pow h (n + 1) (by ring)
+
+/-- To show inA m, it suffices to show the three conditions -/
+lemma inA_of_conditions {m : ℕ} (h1 : m ≥ 1) (h2 : ∀ k : ℕ, 2 * m ≠ 2 ^ k)
+    (h3 : ∀ a : ℕ, 1 ≤ a → a < m → inA a → ∀ k : ℕ, m + a ≠ 2 ^ k) : inA m := by
+  unfold inA; exact ⟨h1, h2, h3⟩
+
+-- ============================================================================
+-- Sum-free property
+-- ============================================================================
+
+/-- **Sum-free property**: No two elements of A sum to a power of 2. -/
+theorem sumFree {a b : ℕ} (ha : inA a) (hb : inA b) (k : ℕ) : a + b ≠ 2 ^ k := by
+  by_cases hab : a < b
+  · rw [add_comm]; exact inA_no_pair hb (inA_pos ha) hab ha k
+  · push_neg at hab
+    by_cases hab' : b < a
+    · exact inA_no_pair ha (inA_pos hb) hab' hb k
+    · push_neg at hab'
+      have heq : a = b := le_antisymm hab' hab
+      subst heq
+      intro h
+      exact inA_not_two_mul_pow ha k (by omega)
+
+/-
+============================================================================
+Key structural lemma: unique pairing with powers of 2
+============================================================================
+
+For m in (2^n, 2^(n+1)) and 1 ≤ a < m, if m + a = 2^k then k = n + 1.
+-/
+lemma unique_power {m a n : ℕ} (hm1 : 2 ^ n < m) (hm2 : m < 2 ^ (n + 1))
+    (ha1 : 1 ≤ a) (ha2 : a < m) {k : ℕ} (hk : m + a = 2 ^ k) : k = n + 1 := by
+  refine' Nat.le_antisymm _ _;
+  · contrapose! hk;
+    -- If $n + 1 < k$, then $2^k \geq 2^{n+2}$.
+    have hk_ge : 2 ^ k ≥ 2 ^ (n + 2) := by
+      exact pow_le_pow_right₀ ( by decide ) hk;
+    grind;
+  · exact Nat.succ_le_of_lt ( Nat.lt_of_not_ge fun h => by linarith [ Nat.pow_le_pow_right two_pos h ] )
+
+/-
+**Structural lemma**: For m in (2^n, 2^(n+1)), m ∈ A iff 2^(n+1) - m ∉ A.
+-/
+theorem structural {m n : ℕ} (hm1 : 2 ^ n < m) (hm2 : m < 2 ^ (n + 1)) :
+    inA m ↔ ¬ inA (2 ^ (n + 1) - m) := by
+  constructor;
+  · grind +suggestions;
+  · intro h_not_inA
+    apply inA_of_conditions
+    exact hm1.le.trans_lt' (by norm_num)
+    intro k hk
+    have h_contra : m = 2 ^ (k - 1) := by
+      cases k <;> simp_all +decide [ pow_succ' ]
+    exact (by
+    rcases k with ( _ | _ | k ) <;> simp_all +decide [ pow_succ' ];
+    norm_num [ ← pow_succ' ] at * ; linarith [ Nat.pow_le_pow_right ( by decide : 1 ≤ 2 ) ( show n ≥ k + 1 from Nat.succ_le_of_lt ( Nat.lt_of_not_ge fun h => by linarith [ Nat.pow_le_pow_right ( by decide : 1 ≤ 2 ) h ] ) ) ] ;)
+    intro a ha1 ha2 ha3 k hk
+    have h_contra : a = 2 ^ (n + 1) - m := by
+      have h_contra : k = n + 1 := by
+        apply unique_power hm1 hm2 ha1 ha2 hk
+      rw [h_contra] at hk
+      linarith [Nat.sub_add_cancel hm2.le]
+    exact (by
+    aesop)
+
+-- ============================================================================
+-- Counting
+-- ============================================================================
+
+/-- Count of elements of A in {1, ..., N} -/
+def countA (N : ℕ) : ℕ := ((Icc 1 N).filter (fun m => inA m)).card
+
+/-
+countA is monotone
+-/
+lemma countA_mono {M N : ℕ} (h : M ≤ N) : countA M ≤ countA N := by
+  exact Finset.card_mono <| Finset.filter_subset_filter _ <| Finset.Icc_subset_Icc_right h
+
+/-
+============================================================================
+Functional equation for countA
+============================================================================
+
+Difference of countA over an interval
+-/
+lemma countA_diff {a b : ℕ} (h : a ≤ b) :
+    countA b - countA a = ((Icc (a + 1) b).filter (fun m => inA m)).card := by
+  unfold countA;
+  rw [ tsub_eq_of_eq_add_rev ];
+  rw [ ← Finset.card_union_of_disjoint ];
+  · congr 1 with x ; norm_num;
+    grind;
+  · exact Finset.disjoint_left.mpr fun x hx₁ hx₂ => by linarith [ Finset.mem_Icc.mp ( Finset.mem_filter.mp hx₁ |>.1 ), Finset.mem_Icc.mp ( Finset.mem_filter.mp hx₂ |>.1 ) ] ;
+
+/-
+Generalized split of countA at a power of 2.
+    For 2^j ≤ N ≤ 2^(j+1) - 1:
+    countA(N) = countA(2^j - 1) + |A ∩ [2^j + 1, N]|
+-/
+lemma countA_split_general {j N : ℕ} (hN1 : 2^j ≤ N) :
+    countA N = countA (2^j - 1) +
+    ((Icc (2^j + 1) N).filter (fun m => inA m)).card := by
+  have h_split : (Icc 1 N).filter (fun m => inA m) = (Icc 1 (2 ^ j - 1)).filter (fun m => inA m) ∪ (Icc (2 ^ j + 1) N).filter (fun m => inA m) := by
+    ext m;
+    by_cases hm : m = 2 ^ j <;> simp_all +decide ;
+    · exact fun h _ => absurd h ( not_inA_pow2 j );
+    · grind +revert;
+  rw [ countA, countA, h_split, Finset.card_union_of_disjoint ];
+  exact Finset.disjoint_left.mpr fun x hx₁ hx₂ => by linarith [ Finset.mem_Icc.mp ( Finset.mem_filter.mp hx₁ |>.1 ), Finset.mem_Icc.mp ( Finset.mem_filter.mp hx₂ |>.1 ), Nat.sub_add_cancel ( Nat.one_le_pow j 2 zero_lt_two ) ] ;
+
+/-
+The A-count in [2^j+1, N] plus the A-count in [2^(j+1)-N, 2^j-1] equals N - 2^j.
+    This follows from the structural lemma: m ↦ 2^(j+1) - m is a bijection
+    sending A-elements to non-A-elements.
+-/
+lemma count_upper_plus_lower {j N : ℕ} (hN1 : 2^j ≤ N) (hN2 : N ≤ 2^(j+1) - 1) :
+    ((Icc (2^j + 1) N).filter (fun m => inA m)).card +
+    ((Icc (2^(j+1) - N) (2^j - 1)).filter (fun m => inA m)).card = N - 2^j := by
+  -- By the structural lemma, m ↦ 2^(j+1) - m is a bijection from [2^j + 1, N] to [2^(j+1)-N, 2^j-1].
+  have h_bij : Finset.image (fun m => 2^(j+1) - m) (Finset.Icc (2^j + 1) N) = Finset.Icc (2^(j+1) - N) (2^j - 1) := by
+    ext m;
+    simp +zetaDelta at *;
+    constructor;
+    · grind;
+    · intro hm;
+      use 2^(j+1) - m;
+      grind;
+  rw [ ← h_bij, Finset.card_filter, Finset.card_filter ];
+  rw [ Finset.sum_image ] <;> norm_num;
+  · rw [ Finset.card_filter, Finset.card_filter ];
+    rw [ ← Finset.sum_add_distrib, Finset.sum_congr rfl fun x hx => ?_ ];
+    rotate_left;
+    use fun x => 1;
+    · split_ifs <;> simp_all +decide;
+      · exact absurd ( sumFree ‹inA x› ‹inA ( 2 ^ ( j + 1 ) - x ) › ( j + 1 ) ) ( by rw [ Nat.add_sub_of_le ( by linarith [ Nat.sub_add_cancel ( Nat.one_le_pow ( j + 1 ) 2 zero_lt_two ) ] ) ] ; norm_num );
+      · have := structural ( show 2 ^ j < x from hx.1 ) ( show x < 2 ^ ( j + 1 ) from lt_of_le_of_lt hx.2 ( lt_of_le_of_lt hN2 ( Nat.sub_lt ( by norm_num ) ( by norm_num ) ) ) ) ; aesop;
+    · simp +arith +decide;
+  · exact fun x hx y hy hxy => by rw [ tsub_right_inj ] at hxy <;> linarith [ hx.1, hx.2, hy.1, hy.2, Nat.sub_add_cancel ( show 1 ≤ 2 ^ ( j + 1 ) from Nat.one_le_pow _ _ ( by decide ) ) ] ;
+
+/-
+**Functional equation**: For 2^j ≤ N ≤ 2^(j+1) - 1:
+    countA(N) = (N - 2^j) + countA(2^(j+1) - 1 - N)
+-/
+theorem countA_functional {j N : ℕ} (hN1 : 2^j ≤ N) (hN2 : N ≤ 2^(j+1) - 1) :
+    countA N = (N - 2^j) + countA (2^(j+1) - 1 - N) := by
+  have h_split : countA N = countA (2^j - 1) + ((Icc (2^j + 1) N).filter (fun m => inA m)).card := by
+    exact countA_split_general hN1;
+  have h_upper_plus_lower : ((Icc (2^j + 1) N).filter (fun m => inA m)).card +
+                            ((Icc (2^(j+1) - N) (2^j - 1)).filter (fun m => inA m)).card = N - 2^j := by
+                              exact count_upper_plus_lower hN1 hN2;
+  have h_lower_count : ((Icc (2^(j+1) - N) (2^j - 1)).filter (fun m => inA m)).card =
+                         countA (2^j - 1) - countA (2^(j+1) - N - 1) := by
+                           convert rfl;
+                           convert countA_diff _ using 1;
+                           · grind +extAll;
+                           · omega;
+  rw [ show 2 ^ ( j + 1 ) - 1 - N = 2 ^ ( j + 1 ) - N - 1 by omega ];
+  linarith [ Nat.sub_add_cancel ( show countA ( 2 ^ j - 1 ) ≥ countA ( 2 ^ ( j + 1 ) - N - 1 ) from countA_mono <| by omega ) ]
+
+/-
+============================================================================
+Density
+============================================================================
+
+The "gap" g(N) = N - 2·countA(N) satisfies g(N) = g(M) + 1
+    for M = 2^(j+1) - 1 - N < N, and g(0) = 0.
+-/
+lemma gap_recurrence {j N : ℕ} (hN1 : 2^j ≤ N) (hN2 : N ≤ 2^(j+1) - 1) :
+    N - 2 * countA N = (2^(j+1) - 1 - N) - 2 * countA (2^(j+1) - 1 - N) + 1 := by
+  rw [ countA_functional hN1 hN2 ];
+  -- By definition of $countA$, we know that $countA(k) \leq k / 2$ for any $k$.
+  have h_countA_le_half : ∀ k : ℕ, countA k ≤ k / 2 := by
+    intro k
+    induction' k using Nat.strong_induction_on with k ih;
+    by_cases hk : k = 0;
+    · aesop;
+    · -- Let $j$ be such that $2^j \leq k < 2^{j+1}$.
+      obtain ⟨j, hj⟩ : ∃ j, 2^j ≤ k ∧ k < 2^(j+1) := by
+        exact ⟨ Nat.log 2 k, Nat.pow_le_of_le_log ( by positivity ) ( by linarith ), Nat.lt_pow_of_log_lt ( by linarith ) ( by linarith ) ⟩;
+      -- Using the functional equation, we have $countA(k) = (k - 2^j) + countA(2^{j+1} - 1 - k)$.
+      have h_fun_eq : countA k = (k - 2^j) + countA (2^(j+1) - 1 - k) := by
+        apply countA_functional; exact hj.left; exact Nat.le_sub_one_of_lt hj.right;
+      grind;
+  grind
+
+/-
+2·countA(N) ≤ N for all N
+-/
+theorem two_countA_le (N : ℕ) : 2 * countA N ≤ N := by
+  induction' N using Nat.strong_induction_on with N ih;
+  by_cases hN : N = 0;
+  · aesop;
+  · -- For N ≥ 1: find j with 2^j ≤ N and N ≤ 2^(j+1) - 1 (j = Nat.log 2 N).
+    obtain ⟨j, hj1, hj2⟩ : ∃ j, 2^j ≤ N ∧ N ≤ 2^(j+1) - 1 := by
+      exact ⟨ Nat.log 2 N, Nat.pow_le_of_le_log ( by positivity ) ( by linarith ), Nat.le_sub_one_of_lt ( Nat.lt_pow_of_log_lt ( by linarith ) ( by linarith ) ) ⟩;
+    rw [ countA_functional hj1 hj2 ];
+    grind
+
+/-
+The gap N - 2·countA(N) is at most Nat.log 2 N + 1
+-/
+theorem gap_le_log (N : ℕ) (hN : N ≥ 1) : N - 2 * countA N ≤ Nat.log 2 N + 1 := by
+  induction' N using Nat.strong_induction_on with N ih;
+  -- By gap_recurrence: N - 2*countA(N) = M - 2*countA(M) + 1, where M = 2^(j+1) - 1 - N.
+  obtain ⟨j, hj⟩ : ∃ j, 2^j ≤ N ∧ N < 2^(j+1) := by
+    exact ⟨ Nat.log 2 N, Nat.pow_le_of_le_log ( by linarith ) ( by linarith ), Nat.lt_pow_of_log_lt ( by linarith ) ( by linarith ) ⟩
+  have hM : N - 2 * countA N = (2^(j+1) - 1 - N) - 2 * countA (2^(j+1) - 1 - N) + 1 := by
+    apply gap_recurrence hj.left (Nat.le_sub_one_of_lt hj.right);
+  by_cases hM_zero : 2^(j+1) - 1 - N = 0;
+  · grind;
+  · have hM_lt : 2^(j+1) - 1 - N < 2^j := by
+      omega;
+    have hM_log : Nat.log 2 (2^(j+1) - 1 - N) < j := by
+      exact Nat.log_lt_of_lt_pow ( by positivity ) hM_lt;
+    have hM_log : Nat.log 2 N ≥ j := by
+      exact Nat.le_log_of_pow_le ( by decide ) hj.1;
+    grind
+
+/-
+A has natural density 1/2
+-/
+theorem density_half :
+    Tendsto (fun N => (countA N : ℝ) / (N : ℝ)) atTop (nhds (1 / 2 : ℝ)) := by
+  -- Apply the squeeze theorem to conclude the proof.
+  have h_squeeze : ∀ ε > 0, ∃ N₀ : ℕ, ∀ N ≥ N₀, |(countA N : ℝ) / N - 1 / 2| < ε := by
+    -- For any ε > 0, we can find an N₀ such that for all N ≥ N₀, (Nat.log 2 N + 1) / (2 * N) < ε.
+    have h_log_div : Filter.Tendsto (fun N : ℕ => (Nat.log 2 N + 1 : ℝ) / (2 * N)) Filter.atTop (nhds 0) := by
+      -- We'll use the fact that $\log_2 N$ grows slower than any linear function in $N$.
+      have h_log_growth : Filter.Tendsto (fun N : ℕ => (Nat.log 2 N : ℝ) / N) Filter.atTop (nhds 0) := by
+        -- We can use the change of variables $k = \log_2 N$ to transform the limit expression.
+        suffices h_log : Filter.Tendsto (fun k : ℕ => (k : ℝ) / 2 ^ k) Filter.atTop (nhds 0) by
+          have h_log : Filter.Tendsto (fun N : ℕ => (Nat.log 2 N : ℝ) / 2 ^ (Nat.log 2 N)) Filter.atTop (nhds 0) := by
+            exact h_log.comp ( Filter.tendsto_atTop_atTop.mpr fun k => ⟨ 2 ^ k, fun n hn => Nat.le_log_of_pow_le ( by norm_num ) hn ⟩ );
+          refine' squeeze_zero_norm' _ h_log;
+          filter_upwards [ Filter.eventually_gt_atTop 0 ] with n hn using by rw [ Real.norm_of_nonneg ( by positivity ) ] ; gcongr ; norm_cast ; exact Nat.pow_log_le_self 2 hn.ne';
+        refine' squeeze_zero_norm' _ tendsto_inv_atTop_nhds_zero_nat;
+        norm_num;
+        exact ⟨ 8, fun n hn => by rw [ inv_eq_one_div, div_le_div_iff₀ ] <;> norm_cast <;> induction hn <;> norm_num [ Nat.pow_succ ] at * ; nlinarith ⟩;
+      convert h_log_growth.div_const 2 |> Filter.Tendsto.add <| tendsto_inv_atTop_nhds_zero_nat.div_const 2 using 2 <;> ring;
+    -- By the definition of absolute value, we know that $|a - b| < ε$ if and only if $-ε < a - b < ε$.
+    intros ε hε_pos
+    have h_abs : ∀ N ≥ 1, |(countA N : ℝ) / N - 1 / 2| ≤ (Nat.log 2 N + 1 : ℝ) / (2 * N) := by
+      intros N hN_pos
+      have h_abs : (countA N : ℝ) / N ≥ 1 / 2 - (Nat.log 2 N + 1 : ℝ) / (2 * N) := by
+        field_simp;
+        have := gap_le_log N hN_pos;
+        exact sub_le_iff_le_add'.mpr ( by norm_cast; omega );
+      rw [ abs_le ];
+      constructor <;> nlinarith [ show ( countA N : ℝ ) ≤ N / 2 by exact le_div_iff₀' ( by positivity ) |>.2 <| mod_cast two_countA_le N, show ( N : ℝ ) ≥ 1 by exact_mod_cast hN_pos, div_mul_cancel₀ ( countA N : ℝ ) ( by positivity : ( N : ℝ ) ≠ 0 ), div_mul_cancel₀ ( ( Nat.log 2 N + 1 : ℝ ) ) ( by positivity : ( 2 * N : ℝ ) ≠ 0 ) ];
+    exact Filter.eventually_atTop.mp ( h_log_div.eventually ( gt_mem_nhds hε_pos ) ) |> fun ⟨ N₀, hN₀ ⟩ ↦ ⟨ N₀ + 1, fun N hN ↦ lt_of_le_of_lt ( h_abs N ( by linarith ) ) ( hN₀ N ( by linarith ) ) ⟩;
+  exact Metric.tendsto_atTop.mpr h_squeeze
+
+/-
+**Main theorem for the greedy sequence**: A has natural density 1/2 and is pow2SumFree
+-/
+theorem main_greedy :
+    pow2SumFree setA ∧
+    Tendsto
+      (fun N => ((((Icc 1 N).filter (fun m => m ∈ setA)).card : ℝ) / (N : ℝ)))
+      atTop (nhds (1 / 2 : ℝ)) := by
+  constructor
+  · intro a ha b hb k
+    exact sumFree (by simpa [setA] using ha) (by simpa [setA] using hb) k
+  · simpa [countA, setA] using density_half
+
+#print axioms main_greedy
+
+end greedy
