@@ -1,5 +1,5 @@
 /-
-For an integer $k ≥ 3$ we define $g_k(n)$ as the smallest integer such that for any set $A ⊆ {1, 2, …, 2n}$ with $|A| ≥ n + g_k(n)$ there exist distinct integers $b_1, b_2, …, b_k$ such that all $\binom{k}{2}$ pairwise sums are in $A$. We further let $h_k(n)$ be the analogous function where we require the $b_i$ to be positive integers. We note that the $b_i$ in the above definition need not be in $A$ themselves.
+For an integer $k ≥ 3$ we define $g_k(n)$ as the smallest integer such that for any set $A ⊆ {1, 2, …, 2n}$ with $|A| ≥ n + g_k(n)$ there exist distinct integers $b_1, b_2, …, b_k$ such that all $\binom{k}{2}$ pairwise sums are in $A$. We further let $h_k(n)$ be the analogous function where we require the $b_i$ to be positive integers. We note that the $b_i$ in these definitions need not be in $A$ themselves.
 
 Since at most one of the $b_i$ can be non-positive (as otherwise we have a negative sum), we note that, in general,
 
@@ -7,7 +7,7 @@ $g_k(n) ≤ h_k(n) ≤ g_{k+1}(n)$ for all $k$ and $n$.
 
 Estimating $g_k(n)$ is Erdős problem #866 (https://www.erdosproblems.com/866), while Choi, Erdős, and Szemerédi had already proven the following estimates for $h$:
 
-$h_3(n) = 2$ for all $n \ge 4$.
+$h_3(n) = 2$ for all $n ≥ 4$.
 $h_4(n) = O(1)$.
 $h_5(n) ≍ \log n$.
 $h_6(n) ≍ \sqrt n$.
@@ -20,7 +20,7 @@ With some help from ChatGPT and Aristotle from Harmonic (aristotle-harmonic@harm
 $g_3(n) = 1$ for all $n ≥ 3$.
 $g_4(n) = 3$ for all $n ≥ 2$.
 $h_4(n) ≤ 2270$ for all $n$.
-$g_5(n) < 2 · 10^8$ for all $n$.
+$g_5(n) < 1.2 · 10^8$ for all $n$.
 $g_k(n) ≤ h_k(n) < 4 n^{1-1/2^{k-2}}$ for all large enough $n$.
 
 You can find formalizations of the proofs of all these (in)equalities below, which were obtained by Aristotle. In the proofs I also had to use explicit upper bounds on the size of Sidon sets and weak Sidon sets by O'Bryant and Ruzsa, so their results are included in the formalization as well.
@@ -3023,8 +3023,6 @@ theorem g5upper (n : ℕ) : gFun 5 n < 120000000 := by
 
 /-! ## h_k(n) ≤ 4n^{1-1/2^{k-2}} for all large enough n -/
 
-/-! ## Definition of F_k (positive version) -/
-
 /-- F_k(x) for k ≥ 3, the positive version of f_k.
     F_3(x) = 2√(x/2) + 4(x/2)^(1/4) + 11
     F_k(x) = √(2x F_{k-1}(x) + 1/4) + 1/2  for k ≥ 4
@@ -3034,8 +3032,6 @@ noncomputable def fFunPos : ℕ → ℝ → ℝ
   | 3, x => 2 * Real.sqrt (x / 2) + 4 * (x / 2) ^ ((1:ℝ)/4) + 11
   | n + 4, x => Real.sqrt (2 * x * fFunPos (n + 3) x + 1/4) + 1/2
 
-/-! ## HasPosSubsetSumsContaining -/
-
 /-- HasPosSubsetSumsContaining A k: there exist b_0, …, b_{k-1} all positive with
     b_i pairwise distinct for i ≥ 1, and every subset sum that includes b_0 lies in A. -/
 def HasPosSubsetSumsContaining (A : Finset ℤ) : (k : ℕ) → Prop
@@ -3044,8 +3040,6 @@ def HasPosSubsetSumsContaining (A : Finset ℤ) : (k : ℕ) → Prop
     (∀ i : Fin (k + 1), 0 < b i) ∧
     (∀ i j : Fin (k + 1), 1 ≤ i.val → 1 ≤ j.val → i ≠ j → b i ≠ b j) ∧
     (∀ S : Finset (Fin (k + 1)), (0 : Fin (k + 1)) ∈ S → ∑ i ∈ S, b i ∈ A)
-
-/-! ## Conversion: HasPosSubsetSumsContaining → HasPosPairwiseSums -/
 
 lemma pos_subsetsums_to_pairwise (A : Finset ℤ) (k : ℕ) (hk : 3 ≤ k)
     (heven : ∀ a ∈ A, (2 : ℤ) ∣ a)
@@ -3065,8 +3059,6 @@ lemma pos_subsetsums_to_pairwise (A : Finset ℤ) (k : ℕ) (hk : 3 ≤ k)
   · grind +ring;
   · intro i j hij; convert hb₃ { 0, i, j } ( by aesop ) using 1; simp +decide ; ring_nf;
     grind);
-
-/-! ## Base case: ceslemprelim_pos_base3 -/
 
 lemma ceslemprelim_pos_base3 (A₀ : Finset ℤ) (hne : A₀.Nonempty)
     (heven : ∀ a ∈ A₀, 2 ∣ a) (hpos : ∀ a ∈ A₀, 2 ≤ a)
@@ -3158,8 +3150,6 @@ lemma ceslemprelim_pos_base3 (A₀ : Finset ℤ) (hne : A₀.Nonempty)
       · grind;
       · grind +revert
 
-/-! ## Monotonicity and auxiliary lemmas for fFunPos -/
-
 private lemma fFunPos_ge_one_early (k : ℕ) (hk : 3 ≤ k) (x : ℝ) (hx : 2 ≤ x) :
     1 ≤ fFunPos k x := by
   induction' k, Nat.succ_le_iff.mpr hk using Nat.le_induction with k ih <;> unfold fFunPos <;> norm_num at *;
@@ -3177,8 +3167,6 @@ private lemma fFunPos_mono_early (k : ℕ) (hk : 3 ≤ k) (x y : ℝ)
     · exact le_trans ( by norm_num ) ( fFunPos_ge_one_early _ ( by linarith ) _ ( by linarith ) );
     · linarith;
     · solve_by_elim
-
-/-! ## Pigeonhole -/
 
 lemma ceslemgeneral_pos_pigeonhole_strong (k : ℕ) (hk : 4 ≤ k)
     (A₀ : Finset ℤ) (hne : A₀.Nonempty)
@@ -3231,8 +3219,6 @@ lemma ceslemgeneral_pos_pigeonhole_strong (k : ℕ) (hk : 4 ≤ k)
     · assumption;
   · exact even_iff_two_dvd.mp ( Nat.even_mul_pred_self _ )
 
-/-! ## Extension step -/
-
 lemma ceslemprelim_pos_extend (k : ℕ) (hk : 4 ≤ k)
     (A₀ S : Finset ℤ) (d : ℤ)
     (hS_sub : S ⊆ A₀)
@@ -3270,8 +3256,6 @@ lemma ceslemprelim_pos_extend (k : ℕ) (hk : 4 ≤ k)
         ext i; simp [Finset.mem_image];
         induction i using Fin.lastCases <;> aesop;
       aesop
-
-/-! ## Main positive ceslemprelim -/
 
 theorem ceslemprelim_pos (k : ℕ) (hk : 3 ≤ k) (A₀ : Finset ℤ) (hne : A₀.Nonempty)
     (heven : ∀ a ∈ A₀, 2 ∣ a)
@@ -3319,8 +3303,6 @@ theorem ceslemprelim_pos (k : ℕ) (hk : 3 ≤ k) (A₀ : Finset ℤ) (hne : A�
         · norm_cast;
           exact sub_le_sub ( Finset.max'_mem _ _ |> fun x => Finset.mem_filter.mp ( hS_sub x ) |>.1 |> fun y => Finset.le_max' _ _ y ) ( Finset.min'_mem _ _ |> fun x => Finset.mem_filter.mp ( hS_sub x ) |>.1 |> fun y => Finset.min'_le _ _ y )
 
-/-! ## Main positive ceslemgeneral -/
-
 theorem ceslemgeneral_pos (k : ℕ) (hk : 3 ≤ k) (A₀ : Finset ℤ) (hne : A₀.Nonempty)
     (heven : ∀ a ∈ A₀, 2 ∣ a)
     (hpos : ∀ a ∈ A₀, 2 ≤ a)
@@ -3329,8 +3311,6 @@ theorem ceslemgeneral_pos (k : ℕ) (hk : 3 ≤ k) (A₀ : Finset ℤ) (hne : A�
     HasPosPairwiseSums A₀ k := by
   exact pos_subsetsums_to_pairwise A₀ k hk heven
     (ceslemprelim_pos k hk A₀ hne heven hpos hrange hcard)
-
-/-! ## Bound on fFunPos -/
 
 /-- The upper bound for the positive version.
     boundPos_n n x = 2^(1 - 1/2^(n+1)) * x^(1 - 1/2^(n+1)) + 15 * x^(1 - 3/2^(n+2)) -/
@@ -3396,8 +3376,6 @@ theorem fFunPos_le_boundPos (k : ℕ) (hk : 3 ≤ k) (x : ℝ) (hx : 1 ≤ x) :
   have := fFunPos_le_boundPos_n_aux (k - 3) x hx
   simp only [Nat.sub_add_cancel hk] at this
   exact this
-
-/-! ## Upper bound on hFun via ceslemgeneral_pos -/
 
 theorem ceslemgeneral_pos_with_bound (k : ℕ) (hk : 3 ≤ k)
     (A₀ : Finset ℤ) (hne : A₀.Nonempty)
