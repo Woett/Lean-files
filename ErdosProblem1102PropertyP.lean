@@ -1,25 +1,37 @@
 /-
 We say that a sequence of positive integers $A$ has:
 
-- property $P$ if, for all positive integers $n$, there are only finitely many $a \in A$ such that $n+a$ is squarefree.
-- property $Q$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all $a \in A$ with $a < n$.
-- property $\overline{P}$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all $a \in A$.
-- property $\overline{P}_\infty$ if there exist infinitely many positive integers $n$ such that $n+a$ is squarefree for all but finitely many $a \in A$.
+- property $P$ if, for all positive integers $n$, there are only finitely many
+  $a \in A$ such that $n+a$ is squarefree.
+- property $Q$ if there exist infinitely many positive integers $n$ such that
+  $n+a$ is squarefree for all $a \in A$ with $a < n$.
+- property $\overline{P}$ if there exist infinitely many positive integers $n$
+  such that $n+a$ is squarefree for all $a \in A$.
+- property $\overline{P}_\infty$ if there exist infinitely many positive
+  integers $n$ such that $n+a$ is squarefree for all but finitely many $a \in
+  A$.
 
-Solving Erdős Problem #1102 (https://www.erdosproblems.com/1102), Terence Tao and I managed to prove tight bounds on the possible densities of sequences with one of the above properties.
+Solving Erdős Problem #1102 (https://www.erdosproblems.com/1102), Terence Tao
+and I managed to prove tight bounds on the possible densities of sequences with
+one of the above properties.
 
-W. van Doorn and T. Tao, Growth rates of sequences governed by the squarefree properties of their translates. arXiv:2512.01087 (2025).
+W. van Doorn and T. Tao, Growth rates of sequences governed by the squarefree
+properties of their translates. arXiv:2512.01087 (2025).
 
-Thanks to Aristotle from Harmonic (aristotle-harmonic@harmonic.fun), the proof of the following theorem is formalized in the Lean file below:
+Thanks to Aristotle from Harmonic (aristotle-harmonic@harmonic.fun), the proof
+of the following theorem is formalized in the Lean file below:
 
-Any sequence with property $P$ has density $0$. On the other hand, the decay rate of this density can be arbitrarily slow.
+Any sequence with property $P$ has density $0$. On the other hand, the decay
+rate of this density can be arbitrarily slow.
 
-At the very end you can find the (relevant parts of the) statement of Erdős Problem #1102 taken from the Formal Conjectures project by Google DeepMind, which we also prove. 
+At the very end you can find the (relevant parts of the) statement of Erdős
+Problem #1102 taken from the Formal Conjectures project by Google DeepMind,
+which we also prove.
 
 https://github.com/google-deepmind/formal-conjectures/blob/main/FormalConjectures/ErdosProblems/1102.lean
 
-Lean version: leanprover/lean4:v4.24.0
-Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
+Lean version: leanprover/lean4:v4.28.0
+Mathlib version: 8f9d9cff6bd728b17a24e163c9402775d9e6a365
 -/
 
 import Mathlib
@@ -827,7 +839,8 @@ theorem Theorem1_i (A : Set ℕ) (hA : PropertyP A) : HasNaturalDensity A 0 := b
   exact hn.2 ( Set.Finite.subset ( hA n |> Set.Finite.union <| Set.finite_singleton 0 ) fun x hx => by cases x <;> aesop )
 
 /-
-Theorem 1(ii): For any function f that goes to infinity, a sequence A with Property P exists that satisfies the growth condition a_j/j <= f(j).
+Theorem 1(ii): For any function f that goes to infinity, a sequence A with
+Property P exists that satisfies the growth condition a_j/j <= f(j).
 -/
 theorem Theorem1_ii (f : ℕ → ℕ) (hf : Filter.Tendsto f Filter.atTop Filter.atTop) (hf_pos : ∀ n, 1 ≤ f n) :
     PropertyP_positive (A_constructed f hf) ∧ ∀ j ≥ 1, (a_seq f hf j : ℝ) / j ≤ f j := by
