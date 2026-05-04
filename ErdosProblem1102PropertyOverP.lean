@@ -14,13 +14,13 @@ Thanks to Aristotle from Harmonic (aristotle-harmonic@harmonic.fun), the proof o
 
 Any sequence with property $\overline{P}$ or $\overline{P}_infty$ has density strictly smaller than $6/\pi^2$. On the other hand, for every $\epsilon > 0$ there exists a sequence with property $\overline{P}$ (which therefore has property $\overline{P}_infty$ as well) with lower density larger than $6/\pi^2 - \epsilon$.
 
-The proof of the second part is conditional on asymptotic bounds on two sums and a product on primes, which all readily follow from the prime number theorem. These asymptotics are bundled as the structure SieveAssumptions that you can find at the start of the formalization below.
-
-Lean version: leanprover/lean4:v4.24.0
-Mathlib version: f897ebcf72cd16f89ab4577d0c826cd14afaafc7
+Lean version: leanprover/lean4:v4.28.0
+Mathlib version: 8f9d9cff6bd728b17a24e163c9402775d9e6a365
 -/
 
 import Mathlib
+
+open Squarefree Set Order Filter Topology
 
 set_option linter.mathlibStandardSet false
 
@@ -39,32 +39,6 @@ set_option relaxedAutoImplicit false
 set_option autoImplicit false
 
 noncomputable section
-
-/-
-The statement of the asymptotic bound for the product of p^2 for p <= x.
--/
-def Bound_prod_primes_le_x_sq : Prop :=
-  (fun (x : ℝ) => Real.log (∏ p ∈ Finset.filter (fun (p : ℕ) => (p : ℝ) ≤ x ∧ Nat.Prime p) (Finset.range (Nat.floor x + 1)), ((p : ℝ)^2)) - 2 * x) =o[Filter.atTop] (fun (x : ℝ) => x)
-
-/-
-The statement of the asymptotic bound for the sum of 1/(p (log log p)^2) for p >= x.
--/
-def Bound_sum_primes_ge_x_inv_p_loglog_sq : Prop :=
-  (fun (x : ℝ) => ∑' (p : ℕ), if (p : ℝ) ≥ x ∧ Nat.Prime p then 1 / ((p : ℝ) * (Real.log (Real.log p))^2) else 0) =Θ[Filter.atTop] (fun (x : ℝ) => 1 / Real.log (Real.log x))
-
-/-
-The statement of the asymptotic bound for the sum of p / (log log p)^2 for 2 < p <= x.
--/
-def Bound_sum_primes_le_x_p_div_loglog_sq : Prop :=
-  (fun (x : ℝ) => ∑ p ∈ Finset.filter (fun (p : ℕ) => 2 < p ∧ (p : ℝ) ≤ x ∧ Nat.Prime p) (Finset.range (Nat.floor x + 1)), (p : ℝ) / (Real.log (Real.log p))^2) =Θ[Filter.atTop] (fun (x : ℝ) => x^2 / (Real.log x * (Real.log (Real.log x))^2))
-
-/-
-Structure bundling the asymptotic bounds that are assumed without proof.
--/
-structure SieveAssumptions where
-  bound_prod_primes_le_x_sq : Bound_prod_primes_le_x_sq
-  bound_sum_primes_ge_x_inv_p_loglog_sq : Bound_sum_primes_ge_x_inv_p_loglog_sq
-  bound_sum_primes_le_x_p_div_loglog_sq : Bound_sum_primes_le_x_p_div_loglog_sq
 
 /-
 SF is the set of squarefree numbers.
@@ -134,7 +108,7 @@ theorem PropertyP_bar_infty_implies_AlmostAdmissible (A : Set ℕ) (h : Property
       simp_all +decide [ sq, Nat.squarefree_mul_iff ];
       aesop;
     contrapose! h_inf_not_squarefree;
-    exact Exists.elim ( h.nonempty ) fun n hn => ⟨ n, Set.not_infinite.mpr <| by simpa using hn ⟩;
+    exact Exists.elim ( h.nonempty ) fun n hn => ⟨ n, by simpa using hn ⟩;
   · aesop
 
 /-
@@ -168,7 +142,7 @@ theorem AlmostAdmissible_finite_diff (A B : Set ℕ) (h : (A \ B).Finite ∧ (B 
     have h_finite_diff : ({a ∈ A | a % p^2 = b}).Finite := by
       exact Set.Finite.subset ( h.1.union hb.2 |> Set.Finite.union <| h.2 ) fun x hx => by by_cases hx' : x ∈ B <;> aesop;
     exact ⟨ b, hb.1, h_finite_diff ⟩
-  
+
 /-
 Property P_bar is downwardly monotone.
 -/
@@ -181,7 +155,7 @@ Property P_bar_infty is downwardly monotone.
 lemma PropertyP_bar_infty_monotone (A B : Set ℕ) (h : A ⊆ B) (hB : PropertyP_bar_infty B) : PropertyP_bar_infty A := by
   refine Set.Infinite.mono ?_ ( hB );
   exact fun n hn => Set.Finite.subset ( hn ) fun x hx => ⟨ h hx.1, hx.2 ⟩
-  
+
 /-
 The upper density of a set A of natural numbers.
 -/
@@ -353,7 +327,7 @@ theorem SF_density : HasNaturalDensity SF (6 / Real.pi ^ 2) := by
       refine' squeeze_zero_norm' _ _;
       use fun n => 1 / Real.sqrt n;
       · filter_upwards [ Filter.eventually_gt_atTop 0 ] with n hn using by rw [ Real.norm_of_nonneg ( by positivity ) ] ; rw [ div_le_div_iff₀ ] <;> first | positivity | nlinarith [ Real.sqrt_nonneg n, Real.sq_sqrt <| Nat.cast_nonneg n, show ( n :ℝ ) ≥ 1 by exact_mod_cast hn, show ( Nat.sqrt n :ℝ ) ^ 2 ≤ n by exact_mod_cast Nat.sqrt_le' n ] ;
-      · simpa using tendsto_inverse_atTop_nhds_zero_nat.sqrt;
+      · simpa using tendsto_inv_atTop_nhds_zero_nat.sqrt;
     refine' Filter.Tendsto.congr' _ ( by simpa using h_limit.sub h_second_term );
     filter_upwards [ Filter.eventually_gt_atTop 0 ] with N hN ; simp_all +decide [div_eq_mul_inv,
       mul_assoc, mul_comm, mul_left_comm, Finset.mul_sum _ _ _, Set.ncard_eq_toFinset_card'] ;
@@ -382,7 +356,8 @@ lemma card_filter_modEq_Icc (u L a m : ℕ) (hm : m > 0) :
         exact ⟨ x / m, ⟨ Nat.div_le_div_right hx.1.1, Nat.div_le_div_right hx.1.2 ⟩, by linarith [ Nat.mod_add_div x m ] ⟩;
       · rw [ Finset.card_image_of_injective _ fun x y hxy => by nlinarith [ Nat.mod_lt a hm ] ] ; norm_num;
         rcases L with ( _ | L ) <;> norm_num [ Nat.succ_div ];
-        · exact le_trans ( add_le_add_right ( Nat.div_le_div_right ( Nat.sub_le _ _ ) ) _ ) ( by omega );
+        · calc (u - 1) / m ≤ u / m := Nat.div_le_div_right (Nat.sub_le u 1)
+              _ < 2 + u / m := by omega;
         · field_simp;
           exact mod_cast by nlinarith [ Nat.div_mul_le_self ( u + L ) m, Nat.div_add_mod ( u + L ) m, Nat.mod_lt ( u + L ) hm, Nat.div_mul_le_self u m, Nat.div_add_mod u m, Nat.mod_lt u hm, Nat.sub_add_cancel ( show u / m ≤ ( u + L ) / m + 1 from Nat.le_succ_of_le ( Nat.div_le_div_right ( by linarith ) ) ) ] ;
     · -- The set of integers in [u, u+L-1] that are congruent to a modulo m forms an arithmetic progression with common difference m.
@@ -512,7 +487,7 @@ lemma density_of_subset_periodic (A B : Set ℕ) (M : ℕ) (hM : M > 0) (hB_per 
             rw [ div_add', div_le_div_iff_of_pos_right ] <;> try norm_num ; linarith;
             have := hB_card n; rw [ ← @Nat.cast_le ℝ ] at *; push_cast at *; nlinarith [ inv_mul_cancel_left₀ ( by positivity : ( M : ℝ ) ≠ 0 ) ( ( B ∩ Set.Icc 1 n ).ncard : ℝ ), inv_mul_cancel_left₀ ( by positivity : ( M : ℝ ) ≠ 0 ) ( ( B ∩ Set.Icc 1 M ).ncard : ℝ ) ] ;
           · have := hB_card_lower n; have := hB_card n; nlinarith [ inv_pos.mpr ( by norm_cast; linarith : 0 < ( n : ℝ ) ), mul_inv_cancel₀ ( by norm_cast; linarith : ( n : ℝ ) ≠ 0 ), mul_inv_cancel₀ ( by positivity : ( M : ℝ ) ≠ 0 ), ( by norm_cast : ( 1 : ℝ ) + M ≤ n ) ] ;
-        · simpa using Filter.Tendsto.add ( tendsto_const_nhds.mul tendsto_inverse_atTop_nhds_zero_nat ) ( tendsto_const_nhds.mul tendsto_inverse_atTop_nhds_zero_nat );
+        · simpa using Filter.Tendsto.add ( tendsto_const_nhds.mul (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)) ) ( tendsto_const_nhds.mul (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)) );
       unfold upperDensity HasNaturalDensity at *;
       rw [ hB_nat_density.limsup_eq ] ; norm_num [ hM.ne' ]
 
@@ -624,7 +599,7 @@ lemma upperDensity_finite_diff (A B : Set ℕ) (h : (A \ B).Finite ∧ (B \ A).F
           have h_card_diff : (A ∩ Set.Icc 1 n) ⊆ (B ∩ Set.Icc 1 n) ∪ ((A \ B) ∩ Set.Icc 1 n) := by
             intro x hx; by_cases hxB : x ∈ B <;> aesop;
           exact le_trans ( Set.ncard_le_ncard h_card_diff ) ( Set.ncard_union_le _ _ );
-        refine' mod_cast h_card_diff.trans ( add_le_add_left _ _ );
+        refine' mod_cast h_card_diff.trans ( add_le_add_right _ _ );
         rw [ ← Set.ncard_coe_finset ] ; exact Set.ncard_le_ncard fun x hx => by aesop;
       obtain ⟨C₂, hC₂⟩ : ∃ C₂ : ℕ, ∀ n : ℕ, ((B ∩ Set.Icc 1 n).ncard : ℝ) ≤ ((A ∩ Set.Icc 1 n).ncard : ℝ) + C₂ := by
         use h.2.toFinset.card + 1;
@@ -635,8 +610,8 @@ lemma upperDensity_finite_diff (A B : Set ℕ) (h : (A \ B).Finite ∧ (B \ A).F
       use max C₁ C₂
       intro n
       exact ⟨by
-      exact le_trans ( hC₁ n ) ( add_le_add_left ( mod_cast le_max_left _ _ ) _ ), by
-        exact le_trans ( hC₂ n ) ( add_le_add_left ( mod_cast le_max_right _ _ ) _ )⟩;
+      exact le_trans ( hC₁ n ) ( add_le_add_right ( mod_cast le_max_left _ _ ) _ ), by
+        exact le_trans ( hC₂ n ) ( add_le_add_right ( mod_cast le_max_right _ _ ) _ )⟩;
     intro ε hε; obtain ⟨ C, hC ⟩ := h_card_diff; use ⌈ε⁻¹ * ( C + 1 ) ⌉₊ + 1; intro n hn; rw [ abs_lt ] ; constructor <;> nlinarith [ Nat.le_ceil ( ε⁻¹ * ( C + 1 ) ), mul_inv_cancel₀ hε.ne', show ( n : ℝ ) ≥ ⌈ε⁻¹ * ( C + 1 ) ⌉₊ + 1 by exact_mod_cast hn, hC n, div_mul_cancel₀ ( ( A ∩ Set.Icc 1 n |> Set.ncard : ℝ ) : ℝ ) ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ), div_mul_cancel₀ ( ( B ∩ Set.Icc 1 n |> Set.ncard : ℝ ) : ℝ ) ( show ( n : ℝ ) ≠ 0 by norm_cast; linarith ) ] ;
   refine' le_antisymm _ _ <;> rw [ upperDensity ];
   · refine' le_csInf _ _;
@@ -646,8 +621,14 @@ lemma upperDensity_finite_diff (A B : Set ℕ) (h : (A \ B).Finite ∧ (B \ A).F
       refine' le_of_forall_pos_le_add fun ε ε_pos => _;
       refine' csInf_le _ _;
       · exact ⟨ 0, fun x hx => by rcases Filter.eventually_atTop.mp hx with ⟨ N, hN ⟩ ; exact le_trans ( by positivity ) ( hN _ le_rfl ) ⟩;
-      · norm_num +zetaDelta at *;
-        obtain ⟨ N, hN ⟩ := h_prop ε ε_pos; obtain ⟨ M, hM ⟩ := hb; exact ⟨ Max.max N M, fun n hn => by linarith [ abs_lt.mp ( hN n ( le_trans ( le_max_left _ _ ) hn ) ), hM n ( le_trans ( le_max_right _ _ ) hn ) ] ⟩ ;
+      · simp only at hb;
+        obtain ⟨ N, hN ⟩ := h_prop ε ε_pos;
+        obtain ⟨ M, hM ⟩ := Filter.eventually_atTop.mp hb;
+        rw [Set.mem_setOf_eq, Filter.eventually_map, Filter.eventually_atTop];
+        exact ⟨ Max.max N M, fun n hn => by
+          have := abs_lt.mp ( hN n ( le_trans ( le_max_left _ _ ) hn ) )
+          have := hM n ( le_trans ( le_max_right _ _ ) hn )
+          simp at *; linarith ⟩ ;
   · refine' le_csInf _ _ <;> norm_num;
     · exact ⟨ 1, ⟨ 1, fun n hn => by rw [ div_le_iff₀ ] <;> norm_cast ; linarith [ show Set.ncard ( A ∩ Set.Icc 1 n ) ≤ n by exact le_trans ( Set.ncard_le_ncard <| Set.inter_subset_right ) <| by norm_num [ Set.ncard_eq_toFinset_card' ] ] ⟩ ⟩;
     · intro b x hx;
@@ -849,10 +830,8 @@ lemma sieve_strict_bound (A : Set ℕ) (C : ℕ)
               have h_abs_conv : Multipliable (fun p : ℕ => Real.exp (Real.log (if Nat.Prime p ∧ p > C then (1 - 2 / (p : ℝ)^2) else 1))) := by
                 refine' ⟨ _, _ ⟩;
                 exact Real.exp ( ∑' p : ℕ, Real.log ( if Nat.Prime p ∧ p > C then 1 - 2 / ( p : ℝ ) ^ 2 else 1 ) );
-                convert h_abs_conv.of_abs.hasSum.exp using 1;
-                any_goals exact ℝ;
-                all_goals first | infer_instance | simp +decide [ Real.exp_eq_exp_ℝ ];
-                rfl;
+                convert h_abs_conv.of_abs.hasSum.exp using 1 <;>
+                first | rfl | infer_instance | (ext; simp only [Function.comp_apply, Real.exp_eq_exp_ℝ]) | simp +decide [ Real.exp_eq_exp_ℝ ];
               convert h_abs_conv using 1;
               ext p; split_ifs <;> norm_num;
               rw [ Real.exp_log ( sub_pos.mpr <| by rw [ div_lt_iff₀ ] <;> norm_cast <;> nlinarith [ Nat.Prime.two_le ( by tauto : Nat.Prime p ) ] ) ];
@@ -900,63 +879,317 @@ lemma sieve_strict_bound (A : Set ℕ) (C : ℕ)
       refine' lt_of_le_of_lt _ h_limit;
       exact le_of_tendsto_of_tendsto tendsto_const_nhds ‹_› ( Filter.eventually_atTop.mpr ⟨ C + 1, fun K hK => sieve_finite_bound A C K ( by linarith ) h1 h2 ⟩ )
 
+open Finset Filter Asymptotics
+
+/-! ## Chebyshev Prime Bounds -/
+
+/-- The sum ∑_{p ≤ x, prime} log p over `Finset.range` equals `Chebyshev.theta x` for x ≥ 0. -/
+lemma sum_log_primes_eq_theta (x : ℝ) (hx : 0 ≤ x) :
+    ∑ p ∈ (Finset.range (Nat.floor x + 1)).filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ x),
+      Real.log (p : ℝ) = Chebyshev.theta x := by
+  congr 1 with ( _ | p ) <;> simp +arith +decide [ Nat.prime_def_lt' ]
+  exact fun h₁ h₂ h₃ => le_trans ( mod_cast Nat.succ_le_of_lt h₁ ) ( Nat.floor_le hx )
+
+/-- The sum of log p for p ≤ x is O(x), proved from Chebyshev's upper bound. -/
+lemma theta_bound_chebyshev :
+    (fun x => ∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ x)
+      (Finset.range (Nat.floor x + 1)), Real.log p) =O[atTop] (fun x => x) := by
+  refine' Asymptotics.IsBigO.of_bound ( Real.log 4 ) _
+  filter_upwards [ Filter.eventually_ge_atTop 0 ] with x hx using by rw [ Real.norm_of_nonneg ( Finset.sum_nonneg fun _ _ => Real.log_nonneg <| mod_cast Nat.Prime.pos <| by aesop ) ] ; rw [ Real.norm_of_nonneg hx ] ; exact sum_log_primes_eq_theta x hx ▸ Chebyshev.theta_le_log4_mul_x hx
+
+/-- The number of primes up to y, as a real, is O(y / log y). -/
+lemma pi_le_const_mul_div_log :
+    ∀ᶠ y : ℝ in atTop,
+      ((Finset.filter Nat.Prime (Finset.range (Nat.floor y + 1))).card : ℝ) ≤
+        (Real.log 4 + 1) * y / Real.log y := by
+  filter_upwards [ Filter.eventually_gt_atTop 1, Chebyshev.eventually_primeCounting_le zero_lt_one ] with x hx₁ hx₂
+  convert hx₂ using 1
+  rw [ Nat.primeCounting ]
+  rw [ Nat.primeCounting', Nat.count_eq_card_filter_range ]
+
+/-- Auxiliary: sum of primes up to y is O(y² / log y). -/
+lemma sum_primes_le_y_bound :
+    ∀ᶠ y : ℝ in atTop,
+      (∑ p ∈ (Finset.range (Nat.floor y + 1)).filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ y),
+        (p : ℝ)) ≤ (Real.log 4 + 1) * y ^ 2 / Real.log y := by
+  filter_upwards [ Filter.eventually_gt_atTop 1, pi_le_const_mul_div_log ] with y hy₁ hy₂
+  refine' le_trans ( Finset.sum_le_sum fun i hi => show ( i : ℝ ) ≤ y from _ ) _
+  · aesop
+  · convert mul_le_mul_of_nonneg_left hy₂ ( show 0 ≤ y by positivity ) using 1 ; ring_nf
+    · norm_num [ add_comm, mul_comm ]
+      exact Or.inl ( congr_arg Finset.card <| Finset.filter_congr fun x hx => ⟨ fun hx' => hx'.1, fun hx' => ⟨ hx', by exact le_trans ( Nat.cast_le.mpr <| Finset.mem_range_succ_iff.mp hx ) <| Nat.floor_le <| by positivity ⟩ ⟩ )
+    · ring
+
+/-
+The sum of p/(log log p)² for p ≤ √(2x) is o(x).
+-/
+lemma error_term_small_chebyshev :
+    (fun x => ∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ Real.sqrt (2 * x))
+      (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)),
+      (p : ℝ) / (Real.log (Real.log p))^2) =o[atTop] (fun x => x) := by
+  -- Since $\frac{p}{(\ln \ln p)^2} \leq Cp$ for some constant $C$ and all sufficiently large primes $p$, we can bound the sum.
+  have h_bound : ∃ C > 0, ∀ p : ℕ, Nat.Prime p → p ≥ 16 → (p : ℝ) / (Real.log (Real.log p))^2 ≤ C * p := by
+    -- Since $\frac{1}{(\ln \ln p)^2}$ is bounded above by some constant $C$ for all $p \geq 16$, we can choose $C$ such that $\frac{1}{(\ln \ln p)^2} \leq C$.
+    obtain ⟨C, hC⟩ : ∃ C > 0, ∀ p : ℕ, Nat.Prime p → p ≥ 16 → 1 / (Real.log (Real.log p))^2 ≤ C := by
+      use 1 / (Real.log (Real.log 16))^2;
+      exact ⟨ one_div_pos.mpr ( sq_pos_of_pos ( Real.log_pos ( show 1 < Real.log 16 by rw [ Real.lt_log_iff_exp_lt ( by norm_num ) ] ; exact Real.exp_one_lt_d9.trans_le ( by norm_num ) ) ) ), fun p hp hp' => one_div_le_one_div_of_le ( sq_pos_of_pos ( Real.log_pos ( show 1 < Real.log 16 by rw [ Real.lt_log_iff_exp_lt ( by norm_num ) ] ; exact Real.exp_one_lt_d9.trans_le ( by norm_num ) ) ) ) ( pow_le_pow_left₀ ( Real.log_nonneg ( show 1 ≤ Real.log 16 by rw [ Real.le_log_iff_exp_le ( by norm_num ) ] ; exact Real.exp_one_lt_d9.le.trans ( by norm_num ) ) ) ( Real.log_le_log ( Real.log_pos ( show 1 < 16 by norm_num ) ) ( Real.log_le_log ( by positivity ) ( by norm_cast ) ) ) _ ) ⟩;
+    exact ⟨ C, hC.1, fun p hp hp' => by convert mul_le_mul_of_nonneg_right ( hC.2 p hp hp' ) ( Nat.cast_nonneg p ) using 1 ; ring ⟩;
+  -- Using the bound, we can show that the sum is $O(x / \log x)$.
+  have h_sum_bound : ∀ᶠ x : ℝ in atTop, (∑ p ∈ (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)).filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ Real.sqrt (2 * x)), (p : ℝ) / (Real.log (Real.log p))^2) ≤ (Real.log 4 + 1) * (Real.sqrt (2 * x))^2 / Real.log (Real.sqrt (2 * x)) * h_bound.choose + (∑ p ∈ Finset.filter Nat.Prime (Finset.range 16), (p : ℝ) / (Real.log (Real.log p))^2) := by
+    have h_sum_bound : ∀ᶠ x : ℝ in atTop, (∑ p ∈ (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)).filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ Real.sqrt (2 * x) ∧ p ≥ 16), (p : ℝ) / (Real.log (Real.log p))^2) ≤ (Real.log 4 + 1) * (Real.sqrt (2 * x))^2 / Real.log (Real.sqrt (2 * x)) * h_bound.choose := by
+      have h_sum_bound : ∀ᶠ x : ℝ in atTop, (∑ p ∈ (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)).filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ Real.sqrt (2 * x) ∧ p ≥ 16), (p : ℝ)) ≤ (Real.log 4 + 1) * (Real.sqrt (2 * x))^2 / Real.log (Real.sqrt (2 * x)) := by
+        have h_sum_bound : ∀ᶠ x : ℝ in atTop, (∑ p ∈ (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)).filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ Real.sqrt (2 * x)), (p : ℝ)) ≤ (Real.log 4 + 1) * (Real.sqrt (2 * x))^2 / Real.log (Real.sqrt (2 * x)) := by
+          have := sum_primes_le_y_bound;
+          exact this.filter_mono ( show Filter.Tendsto ( fun x : ℝ => Real.sqrt ( 2 * x ) ) Filter.atTop Filter.atTop from Filter.tendsto_atTop_atTop.mpr fun x => ⟨ x ^ 2 / 2, fun y hy => Real.le_sqrt_of_sq_le <| by linarith ⟩ );
+        filter_upwards [ h_sum_bound ] with x hx using le_trans ( Finset.sum_le_sum_of_subset_of_nonneg ( fun p hp => by aesop ) fun _ _ _ => Nat.cast_nonneg _ ) hx;
+      filter_upwards [ h_sum_bound ] with x hx;
+      refine' le_trans _ ( mul_le_mul_of_nonneg_right hx <| le_of_lt h_bound.choose_spec.1 );
+      rw [ Finset.sum_mul _ _ _ ] ; exact Finset.sum_le_sum fun p hp => by simpa only [ mul_comm ] using h_bound.choose_spec.2 p ( Finset.mem_filter.mp hp |>.2.1 ) ( Finset.mem_filter.mp hp |>.2.2.2 ) ;
+    filter_upwards [ h_sum_bound, Filter.eventually_gt_atTop 256 ] with x hx₁ hx₂;
+    rw [ show ( Finset.filter ( fun p : ℕ => Nat.Prime p ∧ ( p : ℝ ) ≤ Real.sqrt ( 2 * x ) ) ( Finset.range ( ⌊Real.sqrt ( 2 * x ) ⌋₊ + 1 ) ) ) = Finset.filter ( fun p : ℕ => Nat.Prime p ∧ ( p : ℝ ) ≤ Real.sqrt ( 2 * x ) ∧ p ≥ 16 ) ( Finset.range ( ⌊Real.sqrt ( 2 * x ) ⌋₊ + 1 ) ) ∪ Finset.filter ( fun p : ℕ => Nat.Prime p ∧ ( p : ℝ ) ≤ Real.sqrt ( 2 * x ) ∧ p < 16 ) ( Finset.range ( ⌊Real.sqrt ( 2 * x ) ⌋₊ + 1 ) ) from ?_, Finset.sum_union ];
+    · refine' add_le_add hx₁ _;
+      refine' le_trans ( Finset.sum_le_sum_of_subset_of_nonneg _ _ ) _;
+      exact Finset.filter Nat.Prime ( Finset.range 16 );
+      · grind;
+      · exact fun _ _ _ => div_nonneg ( Nat.cast_nonneg _ ) ( sq_nonneg _ );
+      · norm_num [ Finset.sum_filter, Finset.sum_range_succ ];
+    · exact Finset.disjoint_filter.mpr fun _ _ _ _ => by linarith;
+    · grind;
+  -- Simplify the expression to show it is $o(x)$.
+  have h_simplify : Filter.Tendsto (fun x : ℝ => ((Real.log 4 + 1) * (Real.sqrt (2 * x))^2 / Real.log (Real.sqrt (2 * x)) * h_bound.choose + (∑ p ∈ Finset.filter Nat.Prime (Finset.range 16), (p : ℝ) / (Real.log (Real.log p))^2)) / x) Filter.atTop (nhds 0) := by
+    -- Simplify the expression inside the limit.
+    suffices h_simplify : Filter.Tendsto (fun x : ℝ => ((Real.log 4 + 1) * 2 * x / (Real.log (Real.sqrt (2 * x))) * h_bound.choose) / x) Filter.atTop (nhds 0) by
+      have h_simplify : Filter.Tendsto (fun x : ℝ => ((Real.log 4 + 1) * 2 * x / (Real.log (Real.sqrt (2 * x))) * h_bound.choose) / x + (∑ p ∈ Finset.filter Nat.Prime (Finset.range 16), (p : ℝ) / (Real.log (Real.log p))^2) / x) Filter.atTop (nhds 0) := by
+        simpa using h_simplify.add ( tendsto_const_nhds.div_atTop Filter.tendsto_id );
+      refine h_simplify.congr' ( by filter_upwards [ Filter.eventually_gt_atTop 0 ] with x hx using by rw [ Real.sq_sqrt ( by positivity ) ] ; ring );
+    -- Simplify the expression inside the limit further.
+    suffices h_simplify' : Filter.Tendsto (fun x : ℝ => (Real.log 4 + 1) * 2 * h_bound.choose / Real.log (Real.sqrt (2 * x))) Filter.atTop (nhds 0) by
+      refine h_simplify'.congr' ( by filter_upwards [ Filter.eventually_gt_atTop 0 ] with x hx using by rw [ eq_div_iff hx.ne' ] ; ring );
+    exact tendsto_const_nhds.div_atTop ( Real.tendsto_log_atTop.comp <| Filter.tendsto_atTop_atTop.mpr fun x => ⟨ x ^ 2 / 2, fun y hy => Real.le_sqrt_of_sq_le <| by linarith ⟩ );
+  rw [ Asymptotics.isLittleO_iff_tendsto' ];
+  · refine' squeeze_zero_norm' _ h_simplify;
+    filter_upwards [ h_sum_bound, Filter.eventually_gt_atTop 0 ] with x hx₁ hx₂ using by rw [ Real.norm_of_nonneg ( div_nonneg ( Finset.sum_nonneg fun _ _ => div_nonneg ( Nat.cast_nonneg _ ) ( sq_nonneg _ ) ) hx₂.le ) ] ; exact div_le_div_of_nonneg_right hx₁ hx₂.le;
+  · filter_upwards [ Filter.eventually_gt_atTop 0 ] with x hx hx' using absurd hx' hx.ne'
+
+/-
+For n ≥ 3, 1/(n·(log n)²) ≤ 1/log(n-1) - 1/log(n).
+-/
+lemma inv_mul_log_sq_le_diff_inv_log (n : ℕ) (hn : 3 ≤ n) :
+    1 / ((n : ℝ) * (Real.log n)^2) ≤ 1 / Real.log (n - 1 : ℝ) - 1 / Real.log n := by
+  -- We'll use the Mean Value Theorem to show that $f(n) - f(n-1) \ge f'(n)$.
+  have h_mean_value : ∃ c ∈ Set.Ioo (n - 1 : ℝ) n, deriv (fun x => -1 / Real.log x) c = ( (-1 / Real.log n) - (-1 / Real.log (n - 1)) ) / (n - (n - 1)) := by
+    apply_rules [ exists_deriv_eq_slope ] <;> norm_num;
+    · exact continuousOn_of_forall_continuousAt fun x hx => ContinuousAt.div continuousAt_const ( Real.continuousAt_log ( by linarith [ hx.1, show ( n : ℝ ) ≥ 3 by norm_cast ] ) ) ( ne_of_gt ( Real.log_pos ( by linarith [ hx.1, show ( n : ℝ ) ≥ 3 by norm_cast ] ) ) );
+    · exact DifferentiableOn.div ( differentiableOn_const _ ) ( DifferentiableOn.log differentiableOn_id fun x hx => by linarith [ hx.1, show ( n : ℝ ) ≥ 3 by norm_cast ] ) fun x hx => ne_of_gt <| Real.log_pos <| by linarith [ hx.1, show ( n : ℝ ) ≥ 3 by norm_cast ] ;
+  obtain ⟨ c, ⟨ hc₁, hc₂ ⟩, hc ⟩ := h_mean_value;
+  -- Since $c < n$, we have $1 / (c * (Real.log c) ^ 2) \ge 1 / (n * (Real.log n) ^ 2)$.
+  have h_deriv_ge : 1 / (c * (Real.log c) ^ 2) ≥ 1 / (n * (Real.log n) ^ 2) := by
+    gcongr;
+    · exact mul_pos ( by linarith [ show ( n : ℝ ) ≥ 3 by norm_cast ] ) ( sq_pos_of_pos ( Real.log_pos ( by linarith [ show ( n : ℝ ) ≥ 3 by norm_cast ] ) ) );
+    · exact Real.log_nonneg ( by linarith [ show ( n : ℝ ) ≥ 3 by norm_cast ] );
+    · linarith [ show ( n : ℝ ) ≥ 3 by norm_cast ];
+  norm_num [ show c ≠ 0 by linarith [ show ( n : ℝ ) ≥ 3 by norm_cast ], show Real.log c ≠ 0 by exact ne_of_gt <| Real.log_pos <| by linarith [ show ( n : ℝ ) ≥ 3 by norm_cast ], div_eq_mul_inv ] at * ; ring_nf at * ; linarith
+
+/-
+The series ∑_{n≥3} 1/(n·(log n)²) is summable (bounded by 1/log 2).
+-/
+lemma summable_inv_mul_log_sq :
+    Summable (fun n : ℕ => if 3 ≤ n then 1 / ((n : ℝ) * (Real.log n)^2) else 0) := by
+  refine' summable_nat_add_iff 3 |>.1 _;
+  -- Apply the integral test to show that the series converges.
+  have h_integral_test : Summable (fun n : ℕ => ∫ x in (n + 3 : ℝ)..((n + 4) : ℝ), 1 / (x * (Real.log x)^2)) := by
+    -- Evaluate the integral $\int_{n+3}^{n+4} \frac{dx}{x (\ln x)^2}$.
+    have h_integral_eval : ∀ n : ℕ, ∫ x in (n + 3 : ℝ).. (n + 4), (1 / (x * (Real.log x)^2)) = (1 / Real.log (n + 3)) - (1 / Real.log (n + 4)) := by
+      intro n;
+      rw [ intervalIntegral.integral_eq_sub_of_hasDerivAt ];
+      rotate_right;
+      use fun x => -1 / Real.log x;
+      · ring;
+      · intro x hx; convert HasDerivAt.div ( hasDerivAt_const _ _ ) ( Real.hasDerivAt_log ( show x ≠ 0 by cases Set.mem_uIcc.mp hx <;> linarith ) ) ( ne_of_gt <| Real.log_pos <| show x > 1 by cases Set.mem_uIcc.mp hx <;> linarith ) using 1 ; ring;
+      · apply_rules [ ContinuousOn.intervalIntegrable ];
+        exact continuousOn_of_forall_continuousAt fun x hx => ContinuousAt.div continuousAt_const ( ContinuousAt.mul continuousAt_id <| ContinuousAt.pow ( Real.continuousAt_log <| by cases Set.mem_uIcc.mp hx <;> linarith ) _ ) <| ne_of_gt <| mul_pos ( by cases Set.mem_uIcc.mp hx <;> linarith ) <| sq_pos_of_pos <| Real.log_pos <| by cases Set.mem_uIcc.mp hx <;> linarith;
+    -- The series $\sum_{n=3}^{\infty} \left( \frac{1}{\ln(n+3)} - \frac{1}{\ln(n+4)} \right)$ is a telescoping series.
+    have h_telescoping : ∀ N : ℕ, ∑ n ∈ Finset.range N, (1 / Real.log (n + 3) - 1 / Real.log (n + 4)) = 1 / Real.log 3 - 1 / Real.log (N + 3) := by
+      exact fun N => by induction' N with N ih <;> norm_num [ add_assoc, Finset.sum_range_succ ] at * ; linear_combination ih;
+    rw [ summable_iff_not_tendsto_nat_atTop_of_nonneg ];
+    · exact fun h => not_tendsto_atTop_of_tendsto_nhds ( by simpa only [ h_integral_eval, h_telescoping ] using tendsto_const_nhds.sub ( tendsto_const_nhds.div_atTop <| Real.tendsto_log_atTop.comp <| Filter.tendsto_atTop_add_const_right _ _ tendsto_natCast_atTop_atTop ) ) h;
+    · exact fun n => intervalIntegral.integral_nonneg ( by linarith ) fun x hx => one_div_nonneg.2 ( mul_nonneg ( by linarith [ hx.1 ] ) ( sq_nonneg _ ) );
+  have h_integral_bound : ∀ n : ℕ, ∫ x in (n + 3 : ℝ)..((n + 4) : ℝ), 1 / (x * (Real.log x)^2) ≥ 1 / ((n + 4 : ℝ) * (Real.log (n + 4))^2) := by
+    intro n
+    have h_integral_bound : ∀ x ∈ Set.Icc (n + 3 : ℝ) (n + 4 : ℝ), 1 / (x * (Real.log x)^2) ≥ 1 / ((n + 4 : ℝ) * (Real.log (n + 4))^2) := by
+      simp +zetaDelta at *;
+      bound;
+    refine' le_trans _ ( intervalIntegral.integral_mono_on _ _ _ h_integral_bound ) <;> norm_num;
+    apply_rules [ ContinuousOn.intervalIntegrable ];
+    exact continuousOn_of_forall_continuousAt fun x hx => ContinuousAt.mul ( ContinuousAt.inv₀ ( ContinuousAt.pow ( Real.continuousAt_log ( by cases Set.mem_uIcc.mp hx <;> linarith ) ) _ ) ( ne_of_gt ( sq_pos_of_pos ( Real.log_pos ( by cases Set.mem_uIcc.mp hx <;> linarith ) ) ) ) ) ( ContinuousAt.inv₀ ( continuousAt_id ) ( ne_of_gt ( by cases Set.mem_uIcc.mp hx <;> linarith ) ) );
+  exact summable_nat_add_iff 1 |>.1 <| h_integral_test.of_nonneg_of_le ( fun n => by positivity ) fun n => by exact_mod_cast h_integral_bound n;
+
+/-
+Partial sums of 1/(n·(log n)²) are bounded by 1/log 2.
+-/
+lemma partial_sum_inv_mul_log_sq_le (N : ℕ) :
+    ∑ n ∈ Finset.Icc 3 N, 1 / ((n : ℝ) * (Real.log n)^2) ≤ 1 / Real.log 2 := by
+  rcases lt_trichotomy N 2 <;> norm_num at *;
+  · interval_cases N <;> norm_num;
+    · positivity;
+    · positivity;
+  · -- For $N \geq 3$, we can use the telescoping series.
+    have h_telescope : ∀ N : ℕ, 3 ≤ N → (∑ n ∈ Finset.Icc 3 N, (1 / ((n : ℝ) * (Real.log n)^2))) ≤ (1 / Real.log 2) - (1 / Real.log N) := by
+      intro N hN
+      induction' N, Nat.succ_le_iff.mpr hN using Nat.le_induction with N ih;
+      · have := inv_mul_log_sq_le_diff_inv_log 3;
+        norm_num at * ; linarith;
+      · erw [ Finset.sum_Ioc_succ_top ( by linarith ), add_comm ];
+        have := inv_mul_log_sq_le_diff_inv_log ( N + 1 ) ( by linarith ) ; norm_num at * ; linarith! [ ‹3 ≤ N → _› ih ];
+    rcases ‹N = 2 ∨ 2 < N› with ( rfl | hN ) <;> norm_num at *;
+    · positivity;
+    · exact le_trans ( h_telescope N hN ) ( sub_le_self _ ( inv_nonneg.2 ( Real.log_nonneg ( by norm_cast; linarith ) ) ) )
+
+/-
+The tail sum of 1/(p (log log p)²) for p > P tends to 0.
+-/
+lemma tail_sum_bound_chebyshev :
+    Tendsto (fun P => ∑' p, if p > P ∧ Nat.Prime p then
+      1 / ((p : ℝ) * (Real.log (Real.log p))^2) else 0) atTop (nhds 0) := by
+  by_cases h_summable : Summable (fun p : ℕ => if Nat.Prime p then (Real.log (Real.log p) ^ 2)⁻¹ * (p : ℝ)⁻¹ else 0);
+  · convert tendsto_sum_nat_add fun n => if Nat.Prime ( n + 1 ) then ( Real.log ( Real.log ( n + 1 ) ) ^ 2 ) ⁻¹ * ( n + 1 : ℝ ) ⁻¹ else 0 using 1;
+    ext P; rw [ ← Summable.sum_add_tsum_nat_add P.succ ] ; norm_num [ add_assoc, Nat.succ_eq_add_one ] ;
+    · rw [ Finset.sum_eq_zero ] <;> norm_num;
+      · grind;
+      · grind;
+    · exact Summable.of_nonneg_of_le ( fun n => by positivity ) ( fun n => by split_ifs <;> first | positivity | aesop ) h_summable;
+  · refine' tendsto_const_nhds.congr' _;
+    filter_upwards [ Filter.eventually_gt_atTop 1 ] with P hP;
+    rw [ tsum_eq_zero_of_not_summable ];
+    rw [ ← summable_nat_add_iff ( P + 1 ) ] at *;
+    grind
+
+/-- There exists N₀ such that for N ≥ N₀, the number of primes ≤ N is at most
+    (log 4 + 1) * N / log N. -/
+lemma chebyshev_pi_bound_concrete :
+    ∃ N₀ : ℕ, ∀ N : ℕ, N ≥ N₀ →
+      ((Finset.filter Nat.Prime (Finset.range (N + 1))).card : ℝ) ≤
+        (Real.log 4 + 1) * N / Real.log N := by
+  set ε := (1 : ℝ)
+  have hεpos : 0 < ε := by norm_num
+  have := Chebyshev.eventually_primeCounting_le hεpos;
+  rw [ Filter.eventually_atTop ] at this; rcases this with ⟨ N₀, hN₀ ⟩ ; refine' ⟨ ⌈N₀⌉₊ + 1, fun N hN ↦ _ ⟩ ; specialize hN₀ N ( Nat.le_of_ceil_le <| by linarith ) ; simp_all +decide [ Nat.primeCounting ] ;
+  convert hN₀ using 1;
+  rw [ Nat.primeCounting', Nat.count_eq_card_filter_range ]
+
+/-- For k ≥ 8, log(k * log 2) ≥ (log k)/2. -/
+lemma log_k_log2_ge_half_logk (k : ℕ) (hk : k ≥ 8) :
+    Real.log ((k : ℝ) * Real.log 2) ≥ Real.log (k : ℝ) / 2 := by
+  rw [ Real.log_mul ( by positivity ) ( by positivity ), ge_iff_le, div_le_iff₀' ] <;> norm_num;
+  have h_log_k : Real.log k ≥ 3 * Real.log 2 := by
+    rw [ ← Real.log_rpow, ge_iff_le, Real.log_le_log_iff ] <;> norm_cast ; linarith;
+  have := Real.log_two_gt_d9 ; norm_num at * ; nlinarith [ Real.log_inv ( Real.log 2 ), Real.log_le_sub_one_of_pos ( inv_pos.mpr ( Real.log_pos one_lt_two ) ), mul_inv_cancel₀ ( ne_of_gt ( Real.log_pos one_lt_two ) ) ]
+
+/-- For n ≥ 2^k with k ≥ 8, log(log n) ≥ (log k)/2. -/
+lemma loglog_lower_bound (n k : ℕ) (hk : k ≥ 8) (hn : n ≥ 2^k) :
+    Real.log (Real.log (n : ℝ)) ≥ Real.log (k : ℝ) / 2 := by
+  have h_log_log : Real.log (Real.log n) ≥ Real.log (k * Real.log 2) := by
+    gcongr;
+    rw [ ← Real.log_pow ] ; gcongr ; norm_cast;
+  exact le_trans ( log_k_log2_ge_half_logk k hk ) h_log_log
+
+/-- For p ≥ 2^k with k ≥ 8: 1/(p * (log log p)²) ≤ 4/(2^k * (log k)²). -/
+lemma term_bound_in_block (p k : ℕ) (hk : k ≥ 8) (hp : p ≥ 2^k) :
+    1 / ((p : ℝ) * (Real.log (Real.log p))^2) ≤
+      4 / ((2:ℝ)^k * (Real.log k)^2) := by
+  have h_log_log_p : Real.log (Real.log p) ≥ Real.log k / 2 := by
+    exact loglog_lower_bound p k hk hp
+  have h_subst : (p : ℝ) * (Real.log (Real.log p))^2 ≥ (2^k : ℝ) * ((Real.log k) / 2)^2 := by
+    gcongr ; norm_cast;
+  rw [ div_le_div_iff₀ ] <;> nlinarith [ show 0 < ( 2 : ℝ ) ^ k by positivity, show 0 < Real.log k ^ 2 by exact sq_pos_of_pos <| Real.log_pos <| Nat.one_lt_cast.mpr <| by linarith ]
+
+/-- Bound the contribution from primes in a single dyadic block [2^k, 2^{k+1}). -/
+lemma block_sum_bound (k : ℕ) (hk : k ≥ 8) (N₀ : ℕ)
+    (hcheb : ∀ N : ℕ, N ≥ N₀ →
+      ((Finset.filter Nat.Prime (Finset.range (N + 1))).card : ℝ) ≤
+        (Real.log 4 + 1) * N / Real.log N)
+    (hk_large : 2^(k+1) ≥ N₀) :
+    ∑ p ∈ ((Finset.Ico (2^k) (2^(k+1))).filter Nat.Prime),
+      1 / ((p : ℝ) * (Real.log (Real.log p))^2) ≤
+        8 * (Real.log 4 + 1) / (Real.log 2 * k * (Real.log k)^2) := by
+  have h_term_bound : ∀ p ∈ Finset.filter Nat.Prime (Finset.Ico (2^k) (2^(k+1))), 1 / ((p : ℝ) * (Real.log (Real.log p))^2) ≤ 4 / ((2 : ℝ)^k * (Real.log k)^2) := by
+    intro p hp; convert term_bound_in_block p k hk ( Finset.mem_Ico.mp ( Finset.mem_filter.mp hp |>.1 ) |>.1 ) using 1;
+  have h_prime_count : (Finset.filter Nat.Prime (Finset.Ico (2^k) (2^(k+1)))).card ≤ (Real.log 4 + 1) * 2^(k+1) / ((k+1) * Real.log 2) := by
+    refine' le_trans _ ( le_trans ( hcheb _ hk_large ) _ );
+    · exact_mod_cast Finset.card_mono <| Finset.filter_subset_filter _ <| Finset.subset_iff.mpr fun x hx => Finset.mem_range.mpr <| by linarith [ Finset.mem_Ico.mp hx ] ;
+    · norm_num [ Real.log_pow ];
+  refine le_trans ( Finset.sum_le_sum h_term_bound ) ?_;
+  norm_num [ pow_succ' ] at *;
+  refine le_trans ( mul_le_mul_of_nonneg_right h_prime_count <| by positivity ) ?_;
+  field_simp;
+  exact div_le_div_of_nonneg_right ( by linarith ) ( sq_nonneg _ )
+
+/-
+The partial sums of the prime reciprocal loglog series are bounded.
+-/
+lemma prime_loglog_partial_sums_bounded :
+    ∃ B : ℝ, ∀ N : ℕ,
+      ∑ p ∈ (Finset.range N).filter (fun p => Nat.Prime p),
+        1 / ((p : ℝ) * (Real.log (Real.log p))^2) ≤ B := by
+  obtain ⟨ N₀, hN₀ ⟩ := chebyshev_pi_bound_concrete;
+  obtain ⟨ K₀, hK₀ ⟩ : ∃ K₀ : ℕ, K₀ ≥ 8 ∧ 2^(K₀+1) ≥ N₀ := by
+    exact ⟨ N₀ + 8, by linarith, by linarith [ Nat.le_ceil ( Real.logb 2 N₀ ), show 2 ^ ( N₀ + 8 + 1 ) ≥ N₀ + 8 + 1 from Nat.recOn N₀ ( by norm_num ) fun n ihn => by norm_num [ Nat.pow_succ' ] at * ; linarith ] ⟩;
+  have h_sum_bound : ∀ N : ℕ, (∑ p ∈ ((Finset.Ico (2^K₀) N).filter Nat.Prime), 1 / ((p : ℝ) * (Real.log (Real.log p))^2)) ≤ 8 * (Real.log 4 + 1) / (Real.log 2)^2 := by
+    intro N
+    have h_sum_bound : (∑ p ∈ ((Finset.Ico (2^K₀) N).filter Nat.Prime), 1 / ((p : ℝ) * (Real.log (Real.log p))^2)) ≤ ∑ k ∈ Finset.Ico K₀ (Nat.log 2 (N - 1) + 1), ∑ p ∈ ((Finset.Ico (2^k) (2^(k+1))).filter Nat.Prime), 1 / ((p : ℝ) * (Real.log (Real.log p))^2) := by
+      rw [ ← Finset.sum_biUnion ];
+      · refine Finset.sum_le_sum_of_subset_of_nonneg ?_ fun _ _ _ => by positivity;
+        intro p hp; simp_all +decide;
+        exact ⟨ Nat.log 2 p, ⟨ Nat.le_log_of_pow_le ( by norm_num ) hp.1.1, Nat.log_mono_right ( Nat.le_sub_one_of_lt hp.1.2 ) ⟩, Nat.pow_le_of_le_log ( by linarith [ Nat.Prime.one_lt hp.2 ] ) ( by linarith ), Nat.lt_pow_of_log_lt ( by norm_num ) ( by linarith ) ⟩;
+      · intros k hk l hl hkl; simp_all +decide [ Finset.disjoint_left ];
+        grind +suggestions;
+    refine le_trans h_sum_bound <| le_trans ( Finset.sum_le_sum fun k hk => block_sum_bound k ( by linarith [ Finset.mem_Ico.mp hk ] ) N₀ hN₀ <| by linarith [ Finset.mem_Ico.mp hk, Nat.pow_le_pow_right two_pos ( show k + 1 ≥ K₀ + 1 from by linarith [ Finset.mem_Ico.mp hk ] ) ] ) ?_;
+    have h_sum_bound : ∑ k ∈ Finset.Ico K₀ (Nat.log 2 (N - 1) + 1), (1 / ((k : ℝ) * (Real.log k)^2)) ≤ 1 / Real.log 2 := by
+      have h_sum_bound : ∑ k ∈ Finset.Ico 3 (Nat.log 2 (N - 1) + 1), (1 / ((k : ℝ) * (Real.log k)^2)) ≤ 1 / Real.log 2 := by
+        convert partial_sum_inv_mul_log_sq_le ( Nat.log 2 ( N - 1 ) ) using 1;
+      exact le_trans ( Finset.sum_le_sum_of_subset_of_nonneg ( Finset.Ico_subset_Ico ( by linarith ) le_rfl ) fun _ _ _ => by positivity ) h_sum_bound;
+    convert mul_le_mul_of_nonneg_left h_sum_bound ( show ( 0 : ℝ ) ≤ 8 * ( Real.log 4 + 1 ) / Real.log 2 by positivity ) using 1 <;> ring_nf;
+    simp +decide only [mul_assoc, sum_add_distrib, Finset.mul_sum _ _ _, sum_mul];
+  use (∑ p ∈ ((Finset.range (2^K₀)).filter Nat.Prime), 1 / ((p : ℝ) * (Real.log (Real.log p))^2)) + 8 * (Real.log 4 + 1) / (Real.log 2)^2;
+  intro N; specialize h_sum_bound N; by_cases hN : N ≤ 2^K₀ <;> simp_all +decide [ Finset.sum_filter ] ;
+  · exact le_add_of_le_of_nonneg ( Finset.sum_le_sum_of_subset_of_nonneg ( Finset.range_mono hN ) fun _ _ _ => by positivity ) h_sum_bound;
+  · rw [ ← Finset.sum_range_add_sum_Ico _ hN.le ] ; linarith
+
+/-
+The sum of 1/(p * (log log p)²) over primes is summable.
+-/
+lemma prime_loglog_summable :
+    Summable (fun n : ℕ => if Nat.Prime n then
+      1 / ((n : ℝ) * (Real.log (Real.log n))^2) else 0) := by
+  obtain ⟨ B, hB ⟩ := prime_loglog_partial_sums_bounded;
+  rw [ summable_iff_not_tendsto_nat_atTop_of_nonneg ];
+  · exact fun h => absurd ( h.eventually_gt_atTop B ) fun h' => by obtain ⟨ N, hN ⟩ := h'.exists; exact not_le_of_gt hN <| by simpa [ Finset.sum_filter ] using hB N;
+  · intro n; split_ifs <;> positivity
+
+/-
+The tail sum (with p > P condition) is summable for any P.
+-/
+theorem tail_summable_from_chebyshev (P : ℕ) :
+    Summable (fun p : ℕ => if p > P ∧ Nat.Prime p then
+      1 / ((p : ℝ) * (Real.log (Real.log p))^2) else 0) := by
+  refine' .of_nonneg_of_le ( fun p => _ ) ( fun p => _ ) ( prime_loglog_summable );
+  · positivity;
+  · split_ifs <;> norm_num ; aesop;
+    positivity
+
 /-
 The tail sum of 1/(p (log log p)^2) tends to 0 as P goes to infinity.
 -/
-lemma tail_sum_bound (assumps : SieveAssumptions) :
+lemma tail_sum_bound :
     Filter.Tendsto (fun P => ∑' p, if p > P ∧ Nat.Prime p then 1 / ((p : ℝ) * (Real.log (Real.log p))^2) else 0) Filter.atTop (nhds 0) := by
-      have := assumps.bound_sum_primes_ge_x_inv_p_loglog_sq;
-      convert this.isBigO.trans_isLittleO _;
-      any_goals exact Real;
-      any_goals exact fun x => 1;
-      any_goals exact Real.norm;
-      · constructor <;> intro h;
-        · convert this.isBigO.trans_isLittleO _;
-          rw [ Asymptotics.isLittleO_iff_tendsto' ] <;> norm_num;
-          exact tendsto_inv_atTop_zero.comp <| Real.tendsto_log_atTop.comp <| Real.tendsto_log_atTop;
-        · rw [ Asymptotics.isLittleO_iff_tendsto' ] at h <;> norm_num at *;
-          convert h.comp ( show Filter.Tendsto ( fun P : ℕ => ↑P + 1 ) Filter.atTop Filter.atTop from Filter.tendsto_atTop_add_const_right _ _ tendsto_natCast_atTop_atTop ) using 2 ; norm_num;
-          norm_cast;
-      · rw [ Asymptotics.isLittleO_iff_tendsto' ] <;> norm_num;
-        exact tendsto_inv_atTop_zero.comp ( Real.tendsto_log_atTop.comp ( Real.tendsto_log_atTop ) )
+      exact tail_sum_bound_chebyshev
 
 /-
 The sum of p/(log log p)^2 for p <= sqrt(2x) is o(x).
 -/
-lemma error_term_small (assumps : SieveAssumptions) :
+lemma error_term_small :
   (fun x => ∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ Real.sqrt (2 * x)) (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)), (p : ℝ) / (Real.log (Real.log p))^2) =o[Filter.atTop] (fun x => x) := by
-    rw [ Asymptotics.isLittleO_iff_tendsto' ];
-    · -- Applying the hypothesis `assumps.bound_sum_primes_le_x_p_div_loglog_sq` with $y = \sqrt{2x}$.
-      have h_apply_bound : Filter.Tendsto (fun x => (∑ p ∈ Finset.filter (fun p : ℕ => 2 < p ∧ (p : ℝ) ≤ Real.sqrt (2 * x) ∧ Nat.Prime p) (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)), (p : ℝ) / (Real.log (Real.log p))^2) / x) Filter.atTop (nhds 0) := by
-        have h_apply_bound : Filter.Tendsto (fun y => (∑ p ∈ Finset.filter (fun p : ℕ => 2 < p ∧ (p : ℝ) ≤ y ∧ Nat.Prime p) (Finset.range (Nat.floor y + 1)), (p : ℝ) / (Real.log (Real.log p))^2) / y^2) Filter.atTop (nhds 0) := by
-          have := assumps.bound_sum_primes_le_x_p_div_loglog_sq;
-          have := this.isBigO;
-          rw [ Asymptotics.isBigO_iff' ] at this;
-          obtain ⟨ c, hc₀, hc ⟩ := this;
-          -- We'll use the fact that if the denominator grows faster than the numerator, the limit will tend to 0.
-          have h_lim : Filter.Tendsto (fun y => c * (1 / (Real.log y * (Real.log (Real.log y))^2))) Filter.atTop (nhds 0) := by
-            norm_num;
-            exact le_trans ( Filter.Tendsto.mul tendsto_const_nhds <| Filter.Tendsto.mul ( Filter.Tendsto.inv_tendsto_atTop <| Filter.Tendsto.comp ( Filter.tendsto_pow_atTop ( by norm_num ) ) <| Real.tendsto_log_atTop.comp <| Real.tendsto_log_atTop ) <| Filter.Tendsto.inv_tendsto_atTop <| Real.tendsto_log_atTop ) <| by norm_num;
-          refine' squeeze_zero_norm' _ h_lim;
-          filter_upwards [ hc, Filter.eventually_gt_atTop 1 ] with x hx₁ hx₂ ; simp_all +decide [div_eq_mul_inv,
-            mul_comm];
-          rw [ inv_mul_le_iff₀ ( by positivity ) ] ; convert hx₁ using 1 ; rw [ abs_of_nonneg ( Real.log_nonneg hx₂.le ) ] ; ring;
-        have h_apply_bound : Filter.Tendsto (fun x => (∑ p ∈ Finset.filter (fun p : ℕ => 2 < p ∧ (p : ℝ) ≤ Real.sqrt (2 * x) ∧ Nat.Prime p) (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)), (p : ℝ) / (Real.log (Real.log p))^2) / (Real.sqrt (2 * x))^2) Filter.atTop (nhds 0) := by
-          exact h_apply_bound.comp <| Filter.tendsto_atTop_atTop.mpr fun x => ⟨ x ^ 2 / 2, fun y hy => Real.le_sqrt_of_sq_le <| by linarith ⟩;
-        convert h_apply_bound.const_mul 2 |> Filter.Tendsto.congr' _ using 2;
-        · norm_num;
-        · filter_upwards [ Filter.eventually_gt_atTop 0 ] with x hx using by rw [ Real.sq_sqrt ( by positivity ) ] ; ring;
-      -- Since the primes less than or equal to 2 are finite, their contribution to the sum is bounded.
-      have h_finite_primes : ∃ C : ℝ, ∀ x : ℝ, x ≥ 2 → (∑ p ∈ Finset.filter (fun p : ℕ => Nat.Prime p ∧ (p : ℝ) ≤ Real.sqrt (2 * x)) (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)), (p : ℝ) / (Real.log (Real.log p))^2) ≤ (∑ p ∈ Finset.filter (fun p : ℕ => 2 < p ∧ (p : ℝ) ≤ Real.sqrt (2 * x) ∧ Nat.Prime p) (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)), (p : ℝ) / (Real.log (Real.log p))^2) + C := by
-        use ∑ p ∈ Finset.filter (fun p : ℕ => Nat.Prime p ∧ p ≤ 2) (Finset.range 3), (p : ℝ) / (Real.log (Real.log p))^2;
-        intro x hx; rw [ ← Finset.sum_union ];
-        · refine Finset.sum_le_sum_of_subset_of_nonneg ?_ fun _ _ _ => div_nonneg ( Nat.cast_nonneg _ ) ( sq_nonneg _ );
-          grind;
-        · exact Finset.disjoint_left.mpr fun p hp₁ hp₂ => by linarith [ Finset.mem_filter.mp hp₁, Finset.mem_filter.mp hp₂ ] ;
-      obtain ⟨ C, hC ⟩ := h_finite_primes;
-      refine' squeeze_zero_norm' _ ( by simpa using h_apply_bound.add ( tendsto_inv_atTop_zero.const_mul ( C : ℝ ) ) );
-      filter_upwards [ Filter.eventually_ge_atTop 2 ] with x hx using by rw [ Real.norm_of_nonneg ( div_nonneg ( Finset.sum_nonneg fun _ _ => div_nonneg ( Nat.cast_nonneg _ ) ( sq_nonneg _ ) ) ( by positivity ) ) ] ; simpa [ div_eq_mul_inv, mul_add, add_mul, mul_assoc, mul_comm, mul_left_comm ] using div_le_div_of_nonneg_right ( hC x hx ) ( by positivity ) ;
-    · filter_upwards [ Filter.eventually_gt_atTop 0 ] with x hx hx' using absurd hx' hx.ne'
+    exact error_term_small_chebyshev
 
 /-
 Definitions for relevant primes, bound for a, relevant pairs, and the set S_x of multiples of W in the interval.
@@ -1064,24 +1297,15 @@ lemma sum_S1_le_sum_bound (P : ℕ) (x : ℝ) :
       rw [ div_le_iff₀ ] <;> norm_num;
       exact Nat.floor_le ( by positivity ) |> le_trans <| by ring_nf; norm_num;
 
+structure SieveAssumptions where
+  tail_summable : ∀ P : ℕ, Summable (fun p : ℕ => if p > P ∧ Nat.Prime p then 1 / ((p : ℝ) * (Real.log (Real.log p))^2) else 0)
+
 /-
 The tail series of 1/(p (log log p)^2) is summable.
 -/
 lemma tail_summable (assumps : SieveAssumptions) (P : ℕ) :
   Summable (fun p : ℕ => if p > P ∧ Nat.Prime p then 1 / ((p : ℝ) * (Real.log (Real.log p))^2) else 0) := by
-    contrapose! assumps;
-    rintro ⟨ h1, h3, h5 ⟩;
-    have := h3;
-    obtain ⟨ C, hC ⟩ := this;
-    rw [ Asymptotics.isBigO_iff ] at hC;
-    obtain ⟨ c, hc ⟩ := hC; obtain ⟨ x, hx ⟩ := Filter.eventually_atTop.mp hc; specialize hx ( Max.max x 3 ) ; norm_num at hx;
-    rw [ tsum_eq_zero_of_not_summable ] at hx <;> norm_num at hx;
-    · rcases hx with ( ( hx | hx | hx ) | hx | hx ) <;> linarith [ le_max_right x 3, Real.lt_log_iff_exp_lt ( show 0 < max x 3 by positivity ) |>.2 <| show Real.exp 1 < max x 3 by exact lt_of_lt_of_le ( Real.exp_one_lt_d9.trans_le <| by norm_num ) <| le_max_right x 3 ];
-    · intro H;
-      refine' assumps _;
-      rw [ ← summable_nat_add_iff ( ⌈x⌉₊ + P + 3 ) ] at *;
-      convert H using 2 ; norm_num ; ring_nf;
-      exact if_congr ⟨ fun h => ⟨ ⟨ by linarith [ Nat.le_ceil x ], by linarith ⟩, h.2 ⟩, fun h => ⟨ by linarith, h.2 ⟩ ⟩ rfl rfl
+    exact assumps.tail_summable P
 
 /-
 The sum over relevant primes is bounded by the tail value.
@@ -1103,7 +1327,7 @@ lemma sum_S1_le_tail (P : ℕ) (x : ℝ) (assumps : SieveAssumptions) : sum_S1 P
 /-
 sum_S2 is o(x).
 -/
-lemma sum_S2_is_littleO (P : ℕ) (assumps : SieveAssumptions) :
+lemma sum_S2_is_littleO (P : ℕ):
   (fun x => sum_S2 P x) =o[Filter.atTop] (fun x => x) := by
     -- By definition of `sum_S2`, we have `sum_S2 P x ≤ ∑ p ∈ relevant_primes P x, p / (Real.log (Real.log p))^2`.
     have h_sum_S2_le : ∀ x : ℝ, sum_S2 P x ≤ ∑ p ∈ relevant_primes P x, (p : ℝ) / (Real.log (Real.log p))^2 := by
@@ -1116,10 +1340,10 @@ lemma sum_S2_is_littleO (P : ℕ) (assumps : SieveAssumptions) :
       simp [relevant_primes];
       refine Finset.sum_le_sum_of_subset_of_nonneg ?_ fun _ _ _ => div_nonneg ( Nat.cast_nonneg _ ) ( sq_nonneg _ );
       simp +contextual [ Finset.subset_iff ];
-      exact fun p hp₁ hp₂ hp₃ => Nat.floor_le ( by positivity ) |> le_trans ( mod_cast Nat.le_of_lt_succ hp₁ );
+      exact fun p hp₁ hp₂ hp₃ => Nat.floor_le ( by positivity ) |> le_trans ( mod_cast hp₁ );
     -- By `error_term_small`, this larger sum is $o(x)$.
     have h_error_term_small : (fun x => ∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ Real.sqrt (2 * x)) (Finset.range (Nat.floor (Real.sqrt (2 * x)) + 1)), (p : ℝ) / (Real.log (Real.log p))^2) =o[Filter.atTop] (fun x => x) := by
-      convert error_term_small assumps using 1;
+      convert error_term_small using 1;
     rw [ Asymptotics.isLittleO_iff ] at *;
     intro c hc; filter_upwards [ h_error_term_small hc, Filter.eventually_gt_atTop 0 ] with x hx₁ hx₂; rw [ Real.norm_of_nonneg ( show 0 ≤ sum_S2 P x from Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _ ) ] ; exact le_trans ( h_sum_S2_le x |> le_trans <| h_relevant_primes_le_all_primes x ) ( le_trans ( le_abs_self _ ) hx₁ ) ;
 
@@ -1162,13 +1386,13 @@ lemma large_P_bound_satisfied (assumps : SieveAssumptions) :
       -- By Lemma~\ref{lem:tail_sum_bound}, we can find $P$ large enough such that the tail value (and thus sum_S1) is less than 0.5.
       obtain ⟨P₀, hP₀⟩ : ∃ P₀ : ℕ, ∀ P ≥ P₀, tail_val P < 0.5 := by
         have h_tail_zero : Filter.Tendsto tail_val Filter.atTop (nhds 0) := by
-          convert tail_sum_bound assumps;
+          convert tail_sum_bound;
         simpa using h_tail_zero.eventually ( gt_mem_nhds <| by norm_num );
       -- By Lemma~\ref{lem:sum_S2_is_littleO}, the term $2 * sum_S2$ is $o(x)$, while $L_x x / W$ is proportional to $x$. So $2 * sum_S2 / (L_x x / W)$ tends to 0.
       have h_term_zero : ∀ P ≥ P₀, Filter.Tendsto (fun x => 2 * sum_S2 P x / ((L_x x : ℝ) / W_P P)) Filter.atTop (nhds 0) := by
         intro P hP
         have h_term_zero : Filter.Tendsto (fun x => sum_S2 P x / x) Filter.atTop (nhds 0) := by
-          have := sum_S2_is_littleO P assumps; exact this.tendsto_div_nhds_zero;
+          have := sum_S2_is_littleO P; exact this.tendsto_div_nhds_zero;
         have h_term_zero : Filter.Tendsto (fun x => (L_x x : ℝ) / x) Filter.atTop (nhds 0.5) := by
           have h_floor_ceil : ∀ x : ℝ, x ≥ 2 → (Nat.floor x : ℝ) - Nat.ceil (x / 2) + 1 ≥ x / 2 - 2 ∧ (Nat.floor x : ℝ) - Nat.ceil (x / 2) + 1 ≤ x / 2 + 2 := by
             intro x hx; constructor <;> linarith [ Nat.floor_le ( show 0 ≤ x by linarith ), Nat.lt_floor_add_one x, Nat.le_ceil ( x / 2 ), Nat.ceil_lt_add_one ( show 0 ≤ x / 2 by linarith ) ] ;
@@ -1540,7 +1764,7 @@ lemma card_bad_a_for_p_le (n : ℕ → ℕ) (K : ℕ) (x : ℝ) (p : ℕ) (hK : 
         have h_subset : Finset.filter (fun a => a ≡ r.val [MOD p^2]) (Finset.Icc 1 (Nat.floor x)) ⊆ Finset.image (fun k => r.val + k * p^2) (Finset.range (Nat.floor x / p^2 + 1)) := by
           intro a ha; simp_all +decide [ Nat.ModEq ] ;
           refine' ⟨ a / p ^ 2, _, _ ⟩;
-          · exact Nat.lt_succ_of_le ( Nat.div_le_div_right ha.1.2 );
+          · exact Nat.div_le_div_right ha.1.2;
           · linarith [ Nat.mod_add_div a ( p ^ 2 ), Nat.mod_eq_of_lt ( show r.val < p ^ 2 from by { haveI := Fact.mk ( show p ^ 2 > 1 from one_lt_pow₀ ( by linarith ) two_ne_zero ) ; exact ZMod.val_lt r } ) ];
         exact le_trans ( Finset.card_le_card h_subset ) ( Finset.card_image_le.trans ( by norm_num ) );
       refine le_trans ( Nat.cast_le.mpr h_residue_count ) ?_;
@@ -1670,32 +1894,14 @@ lemma sum_part1_tendsto (K : ℕ) :
 /-
 The sum of log p for p <= x is O(x).
 -/
-lemma theta_bound (assumps : SieveAssumptions) :
+lemma theta_bound :
   (fun x => ∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ x) (Finset.range (Nat.floor x + 1)), Real.log p) =O[Filter.atTop] (fun x => x) := by
-    have := assumps.1;
-    -- From `Bound_prod_primes_le_x_sq`, we have `log (prod_{p <= x} p^2) - 2x = o(x)`.
-    -- `log (prod p^2) = sum_{p <= x} log (p^2) = 2 sum_{p <= x} log p`.
-    -- So `2 sum log p - 2x = o(x)`.
-    -- This implies `sum log p - x = o(x)`.
-    -- Since `x = O(x)`, we have `sum log p = O(x)`.
-    have h_sum_log_p : (fun x : ℝ => 2 * ∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ x) (Finset.range (Nat.floor x + 1)), Real.log p - 2 * x) =o[Filter.atTop] (fun x : ℝ => x) := by
-      have h_sum_log_p : (fun x : ℝ => Real.log (∏ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ x) (Finset.range (Nat.floor x + 1)), ((p : ℝ)^2)) - 2 * x) =o[Filter.atTop] (fun x : ℝ => x) := by
-        convert this using 1;
-        unfold Bound_prod_primes_le_x_sq ;
-        simp +decide only [and_comm];
-      refine h_sum_log_p.congr' ?_ ?_;
-      · filter_upwards [ Filter.eventually_gt_atTop 1 ] with x hx using by rw [ Real.log_prod _ _ fun p hp => by norm_cast; aesop ] ; norm_num [ Finset.mul_sum _ _ _ ] ;
-      · rfl;
-    rw [ Asymptotics.isLittleO_iff ] at h_sum_log_p;
-    rw [ Asymptotics.isBigO_iff ];
-    obtain ⟨ c, hc ⟩ := Filter.eventually_atTop.mp ( h_sum_log_p zero_lt_one );
-    refine' ⟨ 2, Filter.eventually_atTop.mpr ⟨ Max.max c 2, fun x hx => _ ⟩ ⟩ ; specialize hc x ( le_trans ( le_max_left _ _ ) hx ) ; norm_num at *;
-    cases abs_cases x <;> cases abs_cases ( ∑ p ∈ Finset.range ( ⌊x⌋₊ + 1 ) with Nat.Prime p ∧ ( p : ℝ ) ≤ x, Real.log p ) <;> cases abs_cases ( 2 * ∑ p ∈ Finset.range ( ⌊x⌋₊ + 1 ) with Nat.Prime p ∧ ( p : ℝ ) ≤ x, Real.log p - 2 * x ) <;> linarith
+    exact theta_bound_chebyshev
 
 /-
 The prime counting function pi(x) is O(x / log x).
 -/
-lemma pi_bound (assumps : SieveAssumptions) :
+lemma pi_bound :
   (fun x => ((Finset.filter Nat.Prime (Finset.range (Nat.floor x + 1))).card : ℝ)) =O[Filter.atTop] (fun x => x / Real.log x) := by
     -- By definition of $pi(x)$, we know that $\pi(x) \leq \theta(x) / \log(\sqrt{x}) + \sqrt{x}$.
     have h_pi_le_theta : ∀ x : ℝ, x ≥ 100 → (Finset.filter Nat.Prime (Finset.range (Nat.floor x + 1))).card ≤ (2 * (∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ x) (Finset.range (Nat.floor x + 1)), Real.log p)) / Real.log x + Real.sqrt x := by
@@ -1708,9 +1914,9 @@ lemma pi_bound (assumps : SieveAssumptions) :
       have h_prime_count : (∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) > Real.sqrt x ∧ (p : ℝ) ≤ x) (Finset.range (Nat.floor x + 1)), 1) ≥ (Finset.filter Nat.Prime (Finset.range (Nat.floor x + 1))).card - (Finset.filter Nat.Prime (Finset.range (Nat.floor (Real.sqrt x) + 1))).card := by
         have h_prime_count : Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) > Real.sqrt x ∧ (p : ℝ) ≤ x) (Finset.range (Nat.floor x + 1)) ⊇ Finset.filter Nat.Prime (Finset.range (Nat.floor x + 1)) \ Finset.filter Nat.Prime (Finset.range (Nat.floor (Real.sqrt x) + 1)) := by
           simp +contextual [ Finset.subset_iff ];
-          exact fun p hp₁ hp₂ hp₃ => ⟨ Nat.lt_of_floor_lt hp₃, Nat.floor_le ( by positivity ) |> le_trans ( Nat.cast_le.mpr ( Nat.le_of_lt_succ hp₁ ) ) ⟩;
+          exact fun p hp₁ hp₂ hp₃ => ⟨ Nat.lt_of_floor_lt hp₃, Nat.floor_le ( by positivity ) |> le_trans ( Nat.cast_le.mpr hp₁ ) ⟩;
         have := Finset.card_mono h_prime_count; simp_all +decide [ Finset.card_sdiff ] ;
-        exact this.trans ( add_le_add_left ( Finset.card_mono <| Finset.inter_subset_left ) _ );
+        exact this.trans ( add_le_add_right ( Finset.card_mono <| Finset.inter_subset_left ) _ );
       -- Since $\pi(\sqrt{x}) \leq \sqrt{x}$, we have $\pi(x) \leq \theta(x) / \log(\sqrt{x}) + \sqrt{x}$.
       have h_pi_le_theta_step2 : (Finset.filter Nat.Prime (Finset.range (Nat.floor x + 1))).card ≤ (∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) > Real.sqrt x ∧ (p : ℝ) ≤ x) (Finset.range (Nat.floor x + 1)), 1) + Real.sqrt x := by
         have h_pi_le_theta_step2 : (Finset.filter Nat.Prime (Finset.range (Nat.floor (Real.sqrt x) + 1))).card ≤ Real.sqrt x := by
@@ -1719,10 +1925,10 @@ lemma pi_bound (assumps : SieveAssumptions) :
         norm_num at *;
         exact le_trans ( Nat.cast_le.mpr h_prime_count ) ( by push_cast; linarith );
       simp_all +decide [ Real.log_sqrt ( show 0 ≤ x by positivity ) ];
-      exact le_trans h_pi_le_theta_step2 ( add_le_add_right ( by rw [ le_div_iff₀ ( Real.log_pos <| by linarith ) ] ; linarith ) _ );
+      exact le_trans h_pi_le_theta_step2 ( add_le_add_left ( by rw [ le_div_iff₀ ( show (0 : ℝ) < Real.log x from Real.log_pos ( by linarith ) ) ] ; linarith ) _ );
     -- From `theta_bound`, we know $\theta(x) = O(x)$.
     have h_theta_bound : (fun x => ∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ x) (Finset.range (Nat.floor x + 1)), Real.log p) =O[Filter.atTop] (fun x => x) := by
-      exact theta_bound assumps;
+      exact theta_bound;
     -- Since $\sqrt{x} = o(x / \log x)$, we can conclude that $\pi(x) = O(x / \log x)$.
     have h_sqrt_o : (fun x => Real.sqrt x) =o[Filter.atTop] (fun x => x / Real.log x) := by
       -- We can simplify the expression $\frac{\sqrt{x} \cdot \log x}{x}$ to $\frac{\log x}{\sqrt{x}}$.
@@ -1751,11 +1957,11 @@ lemma pi_bound (assumps : SieveAssumptions) :
 /-
 The sum of (log log p + 1) for p <= x is O(x log log x / log x).
 -/
-lemma sum_loglog_bound (assumps : SieveAssumptions) :
+lemma sum_loglog_bound :
   (fun x => ∑ p ∈ Finset.filter (fun p => Nat.Prime p ∧ (p : ℝ) ≤ x) (Finset.range (Nat.floor x + 1)), (Real.log (Real.log p) + 1)) =O[Filter.atTop] (fun x => x * Real.log (Real.log x) / Real.log x) := by
     have h_sum_bound : (fun x => ((Finset.filter Nat.Prime (Finset.range (Nat.floor x + 1))).card : ℝ) * (Real.log (Real.log x) + 1)) =O[Filter.atTop] (fun x => x * Real.log (Real.log x) / Real.log x) := by
       have h_sum_bound : (fun x => ((Finset.filter Nat.Prime (Finset.range (Nat.floor x + 1))).card : ℝ)) =O[Filter.atTop] (fun x => x / Real.log x) := by
-        exact pi_bound assumps;
+        exact pi_bound;
       have h_mul_bound : (fun x => (Real.log (Real.log x) + 1)) =O[Filter.atTop] (fun x => Real.log (Real.log x)) := by
         norm_num [ Asymptotics.isBigO_iff ];
         exact ⟨ 2, Real.exp ( Real.exp 1 ), fun x hx => by rw [ abs_le ] ; constructor <;> cases abs_cases ( Real.log ( Real.log x ) ) <;> linarith [ show 1 ≤ Real.log ( Real.log x ) from by rw [ Real.le_log_iff_exp_le ( Real.log_pos <| by linarith [ Real.add_one_le_exp 1, Real.add_one_le_exp ( Real.exp 1 ) ] ) ] ; rw [ Real.le_log_iff_exp_le ] <;> linarith [ Real.add_one_le_exp 1, Real.add_one_le_exp ( Real.exp 1 ) ] ] ⟩;
@@ -1881,14 +2087,14 @@ lemma sum_part2_le (K : ℕ) :
     unfold sum_part2 S_loglog;
     gcongr;
     · exact fun p hp₁ hp₂ => le_of_lt ( log_log_p_plus_one_pos p ( by aesop ) );
-    · exact fun p hp => ⟨ hp.1, hp.2.2 ⟩
+    · exact fun hp => hp.2
 
 /-
 S_loglog(x) is O(x log log x / log x).
 -/
-lemma S_loglog_is_BigO (assumps : SieveAssumptions) :
+lemma S_loglog_is_BigO :
   S_loglog =O[Filter.atTop] (fun x => x * Real.log (Real.log x) / Real.log x) := by
-  exact sum_loglog_bound assumps
+  exact sum_loglog_bound
 
 /-
 sum_part2 is non-negative for large x.
@@ -1902,11 +2108,11 @@ lemma sum_part2_nonneg (K : ℕ) : ∀ᶠ x in Filter.atTop, 0 ≤ sum_part2 K x
 /-
 The upper bound for sum_part2 has the correct asymptotic behavior.
 -/
-lemma bound_asymptotics (assumps : SieveAssumptions) :
+lemma bound_asymptotics :
   (fun x => (1/x) * S_loglog (p_upper_bound x)) =O[Filter.atTop] (fun x => (Real.log (Real.log x))^3 / Real.log x) := by
     have h_sum_part2_le : (fun x => (1 / x) * S_loglog (p_upper_bound x)) =O[Filter.atTop] (fun x => (1 / x) * (p_upper_bound x * Real.log (Real.log (p_upper_bound x)) / Real.log (p_upper_bound x))) := by
       have h_S_loglog_bound : S_loglog =O[Filter.atTop] (fun x => x * Real.log (Real.log x) / Real.log x) := by
-        exact S_loglog_is_BigO assumps;
+        exact S_loglog_is_BigO;
       apply_rules [ Asymptotics.IsBigO.mul, h_S_loglog_bound.comp_tendsto ];
       · exact Asymptotics.isBigO_refl _ _;
       · exact Asymptotics.isBigO_refl _ _;
@@ -1922,11 +2128,11 @@ lemma bound_asymptotics (assumps : SieveAssumptions) :
 /-
 sum_part2 tends to 0 as x goes to infinity.
 -/
-lemma sum_part2_tendsto (K : ℕ) (assumps : SieveAssumptions) :
+lemma sum_part2_tendsto (K : ℕ):
   Filter.Tendsto (fun x => sum_part2 K x) Filter.atTop (nhds 0) := by
   have h1 : ∀ᶠ x in Filter.atTop, 0 ≤ sum_part2 K x := sum_part2_nonneg K
   have h2 : ∀ᶠ x in Filter.atTop, sum_part2 K x ≤ (1/x) * S_loglog (p_upper_bound x) := sum_part2_le K
-  have h3 : (fun x => (1/x) * S_loglog (p_upper_bound x)) =O[Filter.atTop] (fun x => (Real.log (Real.log x))^3 / Real.log x) := bound_asymptotics assumps
+  have h3 : (fun x => (1/x) * S_loglog (p_upper_bound x)) =O[Filter.atTop] (fun x => (Real.log (Real.log x))^3 / Real.log x) := bound_asymptotics
   have h4 : Filter.Tendsto (fun x => (Real.log (Real.log x))^3 / Real.log x) Filter.atTop (nhds 0) := by
     convert log_log_pow_div_log_tendsto_zero 3 using 1
     norm_cast
@@ -1936,10 +2142,10 @@ lemma sum_part2_tendsto (K : ℕ) (assumps : SieveAssumptions) :
 /-
 The density of the removed set converges to the tail sum.
 -/
-lemma total_removed_density (K : ℕ) (assumps : SieveAssumptions) :
+lemma total_removed_density (K : ℕ) :
   Filter.Tendsto (fun x => total_removed_bound K x / x) Filter.atTop (nhds (tail_sum_loglog_sq K)) := by
     rw [ Filter.tendsto_congr' ];
-    convert Filter.Tendsto.add ( sum_part1_tendsto K ) ( sum_part2_tendsto K assumps ) using 2 ; ring;
+    convert Filter.Tendsto.add ( sum_part1_tendsto K ) ( sum_part2_tendsto K ) using 2 ; ring;
     filter_upwards [ Filter.eventually_gt_atTop 0 ] with x hx using total_removed_bound_split K x hx ▸ rfl
 
 /-
@@ -1977,12 +2183,12 @@ lemma liminf_ge_limit_sub_limit {f g h : ℕ → ℝ} {Lg Lh : ℝ}
 /-
 The sequence u_n converges to the expected limit.
 -/
-lemma u_tendsto (K : ℕ) (assumps : SieveAssumptions) :
+lemma u_tendsto (K : ℕ) :
   Filter.Tendsto (fun n : ℕ => ((SF ∩ Set.Icc 1 n).ncard : ℝ) / n - total_removed_bound K n / n) Filter.atTop (nhds (6 / Real.pi^2 - tail_sum_loglog_sq K)) := by
     have h_diff : Filter.Tendsto (fun n : ℕ => ((SF ∩ (Set.Icc 1 n)).ncard : ℝ) / n) Filter.atTop (nhds (6 / Real.pi^2)) := by
       have := @SF_density;
       convert this using 1;
-    exact h_diff.sub ( total_removed_density K assumps |> Filter.Tendsto.comp <| tendsto_natCast_atTop_atTop )
+    exact h_diff.sub ( total_removed_density K |> Filter.Tendsto.comp <| tendsto_natCast_atTop_atTop )
 
 /-
 The tail sum of (log log p + 1) / p^2 for p > K tends to 0 as K goes to infinity.
@@ -2093,7 +2299,7 @@ lemma removed_subset_card_le_nat (n : ℕ → ℕ) (K : ℕ) (x : ℝ) (h_good :
       · norm_num +zetaDelta at *;
         congr! 1;
         ext; simp [relevant_primes_for_bound];
-        exact fun _ _ _ => le_trans ( Nat.cast_le.mpr ( Nat.le_of_lt_succ ‹_› ) ) ( Nat.floor_le ( by exact mul_nonneg ( by positivity ) ( sq_nonneg _ ) ) );
+        exact fun _ _ _ => le_trans ( Nat.cast_le.mpr ‹_› ) ( Nat.floor_le ( by exact mul_nonneg ( by positivity ) ( sq_nonneg _ ) ) );
       · infer_instance;
       · infer_instance;
       · infer_instance;
@@ -2103,7 +2309,7 @@ lemma removed_subset_card_le_nat (n : ℕ → ℕ) (K : ℕ) (x : ℝ) (h_good :
 /-
 If n is a GoodSeqNat with respect to K, then the lower density of A_seq n is at least 6/pi^2 - tail_sum_loglog_sq K.
 -/
-lemma lowerDensity_A_seq_bound_nat (n : ℕ → ℕ) (K : ℕ) (hK : K ≥ 3) (h_good : GoodSeqNat n K) (assumps : SieveAssumptions) :
+lemma lowerDensity_A_seq_bound_nat (n : ℕ → ℕ) (K : ℕ) (hK : K ≥ 3) (h_good : GoodSeqNat n K) :
   lowerDensity (A_seq n) ≥ 6 / Real.pi^2 - tail_sum_loglog_sq K := by
     apply le_of_forall_gt_imp_ge_of_dense;
     have := @liminf_ge_limit_sub_limit;
@@ -2120,7 +2326,7 @@ lemma lowerDensity_A_seq_bound_nat (n : ℕ → ℕ) (K : ℕ) (hK : K ≥ 3) (h
       have := card_A_seq_ge n x;
       norm_num [ Nat.floor_natCast ] at *;
       rw [ ← add_div ] ; gcongr ; linarith;
-    · convert u_tendsto K assumps using 1;
+    · convert u_tendsto K using 1;
     · exact tendsto_const_nhds;
     · refine' ⟨ _, _ ⟩;
       · refine' ⟨ 1, Filter.eventually_atTop.mpr ⟨ 1, fun x hx => _ ⟩ ⟩;
@@ -2174,9 +2380,10 @@ theorem theorem_overp_i (A : Set ℕ) (h : PropertyP_bar_infty A) :
       exact h_upperDensity_eq.symm ▸ sieve_strict_bound _ _ h_sieve h_sieve_strict
 
 /-
-For any epsilon > 0, there exists a set A with property P_bar such that its lower density is at least 6/pi^2 - epsilon.
+For any epsilon > 0, there exists a set A with property P_bar such that its
+lower density is at least 6/pi^2 - epsilon, conditional on SieveAssumptions.
 -/
-theorem theorem_overp_ii (assumps : SieveAssumptions) :
+theorem theorem_overp_ii_conditional (assumps : SieveAssumptions) :
     ∀ ε > 0, ∃ A : Set ℕ, PropertyP_bar A ∧ lowerDensity A ≥ 6 / Real.pi^2 - ε := by
       have := lemma_largeP assumps;
       -- By `tail_sum_loglog_sq_tendsto_zero`, there exists $K_1$ such that for all $K \ge K_1$, `tail_sum_loglog_sq K < \epsilon`.
@@ -2192,9 +2399,20 @@ theorem theorem_overp_ii (assumps : SieveAssumptions) :
       use A_seq n;
       refine' ⟨ _, _ ⟩;
       · exact PropertyP_bar_A_seq n hn.1;
-      · refine' le_trans _ ( lowerDensity_A_seq_bound_nat n K _ hn assumps );
+      · refine' le_trans _ ( lowerDensity_A_seq_bound_nat n K _ hn );
         · exact sub_le_sub_left ( le_of_lt ( hK₁ K ( le_max_left _ _ ) ) ) _;
         · exact le_trans ( by linarith ) ( le_max_right _ _ ) |> le_trans ( le_max_right _ _ )
+
+/-- Construction of SieveAssumptions from Chebyshev bounds. -/
+def sieveAssumptionsFromChebyshev : SieveAssumptions :=
+  ⟨tail_summable_from_chebyshev⟩
+
+/-
+For any ε > 0, there exists a set A with property P̄ whose lower density is at least 6/π² - ε.
+-/
+theorem theorem_overp_ii :
+    ∀ ε > 0, ∃ A : Set ℕ, PropertyP_bar A ∧ lowerDensity A ≥ 6 / Real.pi^2 - ε :=
+  theorem_overp_ii_conditional sieveAssumptionsFromChebyshev
 
 #print axioms theorem_overp_i
 #print axioms theorem_overp_ii
