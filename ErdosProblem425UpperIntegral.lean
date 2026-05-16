@@ -21,9 +21,10 @@ see my GitHub
 
 https://github.com/Woett/Lean-files/blob/main/ErdosProblem425Upper.lean
 
-The formalization uses the tactic native_decide a bunch of times, so that the
-used axioms not only include the Rosser-Schoenfeld result, but also
-Lean.ofReduceBool and Lean.trustCompiler, which are used to justify the
+The formalization (done by Aristotle from Harmonic
+(aristotle-harmonic@harmonic.fun)) uses the tactic native_decide a bunch of
+times, so that the used axioms not only include the Rosser-Schoenfeld result,
+but also Lean.ofReduceBool and Lean.trustCompiler, which are used to justify the
 correctness of native_decide.
 
 Lean version: leanprover/lean4:v4.28.0
