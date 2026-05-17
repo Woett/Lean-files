@@ -45,8 +45,8 @@ axiom dusart_pi_lower (x : ℝ) (hx : x ≥ 88789) :
     x / Real.log x + x / Real.log x ^ 2 + 2 * x / Real.log x ^ 3 ≤
       ((primesUpTo x).card : ℝ)
 
-/-- For x ≥ 88789, π(x) ≤ x/log x + x/log²x + 2.53816·x/log³x -/
-axiom dusart_pi_upper (x : ℝ) (hx : x ≥ 88789) :
+/-- For x > 1, π(x) ≤ x/log x + x/log²x + 2.53816·x/log³x -/
+axiom dusart_pi_upper (x : ℝ) (hx : x > 1) :
     ((primesUpTo x).card : ℝ) ≤
       x / Real.log x + x / Real.log x ^ 2 + 2.53816 * x / Real.log x ^ 3
 
@@ -1860,7 +1860,7 @@ def piL (x : ℝ) : ℝ := x / Real.log x + x / Real.log x ^ 2 + 2 * x / Real.lo
 /-- For x ≥ 88789, π_L(x) ≤ π(x) ≤ π_U(x) -/
 theorem dusart_pi_bounds (x : ℝ) (hx : x ≥ 88789) :
     piL x ≤ ((primesUpTo x).card : ℝ) ∧ ((primesUpTo x).card : ℝ) ≤ piU x := by
-  exact ⟨dusart_pi_lower x hx, dusart_pi_upper x hx⟩
+  exact ⟨dusart_pi_lower x hx, dusart_pi_upper x (by linarith)⟩
 
 /-
 For x ≥ 2278382, ∏_{p≤x}(1-1/p) ≥ e^{-γ}/log(x) · (1 - 0.2/log³x)
