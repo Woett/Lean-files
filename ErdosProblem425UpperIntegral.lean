@@ -1,13 +1,6 @@
 import Mathlib
 
-open MeasureTheory Finset BigOperators Real Set
-open scoped Nat
-
-set_option maxHeartbeats 32000000
-set_option maxRecDepth 8000
-
-/-! # Proof that I < 9263/2000
-
+/-!
 The integral `I = ∫₀^∞ e^{-x}·√(H(x)·(eˣ-e^{-x})) dx`, where `H(x) = ∏_{p ≤
 e^{2x}, prime} (1-1/p)⁻¹`, satisfies `I < 9263/2000` conditional on an explicit
 version of Mertens' theorem by Rosser–Schoenfeld.
@@ -29,6 +22,12 @@ correctness of native_decide.
 
 Lean version: leanprover/lean4:v4.28.0
 -/
+
+open MeasureTheory Finset BigOperators Real Set
+open scoped Nat
+
+set_option maxHeartbeats 32000000
+set_option maxRecDepth 8000
 
 -- =====================================================================
 /-! ## §1. Core definitions -/
@@ -1342,5 +1341,4 @@ theorem integralI_lt_9263_div_2000 :
   · rw [MeasureTheory.integral_undef hint]
     norm_num
 
-#show_unused integralI_lt_9263_div_2000
 #print axioms integralI_lt_9263_div_2000
