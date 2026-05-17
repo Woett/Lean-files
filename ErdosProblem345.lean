@@ -2,8 +2,8 @@ import Mathlib
 
 /-
 In this file we prove that every N ≥ (200d)^(d³) can be written as a sum of
-distinct d-th powers of natural numbers. This is a strengthening of a result by
-Kim.
+distinct d-th powers of natural numbers. For d ≥ 9 we obtain a bound of
+(4d)^(d³) instead. This strengthens a result by Kim.
 
 Kim, D. On the largest integer that is not a sum of distinct positive nth
 powers, Journal of Integer Sequences, Volume 20, Issue 7 (2017).
