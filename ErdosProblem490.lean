@@ -6,8 +6,8 @@ a formalization of this result, which obtains an explicit constant C = 60 for
 sufficiently large n. For this we need various explicit estimates on primes of
 Dusart that are recorded at the start of the file.
 
-Dusart, P. Explicit estimates of some functions over primes. Ramanujan J 45,
-227–251 (2018)
+Dusart, P. Explicit estimates of some functions over primes. Ramanujan J. 45,
+227–251 (2018).
 
 The proof is an improved version of Szeméredi's original argument, which was
 written down by ChatGPT 5.5 Pro.
