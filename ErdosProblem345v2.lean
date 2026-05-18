@@ -39,8 +39,6 @@ structure SignedBlock (p : Polynomial ℤ) (a : ℤ) where
 
 end
 
-/-! ===== Tail Lemmas ===== -/
-
 open Polynomial BigOperators Finset
 
 /-- The defining property of τ_p(G): for all u, v with T ≤ u < v ≤ u + G,
@@ -55,8 +53,7 @@ theorem tauProp_pos {p : Polynomial ℤ} {G T : ℕ} (hG : 1 ≤ G)
     0 < p.eval (u : ℤ) :=
   (hT u (u + 1) hu (by omega) (by omega)).1
 
-/-! ===== Interval Completion =====
-
+/-
 If a finite index set I represents K consecutive integers starting at C,
 and we have an infinite sequence of positive "tail" values b(t_m) satisfying
 b(t_m) ≤ K + ∑_{ν=1}^{m-1} b(t_ν), then every N ≥ C is representable.
@@ -70,7 +67,7 @@ def RepresentsInterval (b : ℕ → ℤ) (I : Finset ℕ) (C : ℤ) (K : ℕ) : 
     ∃ J : Finset ℕ, J ⊆ I ∧ ∑ i ∈ J, b i = N
 
 /-
-Helper: inductive step. If I_m represents [C, C + K - 1 + S_m] where
+Inductive step; if I_m represents [C, C + K - 1 + S_m] where
     S_m = ∑_{ν=1}^m b(t_ν), and b(t_{m+1}) ≤ K + S_m, and t_{m+1} ∉ I_m,
     then I_{m+1} = I_m ∪ {t_{m+1}} represents [C, C + K - 1 + S_{m+1}].
 -/
@@ -127,14 +124,11 @@ theorem interval_completion_nat
   generalize_proofs at *; (
   exact fun N hN => by obtain ⟨ m, hm ⟩ := h_exists_m N hN; obtain ⟨ J, hJ₁, hJ₂ ⟩ := h_ind m N hN hm; exact ⟨ J, fun j hj => by have := hJ₁ hj; aesop, hJ₂ ⟩ ;))
 
-/-! ===== Elementary Bounds ===== -/
-
 open Polynomial BigOperators Finset
 
-/-! ## Elementary ratio bound
-
-For every d ≥ 1, (1 + 1/(6d))^d ≤ 6/5. -/
-
+/-
+For every d ≥ 1, (1 + 1/(6d))^d ≤ 6/5.
+-/
 theorem elementary_ratio_bound (d : ℕ) (hd : 1 ≤ d) :
     (1 + 1 / (6 * (d : ℚ))) ^ d ≤ 6 / 5 := by
   -- Let's rewrite the inequality as $(1 + 1/(6d))^d \leq 6/5$.
@@ -161,14 +155,6 @@ noncomputable def Hzero (p : Polynomial ℤ) : ℤ :=
   p.leadingCoeff + ∑ i ∈ Finset.range p.natDegree, |p.coeff i|
 
 open Polynomial BigOperators Finset
-
-/-! ## Iterated additive difference
-
-For h = (h₀, ..., h_{d-1}) ∈ ℕ^d,
-  ∑_{ε ∈ {0,1}^d} (-1)^{d - ∑ εᵢ} p(X + ∑ εᵢhᵢ) = A·d!·∏hᵢ
-as a polynomial identity in ℤ[X].
-
-We formalize the key special case: for a single difference operator. -/
 
 /-- The difference operator Δ_h f(X) = f(X + h) - f(X). -/
 noncomputable def diffOp (h : ℤ) (f : Polynomial ℤ) : Polynomial ℤ :=
@@ -237,13 +223,9 @@ theorem iterated_diff_const (p : Polynomial ℤ) (d : ℕ) (hd : p.natDegree = d
 
 open Polynomial BigOperators Finset
 
-/-! ## The explicit tail parameter -/
-
 /-- The explicit tail parameter 𝔗_p(G) = max(6dG, ⌈4H₀(p)/A⌉). -/
 noncomputable def explicitTailParam (p : Polynomial ℤ) (G : ℕ) : ℕ :=
   max (6 * p.natDegree * G) (Int.toNat ⌈(4 * Hzero p : ℚ) / p.leadingCoeff⌉)
-
-/-! ## Coefficient bounds -/
 
 /-- p(x) ≥ Ax^d - H₀(p)x^{d-1} for x ≥ 1. -/
 theorem eval_lower_bound (p : Polynomial ℤ) (x : ℕ) (hx : 1 ≤ x)
@@ -268,8 +250,6 @@ theorem eval_upper_bound (p : Polynomial ℤ) (x : ℕ) (hx : 1 ≤ x)
   norm_num [ add_mul ];
   exact le_add_of_nonneg_of_le ( mul_nonneg hA.le ( pow_nonneg ( Nat.cast_nonneg _ ) _ ) ) ( by rw [ Finset.sum_mul _ _ _ ] ; exact Finset.sum_le_sum fun i hi => by cases abs_cases ( p.coeff i ) <;> nlinarith [ pow_pos ( by positivity : 0 < ( x : ℤ ) ) i, pow_le_pow_right₀ ( by linarith : 1 ≤ ( x : ℤ ) ) ( show i ≤ p.natDegree - 1 from Nat.le_sub_one_of_lt ( Finset.mem_range.mp hi ) ) ] )
 
-/-! ## Helper lemmas for explicit tau bound -/
-
 /-- If u ≥ 4H₀/A and u ≥ 1, then p(u) > 0. -/
 theorem eval_pos_of_large (p : Polynomial ℤ) (u : ℕ)
     (hA : 0 < p.leadingCoeff) (hd : 1 ≤ p.natDegree)
@@ -282,9 +262,7 @@ theorem eval_pos_of_large (p : Polynomial ℤ) (u : ℕ)
   · nlinarith [ show 0 < ( u : ℤ ) * u ^ ‹_› by positivity, show 0 < ( u : ℤ ) ^ 2 * u ^ ‹_› by positivity ]
 
 /-
-The explicit tau bound: τ_p(G) ≤ 𝔗_p(G).
-
-  That is, explicitTailParam p G satisfies the TauProp for gap G.
+The explicit tau bound: τ_p(G) ≤ 𝔗_p(G). That is, explicitTailParam p G satisfies the TauProp for gap G.
 -/
 set_option maxHeartbeats 1600000 in
 theorem explicit_tau_bound (p : Polynomial ℤ) (G : ℕ)
@@ -423,18 +401,12 @@ theorem explicit_tau_bound (p : Polynomial ℤ) (G : ℕ)
     · exact mul_le_mul_of_nonneg_left ( by linarith [ ( by norm_cast : ( p.leadingCoeff : ℚ ) * u ^ p.natDegree ≤ eval ( u : ℤ ) p + Hzero p * u ^ ( p.natDegree - 1 ) ) ] ) zero_le_two
   exact ⟨h_pos, h_mono, h_bound⟩
 
-/-
-# Signed Block Construction
-
-Construction of signed a-blocks via iterated finite differences and Bézout's identity.
--/
-
 open Polynomial BigOperators Finset
 
-/-! ## Inductive P/N construction
-
+/-
 We build disjoint Finset pairs (P, N) tracking which offsets get positive
-vs negative signs when expanding the iterated difference operator. -/
+vs negative signs when expanding the iterated difference operator.
+-/
 
 /-- One step of the P/N construction: applying diffOp with shift h
     transforms (P, N) to (P.image(·+h) ∪ N, P ∪ N.image(·+h)). -/
@@ -578,17 +550,6 @@ theorem signed_block_s (p : Polynomial ℤ) (hd : 1 ≤ p.natDegree) :
     · exact ⟨ by exact ( foldl_eval_eq_pn p ( canonicalS p.natDegree ) ( canonicalS_inc p.natDegree ) ) |>.1, fun x => Or.inl <| by simp +decide [ Polynomial.eval_prod ] ⟩;
     · intro x; specialize h; replace h := h.2 x; simp_all +decide [ Polynomial.eval_prod ] ;
 
-/-
-# Bounded Signed Block Construction
-
-Helper lemmas for proving that the canonical signed block has L ≤ Λ_d.
-Key ingredients:
-1. Elements of buildPN(canonicalR d) are < 2^d
-2. Elements of buildPN(canonicalS d) are < 2^(d+1)
-3. Bounded Bézout coefficients: λ+μ < 2^{d(d-1)/2+d+1}
-4. Construction of signed block with L ≤ Λ_d = 2^{d(d-1)/2+2d+2}
--/
-
 open Polynomial BigOperators Finset
 
 noncomputable section
@@ -699,19 +660,7 @@ lemma bounded_bezout_canonical (d : ℕ) (hd : 1 ≤ d) :
 
 end
 
-/-
-Every N ≥ C(p; R, B) is a sum of distinct positive values p(n).
-This establishes the existence of thresholds and the bound θ_p ≤ C(p; R, B).
-
-We formalize the key components:
-1. The notion of a "threshold" for a polynomial
-2. The existence of thresholds given residue data and signed blocks
-3. The optimized explicit bound
--/
-
 open Polynomial BigOperators Finset
-
-/-! ## Threshold definition -/
 
 /-- A threshold for p: every N ≥ C is representable as a sum of distinct
     positive values p(n) with distinct indices. -/
@@ -720,12 +669,7 @@ def IsThreshold (p : Polynomial ℤ) (C : ℕ) : Prop :=
     ∃ J : Finset ℕ, (∀ j ∈ J, 0 < p.eval (j : ℤ)) ∧
       (N : ℤ) = ∑ i ∈ J, p.eval (i : ℤ)
 
-/-! ## Residue datum definition -/
-
-/-- A residue datum modulo a for p is:
-    - A finite set E ⊆ ℕ
-    - For each r ∈ {0, ..., a-1}, a subset F_r ⊆ E
-    - Such that ∑_{e ∈ F_r} p(e) ≡ r (mod a) -/
+/-- A residue datum modulo a for p is a finite set E ⊆ ℕ -/
 structure ResidueDatum (p : Polynomial ℤ) (a : ℕ) where
   E : Finset ℕ
 
@@ -802,8 +746,9 @@ theorem isThreshold_of_data
     · exact h_pos (t m) (ht_ge m),
     hJ2.symm⟩
 
-/-! ## Index bound -/
-
+/-
+Index bound
+-/
 theorem construction_indices_ge
     (p : Polynomial ℤ)
     (a : ℕ) (_ha : 0 < a)
@@ -820,8 +765,6 @@ theorem construction_indices_ge
 
 end
 
-/-! ===== Height-Only Bound Definitions ===== -/
-
 open Polynomial BigOperators Finset
 
 noncomputable section
@@ -833,12 +776,9 @@ theorem isThreshold_mono {p : Polynomial ℤ} {C C' : ℕ}
     (h : IsThreshold p C) (hle : C ≤ C') : IsThreshold p C' :=
   fun N hN => h N (le_trans hle hN)
 
-/-! ## Canonical signed block bound
-
+/-
 The canonical signed block B_d satisfies L ≤ Λ_d.
-This requires bounding the Bézout coefficients and block element sizes.
 -/
-
 set_option maxHeartbeats 1600000 in
 theorem canonical_signed_block_bound (p : Polynomial ℤ)
     (hd : 1 ≤ p.natDegree):
@@ -897,8 +837,6 @@ theorem canonical_signed_block_bound (p : Polynomial ℤ)
 
 end
 
-/-! ===== Monomial Polynomial ===== -/
-
 open Nat Polynomial BigOperators Finset
 
 noncomputable section
@@ -923,18 +861,10 @@ theorem monomialPoly_natDegree_pos (d : ℕ) (hd : 1 ≤ d) :
 
 end
 
-/-! ===== Subset Sums of Powers ===== -/
-
-/-!
-# Subset Sums of d-th Powers Cover All Residues Modulo d!
-
-We prove that for d ≥ 1, every interval of 4^d consecutive integers is (d, d!)-complete:
-the subset sums of d-th powers from such an interval cover all residues modulo d!.
+/-
+The subset sums of d-th powers from an interval of length 4^d cover all residues modulo d!.
 -/
-
 open Finset BigOperators
-
-/-! ## Definitions -/
 
 /-- An interval of L consecutive integers starting at b. -/
 def Intv (b : ℤ) (L : ℕ) : Finset ℤ := Finset.Ico b (b + (L : ℤ))
@@ -976,7 +906,6 @@ theorem mem_Intv_iff (b : ℤ) (L : ℕ) (x : ℤ) :
 theorem Intv_subset_of_le (b : ℤ) (L L' : ℕ) (h : L ≤ L') :
     Intv b L ⊆ Intv b L' := by
   intro x hx; simp [mem_Intv_iff] at *; omega
-
 
 theorem sharpened_valuation_bound (p n : ℕ) (hp : Nat.Prime p) (hn : 1 ≤ n) :
     ap p n * (p - 1) ≤ n - 1 := by
@@ -1061,8 +990,6 @@ theorem residue_count_in_Intv (M L : ℕ) (hM : 1 ≤ M) (b : ℤ) (r : ℤ) :
   refine' h_set_card ▸ Finset.card_mono _;
   exact fun x hx => Finset.mem_filter.mpr ⟨ Finset.mem_Ico.mpr ⟨ by linarith [ Finset.mem_Ico.mp ( Finset.mem_filter.mp hx |>.1 ) ], by linarith [ Finset.mem_Ico.mp ( Finset.mem_filter.mp hx |>.1 ) ] ⟩, Finset.mem_filter.mp hx |>.2 ⟩
 
-/-! ## Counting usable elements -/
-
 /-
 The number of usable elements in an interval of length ≥ L_p(d) is at least p^{a_p(d)} - 1.
 -/
@@ -1117,8 +1044,6 @@ theorem count_usable_elements (p d : ℕ) (hp : Nat.Prime p) (hpd : p ≤ d)
     rw [ mul_comm, geom_sum_mul ];
   exact h_final ▸ h_card.trans ( Finset.card_mono h_count )
 
-/-! ## Vanishing and units -/
-
 /-
 Vanishing at earlier prime powers: if q < p are primes ≤ d and n ∈ U_p(J),
     then n^d ≡ 0 (mod q^{a_q(d)}).
@@ -1167,11 +1092,9 @@ theorem usableSet_disjoint (p q : ℕ) (hp : Nat.Prime p) (hpq : p < q)
   · refine' Finset.dvd_prod_of_mem _ _;
     exact Finset.mem_filter.mpr ⟨ Finset.mem_range.mpr ( by omega ), hp ⟩
 
-/-! ## Subset sums of units -/
-
 /-
-Invariant subsets lemma: if A ⊆ ZMod m is nonempty with A + {u} = A and u is a unit,
-    then A = univ.
+Invariant subsets lemma: if A ⊆ ZMod m is nonempty with A + {u} = A and u is a
+unit, then A = univ.
 -/
 theorem invariant_subset_is_full (m : ℕ) [NeZero m] (u : ZMod m)
     (hu : IsUnit u) (A : Finset (ZMod m)) (hA : A.Nonempty)
@@ -1265,8 +1188,6 @@ theorem completeness_from_many_units (A : Finset ℤ) (e m : ℕ) [NeZero m] (hm
   use Finset.image x S;
   simp_all +decide [ Finset.subset_iff, hx.2.eq_iff ]
 
-/-! ## Completeness for one prime -/
-
 /-
 For prime p ≤ d with d ≥ 1, p^{a_p(d)} ≥ 2.
 -/
@@ -1291,8 +1212,6 @@ theorem completeness_for_one_prime (p d : ℕ) (hp : Nat.Prime p) (hpd : p ≤ d
   · exact ppow_ap_ge_two p d hp hpd;
   · exact count_usable_elements p d hp hpd b L hL;
   · exact ⟨ fun h => fun _ => h, fun h => h fun x hx => units_at_current_prime p d hp _ x hx ⟩
-
-/-! ## Triangular CRT construction -/
 
 /-
 Triangular Chinese-remainder construction.
@@ -1345,8 +1264,6 @@ theorem triangular_crt {t : ℕ} {e : ℕ}
           · ring;
           · exact Finset.disjoint_left.mpr fun x hx₁ hx₂ => Finset.disjoint_left.mp ( hdisjoint _ _ <| ne_of_lt <| Fin.castSucc_lt_last <| Classical.choose <| Finset.mem_biUnion.mp <| hB₁.1 hx₁ ) ( Classical.choose_spec ( Finset.mem_biUnion.mp <| hB₁.1 hx₁ ) |>.2 ) ( hB₂.1 hx₂ );
       erw [ ← ZMod.intCast_eq_intCast_iff ] at * ; aesop
-
-/-! ## Main theorem: exact covering -/
 
 instance factorial_neZero (d : ℕ) : NeZero d.factorial :=
   ⟨Nat.factorial_ne_zero d⟩
@@ -1483,7 +1400,6 @@ theorem interval_4d_complete (d : ℕ) (hd : 1 ≤ d) (b : ℤ) :
   · interval_cases d ; simp_all +decide [ IsEMComplete ];
     simp +decide [ ZMod, Fin.eq_zero ];
     exact ⟨ ∅, Finset.empty_subset _ ⟩
-/-! ===== Doubling and Monomial Helpers ===== -/
 
 open Nat Polynomial BigOperators Finset
 
@@ -1586,8 +1502,6 @@ theorem crt_doubling (p : Polynomial ℤ)
       have hu_blk : T_blk ≤ u := by omega
       exact (hT_blk u v hu_blk huv hgap).2.2
 
-/-! ## Monomial-specific helpers -/
-
 theorem monomial_tau_eq (d G : ℕ) (hd : 1 ≤ d) :
     explicitTailParam (monomialPoly d) G = max (6 * d * G) 4 := by
   unfold explicitTailParam;
@@ -1609,19 +1523,9 @@ theorem monomial_K_eq (d : ℕ) (hd : 2 ≤ d) :
 
 end
 
-
-/-!
-# Bound Tracking Lemmas for the Pure Exponential Bound
-
-We prove the numerical inequalities needed to show that
-`M + C₁ + 1 ≤ 32^{d³}` for the small-eMax construction.
--/
-
 open Polynomial Finset BigOperators
 
 noncomputable section
-
-/-! ## Key arithmetic lemmas -/
 
 /-
 6d ≤ 2^d for d ≥ 6
@@ -1657,11 +1561,9 @@ lemma bound_assembly (d : ℕ) (hd : 7 ≤ d)
   refine le_trans h_final ?_;
   rw [ show ( 32 : ℤ ) = 2 ^ 5 by norm_num, ← pow_mul ] ; exact Int.add_one_le_of_lt ( pow_lt_pow_right₀ ( by norm_num ) ( by linarith ) ) ;
 
-/-! ## C₁ bound from component bounds -/
-
 /-
 Each block term is bounded: if BL ≤ 2^(d²), Qm1 ≤ 2^(3d²+2d+1),
-    Y ≤ 2^(d²+d+2), then (Q-1)*BL*(Y + (Q-1)*(BL+1))^d ≤ 2^(4d³+6d²+5d+1).
+    Y ≤ 2^(d²+d+2), then (Q-1)BL(Y + (Q-1)*(BL+1))^d ≤ 2^(4d³+6d²+5d+1).
 -/
 lemma C1_bound_from_components (d Qm1 BL Y : ℕ)
     (hBL : BL ≤ 2 ^ (d ^ 2))
@@ -1678,8 +1580,6 @@ lemma C1_bound_from_components (d Qm1 BL Y : ℕ)
   refine' le_trans ( mul_le_mul_of_nonneg_right ( mul_le_mul ( Nat.cast_le.mpr hQm1 ) ( Nat.cast_le.mpr hBL ) ( by positivity ) ( by positivity ) ) ( by positivity ) ) _ ; ring_nf;
   norm_num [ mul_assoc, ← pow_add ] ; ring_nf;
   rw [ show ( 8 : ℤ ) = 2 ^ 3 by norm_num, pow_right_comm ] ; ring_nf ; norm_num
-
-/-! ## Component bound lemmas -/
 
 /-
 M ≤ 2^(3d²+2d) follows from M ≤ 4^d * (8^d)^d
@@ -1728,8 +1628,6 @@ lemma Q_bound (d : ℕ) (hd : 6 ≤ d) (M : ℤ) (K : ℕ)
   · nlinarith [ Int.toNat_of_nonneg ( by linarith : 0 ≤ M + K ), Nat.self_le_factorial d, pow_pos ( by linarith : 0 < 2 ) ( 3 * d ^ 2 + 2 * d + 1 ) ];
   · norm_num
 
-/-! ## Final bound tracking assembly -/
-
 /-- The complete bound tracking: given abstract bounds on M, K, Q-1, B.L, Y, and C₁,
     prove M + C₁ + 1 ≤ 32^(d³). -/
 lemma bound_tracking_final_abstract (d : ℕ) (hd : 7 ≤ d) (M C₁ : ℤ)
@@ -1746,10 +1644,6 @@ lemma bound_tracking_final_abstract (d : ℕ) (hd : 7 ≤ d) (M C₁ : ℤ)
   exact bound_assembly d hd M C₁ hM_le' hC₁_le'
 
 end
-
-/-!
-# Bridge lemmas for connecting construction to bound tracking
--/
 
 open Polynomial Finset BigOperators
 
@@ -1798,18 +1692,13 @@ lemma monomial_K_value (d : ℕ) (hd : 2 ≤ d) (K : ℕ)
 
 end
 
-/-!
-# Pure Exponential Bound via Small-eMax Construction
-
-We prove `IsThreshold (monomialPoly d) (400^{d³})` for d > 100.
--/
-
 open Polynomial Finset BigOperators
 
 noncomputable section
 
-/-! ## Generalized represents_interval_construction -/
-
+/-
+Generalized represents_interval_construction
+-/
 set_option maxHeartbeats 3200000 in
 theorem represents_interval_construction_gen
     (p : Polynomial ℤ)
@@ -1880,8 +1769,9 @@ theorem represents_interval_construction_gen
       · intro x hx y hy z hz; nlinarith [ show x ≤ E.sup id from Finset.le_sup ( f := id ) ( hF_sub r hx ), show z < B.L from B.hP_bound z hz ] ;
       · intro a ha x hx₁ hx₂ y hy; nlinarith [ show a ≤ E.sup id from Finset.le_sup ( f := id ) ( hF_sub r ha ), show y < B.L from B.hN_bound y hy ] ;)
 
-/-! ## Conversion lemmas -/
-
+/-
+Conversion lemmas
+-/
 noncomputable def smallEmaxDatum (d : ℕ) :
     ResidueDatum (monomialPoly d) d.factorial where
   E := Finset.Icc 1 (4 ^ d)
@@ -1898,8 +1788,9 @@ theorem smallEmaxDatum_ePos (d : ℕ):
     ∀ e ∈ (smallEmaxDatum d).E, 1 ≤ e := by
   intro e he; simp [smallEmaxDatum] at he; exact he.1
 
-/-! ## Shifted congruence -/
-
+/-
+Shifted congruence
+-/
 theorem shifted_coverage_nat (d : ℕ) (hd : 1 ≤ d) (R₀ : ℕ)
     (r : Fin d.factorial) :
     ∃ F : Finset ℕ, F ⊆ Finset.Icc 1 (4 ^ d) ∧
@@ -1932,8 +1823,6 @@ theorem shiftedF_cong (d : ℕ) (hd : 1 ≤ d) (R₀ : ℕ)
       (∑ e ∈ shiftedF d hd R₀ r,
         ((R₀ : ℤ) + ↑e) ^ d - ↑(r : ℕ)) :=
   (shifted_coverage_nat d hd R₀ r).choose_spec.2
-
-/-! ## Numerical bound lemmas -/
 
 /-
 For d ≥ 10, 6d + 2 ≤ 2^d.
@@ -2037,21 +1926,15 @@ theorem isThreshold_32_pow_ge9 (d : ℕ) (hd : 9 ≤ d) :
   set C₀ : ℤ := M - ↑a + 1 + C₁ with hC₀_def
   have hThreshold : IsThreshold p C₀.toNat :=
     isThreshold_of_data p T₀ K hK_eq _ C₀ hI_ge hI_rep h_pos hDoubling
-  -- Bound tracking: C₀.toNat ≤ 400^{d³}
   apply isThreshold_mono hThreshold
-  -- Goal: C₀.toNat ≤ 400 ^ (d ^ 3)
-  -- Step 1: C₀.toNat ≤ (M + C₁ + 1).toNat
+  -- C₀.toNat ≤ (M + C₁ + 1).toNat
   have hM_nn : 0 ≤ M :=
     Finset.le_sup'_of_le k (Finset.mem_univ ⟨0, ha_pos⟩) (hR₀_nonneg ⟨0, ha_pos⟩)
   have hC₁_nn : 0 ≤ C₁ := Finset.sum_nonneg fun i _ =>
     Finset.sum_nonneg fun v hv =>
       le_of_lt (h_pos (Y + i * (B.L + 1) + v) (by omega))
-  -- Step 2: M + C₁ + 1 ≤ 32^{d³}
-  -- We need to show M + C₁ + 1 ≤ 32^(d³) to apply C0_toNat_le
+  -- M + C₁ + 1 ≤ 32^{d³}
   have hp_eval : ∀ x : ℤ, p.eval x = x ^ d := by intro x; simp [hp_def, monomialPoly]
-  -- Use bound_tracking_final_abstract with Qm1=Q-1, BL=B.L, Y=Y
-  -- and verify all the component bounds
-  -- Prove M + C₁ + 1 ≤ 32^(d³) using bound_tracking_final_abstract
   have hp_eval : ∀ x : ℤ, p.eval x = x ^ d := by intro x; simp [hp_def, monomialPoly]
   -- M bound
   have hT_res_eq : T_res = 6 * d * (4 ^ d + 1) := by
@@ -2102,13 +1985,12 @@ theorem isThreshold_32_pow_ge9 (d : ℕ) (hd : 9 ≤ d) :
       (Q - 1) B.L Y hBL_le hQm1_le hY_le hC₁_le)
 
 end
-/-! ===== Main Theorem ===== -/
 
 open Polynomial Finset BigOperators
 
-/-- **Main Theorem (Pure Exponential Bound).**
+/-- **Main Theorem**
 For every d ≥ 9 and every N ≥ 32^{d³}, N can be written as a sum of distinct
-d-th powers of natural numbers. The constant 32 is independent of d. -/
+d-th powers of natural numbers -/
 theorem main_theorem_constant_exp (d : ℕ) (hd : 9 ≤ d) :
     ∀ N : ℕ, 32 ^ (d ^ 3) ≤ N →
       ∃ J : Finset ℕ, N = ∑ i ∈ J, i ^ d := by
