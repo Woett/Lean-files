@@ -1,7 +1,7 @@
 import Mathlib
 
 /-
-In this file we prove that if d ≥ 9, then every N ≥ 2^{5d²+8d+4} can be written
+In this file we prove that if d ≥ 9, then every N ≥ 2^{5d²+4d+1} can be written
 as a sum of distinct d-th powers of natural numbers. The assumption d ≥ 9 is
 fine, as the exact bound for d < 9 is already known; https://oeis.org/A001661.
 With the bound below we strengthen a result by Kim.
@@ -13,7 +13,7 @@ In principle, sufficiently good bounds on this quantity could answer Erdős
 Problem #345 (https://www.erdosproblems.com/345) in the negative.
 
 Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) did the formalization
-based on an improved version of Kim's proof, which was written down by ChatGPT.
+based on Kim's proof strategy, which was written down by ChatGPT.
 
 Lean version: leanprover/lean4:v4.28.0
 -/
@@ -1238,28 +1238,28 @@ lemma factorial_UV_le (d : ℕ) (hd : 1 ≤ d) :
   convert h_mul using 1 ; ring
 
 /-
-For d ≥ 9: 6d² ≤ 2^{d+3}.
+For d ≥ 9: 4d² ≤ 2^d.
 -/
-lemma six_dsq_le (d : ℕ) (hd : 9 ≤ d) : 6 * d ^ 2 ≤ 2 ^ (d + 3) := by
-  -- We proceed by induction on $d$.
-  induction' hd with d hd iharith;
-  · decide +revert;
-  · norm_num [ pow_succ' ] at * ; nlinarith [ Nat.pow_le_pow_right ( by decide : 1 ≤ ( 2:ℕ ) ) hd ]
+lemma four_dsq_le (d : ℕ) (hd : 9 ≤ d) : 4 * d ^ 2 ≤ 2 ^ d := by
+  induction' hd with d hd ih <;> norm_num [ Nat.pow_succ' ] at * ; nlinarith
 
 /-
-If C_neg ≤ 2^{5d²+8d+2}, d!B ≤ 2^{2d²}, M ≤ 2^{3d²+2d},
-then C_neg + d!B + M + 1 ≤ 2^{5d²+8d+4} for d ≥ 9.
+If C_neg ≤ 2^{5d²+4d-1}, d!B ≤ 2^{2d²}, M ≤ 2^{3d²+2d},
+then C_neg + d!B + M + 1 ≤ 2^{5d²+4d+1} for d ≥ 9.
 -/
 lemma improved_bound_assembly (d : ℕ) (hd : 9 ≤ d)
     (C_neg M aB : ℤ)
-    (h1 : C_neg ≤ 2 ^ (5 * d ^ 2 + 8 * d + 2))
+    (h1 : C_neg ≤ 2 ^ (5 * d ^ 2 + 4 * d - 1))
     (h2 : aB ≤ 2 ^ (2 * d ^ 2))
     (h3 : M ≤ 2 ^ (3 * d ^ 2 + 2 * d)) :
-    C_neg + aB + M + 1 ≤ 2 ^ (5 * d ^ 2 + 8 * d + 4) := by
-  have h_bounds : aB ≤ 2^(5 * d^2 + 8 * d + 2) ∧ M ≤ 2^(5 * d^2 + 8 * d + 2) := by
-    exact ⟨ h2.trans ( pow_le_pow_right₀ ( by decide ) ( by nlinarith ) ), h3.trans ( pow_le_pow_right₀ ( by decide ) ( by nlinarith ) ) ⟩;
-  ring_nf at *;
-  nlinarith [ pow_le_pow_right₀ ( show 1 ≤ 2 by norm_num ) ( show d * 8 ≥ 0 by positivity ), pow_le_pow_right₀ ( show 1 ≤ 2 by norm_num ) ( show d ^ 2 * 5 ≥ 0 by positivity ) ]
+    C_neg + aB + M + 1 ≤ 2 ^ (5 * d ^ 2 + 4 * d + 1) := by
+  -- Since $2d^2 \leq 5d^2 + 4d - 1$ and $3d^2 + 2d \leq 5d^2 + 4d - 1$ for $d \geq 1$, all three terms are $\leq 2^{5d^2 + 4d - 1}$.
+  have h4 : 2 * d ^ 2 ≤ 5 * d ^ 2 + 4 * d - 1 ∧ 3 * d ^ 2 + 2 * d ≤ 5 * d ^ 2 + 4 * d - 1 := by
+    grind +qlia;
+  -- Therefore, $C_neg + aB + M + 1 \leq 3 \cdot 2^{5d^2 + 4d - 1} + 1$.
+  have h5 : C_neg + aB + M + 1 ≤ 3 * 2 ^ (5 * d ^ 2 + 4 * d - 1) + 1 := by
+    linarith [ pow_le_pow_right₀ ( by decide : 1 ≤ 2 ) h4.1, pow_le_pow_right₀ ( by decide : 1 ≤ 2 ) h4.2 ];
+  grind +suggestions
 
 /-
 A general signed block from any shift list satisfying the buildPN increasing condition.
@@ -1657,33 +1657,36 @@ lemma block_count_le (d : ℕ) (hd : 1 ≤ d) :
   nlinarith [ Nat.div_mul_le_self ( d * ( d - 1 ) ) 2, Nat.sub_add_cancel hd ]
 
 /-
-Maximum position in the bank is bounded by 2^{5d+6}
+Maximum position in the bank is bounded by 2^{5d+2}
 -/
 lemma bank_max_position_bound (d : ℕ) (hd : 9 ≤ d) (Y W : ℕ)
     (hW : W = 2 ^ (4 * d + 2))
     (hY : Y ≤ 6 * d * (W + 2) + 1)
     (T : ℕ) (hT : T ≤ 4 * d ^ 2) (e : ℕ) (he : e < W) :
-    Y + T * (W + 1) + e < 2 ^ (5 * d + 6) := by
-  have hd_large : 9 ≤ d := hd
-  have h_bound : (6 * d * (W + 2) + 1) + 4 * d ^ 2 * (W + 1) + W < 2 ^ (5 * d + 6) := by
-    subst hW;
-    induction' hd_large with d hd ih <;> norm_num [ Nat.pow_succ', Nat.pow_mul ] at *;
-    exact Nat.recOn d ( by norm_num ) fun n ihn => by norm_num [ Nat.pow_succ' ] at * ; nlinarith only [ ihn, pow_pos ( show 0 < 16 by norm_num ) n, pow_le_pow_left' ( show 32 ≥ 16 by norm_num ) n ] ;
-  exact lt_of_le_of_lt ( by nlinarith only [ hY, hT, he ] ) h_bound
+    Y + T * (W + 1) + e < 2 ^ (5 * d + 2) := by
+  -- Substitute $W = 2^{4d+2}$ into the inequality.
+  have h_subst : (6 * d * (2 ^ (4 * d + 2) + 2) + 1) + (4 * d ^ 2) * (2 ^ (4 * d + 2) + 1) + 2 ^ (4 * d + 2) < 2 ^ (5 * d + 2) := by
+    have h_dom : (4 * d ^ 2 + 6 * d + 2) * 2 ^ (4 * d + 2) < 2 ^ (5 * d + 2) := by
+      have h_dom : 4 * d ^ 2 + 6 * d + 2 < 2 ^ d := by
+        exact Nat.le_induction ( by norm_num ) ( fun k hk ih ↦ by norm_num [ Nat.pow_succ' ] at * ; nlinarith only [ hk, ih ] ) d hd;
+      exact lt_of_lt_of_le ( Nat.mul_lt_mul_of_pos_right h_dom ( by positivity ) ) ( by ring_nf; norm_num );
+    refine lt_of_le_of_lt ?_ h_dom;
+    exact Nat.recOn d ( by norm_num ) fun n ihn => by norm_num [ Nat.pow_succ', Nat.pow_mul ] at * ; nlinarith only [ ihn, Nat.one_le_pow n 16 ( by norm_num ) ] ;
+  subst hW; nlinarith;
 
 /-
-(4d²) * 2^{d-1} ≤ 2^{2d+2} for d ≥ 9, using six_dsq_le
+(4d²) * 2^{d-1} ≤ 2^{2d-1} for d ≥ 9
 -/
 lemma neg_count_bound (d : ℕ) (hd : 9 ≤ d) :
-    4 * d ^ 2 * 2 ^ (d - 1) ≤ 2 ^ (2 * d + 2) := by
-  have h_mul : 4 * d ^ 2 * 2 ^ (d - 1) ≤ 2 ^ (d + 3) * 2 ^ (d - 1) := by
+    4 * d ^ 2 * 2 ^ (d - 1) ≤ 2 ^ (2 * d - 1) := by
+  have h_mul : 4 * d ^ 2 * 2 ^ (d - 1) ≤ 2 ^ d * 2 ^ (d - 1) := by
     gcongr;
-    exact le_trans (by nlinarith) (six_dsq_le d hd);
-  exact h_mul.trans_eq ( by rw [ ← pow_add ] ; rw [ show 2 * d + 2 = d + 3 + ( d - 1 ) by omega ] )
+    exact four_dsq_le d hd;
+  exact h_mul.trans_eq ( by rw [ ← pow_add ] ; congr 1 ; omega )
 
 /-
 C_neg is bounded when all N-sets have bounded cardinality and all positions
-    are less than 2^{5d+6}.
+    are less than 2^{5d+2}.
 -/
 lemma C_neg_le_pow (d Jb Dd : ℕ) (hd : 9 ≤ d)
     (hJbDd : Jb + Dd ≤ 4 * d ^ 2)
@@ -1696,32 +1699,33 @@ lemma C_neg_le_pow (d Jb Dd : ℕ) (hd : 9 ≤ d)
     (hNv_bound : ∀ i, ∀ v ∈ Nv i, v < W) :
     (∑ j : Fin Jb, ∑ v ∈ Nu j, ((↑Y + ↑j.val * (↑W + 1) : ℤ) + ↑v) ^ d +
      ∑ i : Fin Dd, ∑ v ∈ Nv i, ((↑Y + (↑Jb + ↑i.val) * (↑W + 1) : ℤ) + ↑v) ^ d)
-      ≤ 2 ^ (5 * d ^ 2 + 8 * d + 2) := by
-  have h_sum_bound : ∀ j : Fin Jb, ∑ v ∈ Nu j, (Y + (j : ℕ) * (W + 1) + v : ℤ) ^ d ≤ 2 ^ (d - 1) * (2 ^ (5 * d + 6) - 1) ^ d := by
+      ≤ 2 ^ (5 * d ^ 2 + 4 * d - 1) := by
+  have h_sum_bound : ∀ j : Fin Jb, ∑ v ∈ Nu j, (Y + (j : ℕ) * (W + 1) + v : ℤ) ^ d ≤ 2 ^ (d - 1) * (2 ^ (5 * d + 2) - 1) ^ d := by
     intro j
-    have h_sum_bound : ∀ v ∈ Nu j, (Y + (j : ℕ) * (W + 1) + v : ℤ) ^ d ≤ (2 ^ (5 * d + 6) - 1) ^ d := by
+    have h_sum_bound : ∀ v ∈ Nu j, (Y + (j : ℕ) * (W + 1) + v : ℤ) ^ d ≤ (2 ^ (5 * d + 2) - 1) ^ d := by
       intro v hv
-      have h_pos : Y + (j : ℕ) * (W + 1) + v < 2 ^ (5 * d + 6) := by
+      have h_pos : Y + (j : ℕ) * (W + 1) + v < 2 ^ (5 * d + 2) := by
         convert bank_max_position_bound d hd Y W hW hY ( j : ℕ ) ( by linarith [ Fin.is_lt j ] ) v ( hNu_bound j v hv ) using 1;
       exact pow_le_pow_left₀ ( by positivity ) ( by linarith ) _;
     refine' le_trans ( Finset.sum_le_sum h_sum_bound ) _ ; norm_num [ hNu_card j ];
     exact mul_le_mul_of_nonneg_right ( mod_cast hNu_card j ) ( pow_nonneg ( sub_nonneg_of_le ( one_le_pow₀ ( by norm_num ) ) ) _ );
-  have h_sum_bound_v : ∀ i : Fin Dd, ∑ v ∈ Nv i, (Y + (Jb + i : ℕ) * (W + 1) + v : ℤ) ^ d ≤ 2 ^ (d - 1) * (2 ^ (5 * d + 6) - 1) ^ d := by
+  have h_sum_bound_v : ∀ i : Fin Dd, ∑ v ∈ Nv i, (Y + (Jb + i : ℕ) * (W + 1) + v : ℤ) ^ d ≤ 2 ^ (d - 1) * (2 ^ (5 * d + 2) - 1) ^ d := by
     intros i
-    have h_sum_bound_v_i : ∀ v ∈ Nv i, (Y + (Jb + i : ℕ) * (W + 1) + v : ℤ) ^ d ≤ (2 ^ (5 * d + 6) - 1) ^ d := by
+    have h_sum_bound_v_i : ∀ v ∈ Nv i, (Y + (Jb + i : ℕ) * (W + 1) + v : ℤ) ^ d ≤ (2 ^ (5 * d + 2) - 1) ^ d := by
       intros v hv
-      have h_pos : Y + (Jb + i : ℕ) * (W + 1) + v < 2 ^ (5 * d + 6) := by
+      have h_pos : Y + (Jb + i : ℕ) * (W + 1) + v < 2 ^ (5 * d + 2) := by
         apply bank_max_position_bound d hd Y W hW hY (Jb + i) (by
         linarith [ Fin.is_lt i ]) v (hNv_bound i v hv);
       exact pow_le_pow_left₀ ( by positivity ) ( by exact le_tsub_of_add_le_right ( mod_cast h_pos ) ) _;
     refine' le_trans ( Finset.sum_le_sum h_sum_bound_v_i ) _ ; norm_num [ mul_comm ];
     exact mul_le_mul_of_nonneg_right ( mod_cast hNv_card i ) ( pow_nonneg ( sub_nonneg_of_le ( one_le_pow₀ ( by norm_num ) ) ) _ );
-  have h_sum_bound_total : (Jb + Dd) * 2 ^ (d - 1) * (2 ^ (5 * d + 6) - 1) ^ d ≤ 2 ^ (5 * d ^ 2 + 8 * d + 2) := by
-    have h_sum_bound_total : (Jb + Dd) * 2 ^ (d - 1) ≤ 2 ^ (2 * d + 2) := by
+  have h_sum_bound_total : (Jb + Dd) * 2 ^ (d - 1) * (2 ^ (5 * d + 2) - 1) ^ d ≤ 2 ^ (5 * d ^ 2 + 4 * d - 1) := by
+    have h_sum_bound_total : (Jb + Dd) * 2 ^ (d - 1) ≤ 2 ^ (2 * d - 1) := by
       exact le_trans ( Nat.mul_le_mul_right _ hJbDd ) ( neg_count_bound d hd );
     refine le_trans ( Nat.mul_le_mul_right _ h_sum_bound_total ) ?_;
     refine' le_trans ( Nat.mul_le_mul_left _ ( Nat.pow_le_pow_left ( Nat.sub_le _ _ ) _ ) ) _;
-    rw [ ← pow_mul ] ; ring_nf ; norm_num;
+    rw [ ← pow_mul, ← pow_add ];
+    grind +revert
   refine le_trans ?_ ( Nat.cast_le.mpr h_sum_bound_total );
   convert add_le_add ( Finset.sum_le_sum fun j _ => h_sum_bound j ) ( Finset.sum_le_sum fun i _ => h_sum_bound_v i ) using 1 ; norm_num ; ring
 
@@ -1740,7 +1744,7 @@ lemma n_upper_bound_helper (d : ℕ) (hd : 9 ≤ d)
   -- By dividing both sides of the inequality $a * n < a * Vn * 2^Dd + M + K + 1$ by $a$, we get $n < Vn * 2^Dd + (M + K + 1) / a$.
   have h_div : n < Vn * 2^Dd + (2^(3*d^2 + 2*d + 1) + 1) := by
     nlinarith [ pow_pos ( zero_lt_two' ℤ ) ( 3 * d ^ 2 + 2 * d + 1 ) ];
-  -- We'll use that $Dd + Jb = d*(d-1)/2 + 4d^2 + 1$ and simplify the exponent.
+  -- We'll use that $Dd + Jb = d*(d-1)/2 + 3d^2 + 1 \geq 3d^2 + 2d + 2$.
   have h_exp : Dd + Jb ≥ 3 * d^2 + 2 * d + 2 := by
     nlinarith only [ hd, hDd, hJb, Nat.div_add_mod ( d * ( d - 1 ) ) 2, Nat.mod_lt ( d * ( d - 1 ) ) two_pos, Nat.sub_add_cancel ( by linarith : 1 ≤ d ) ];
   -- By combining the inequalities, we get $n < 2^{d^2} + 2^{3d^2 + 2d + 2}$.
@@ -1756,7 +1760,7 @@ lemma n_upper_bound_helper (d : ℕ) (hd : 9 ≤ d)
   nlinarith only [ show 2 ^ ( d * 2 ) > 0 by positivity, show 2 ^ ( d ^ 2 * 3 ) > 0 by positivity, show 2 ^ d ^ 2 > 0 by positivity, show 2 ^ ( d * 2 ) * 2 ^ ( d ^ 2 * 3 ) > 2 ^ d ^ 2 by exact lt_of_lt_of_le ( pow_lt_pow_right₀ ( by decide ) ( by nlinarith only [ hd ] ) ) ( Nat.le_mul_of_pos_left _ ( by positivity ) ) ]
 
 set_option maxHeartbeats 3200000 in
-/-- For d ≥ 9, there exists I and C₀ ≤ 2^{5d²+8d+4}
+/-- For d ≥ 9, there exists I and C₀ ≤ 2^{5d²+4d+1}
     such that I represents [C₀, C₀+K) and the doubling condition holds. -/
 theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
     let p := monomialPoly d
@@ -1767,7 +1771,7 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
       RepresentsInterval (fun j => p.eval (j : ℤ)) I C₀ K ∧
       (∀ u v : ℕ, T₀ ≤ u → u ∉ I → v ∉ I → u < v →
         (∀ w, u < w → w < v → w ∈ I) → p.eval (v : ℤ) ≤ 2 * p.eval (u : ℤ)) ∧
-      C₀.toNat ≤ 2 ^ (5 * d ^ 2 + 8 * d + 4) := by
+      C₀.toNat ≤ 2 ^ (5 * d ^ 2 + 4 * d + 1) := by
   set p := monomialPoly d with hp_def
   have hd1 : 1 ≤ d := by omega
   have hd2 : 2 ≤ d := by omega
@@ -1859,7 +1863,7 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
     · exact lt_add_of_lt_of_nonneg ( lt_add_of_lt_of_nonneg ( lt_max_of_lt_left ( by linarith ) ) ( Nat.zero_le _ ) ) ( Nat.zero_le _ );
     · exact lt_add_of_lt_of_nonneg ( lt_add_of_lt_of_nonneg ( lt_max_of_lt_left ( by linarith ) ) ( Nat.zero_le _ ) ) ( Nat.zero_le _ )
   -- Condition 4: bound
-  have hCond4 : C₀.toNat ≤ 2 ^ (5 * d ^ 2 + 8 * d + 4) := by
+  have hCond4 : C₀.toNat ≤ 2 ^ (5 * d ^ 2 + 4 * d + 1) := by
     rw [Int.toNat_le]
     -- Step 1: Bound M
     have hT_res_eq : T_res = 6 * d * (R.eMax + 1) := by
@@ -1887,7 +1891,7 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
       ring_nf;
       rw [ show 4 ^ d = 2 ^ ( d * 2 ) by rw [ pow_mul' ] ; norm_num ] ; ring_nf;
       nlinarith only [ hd, pow_pos ( zero_lt_two' ℕ ) ( d * 2 ), pow_le_pow_right₀ ( show 1 ≤ 2 by norm_num ) ( show d * 2 ≤ d * 4 by linarith ), pow_pos ( zero_lt_two' ℕ ) ( d * 4 ) ]
-    have hC_neg_le : C_neg ≤ 2 ^ (5 * d ^ 2 + 8 * d + 2) := by
+    have hC_neg_le : C_neg ≤ 2 ^ (5 * d ^ 2 + 4 * d - 1) := by
       exact C_neg_le_pow d Jb Dd hd
         (by rw [hJb_def, hDd_def]; exact block_count_le d hd1)
         Y W hW_def hY_le
@@ -2230,10 +2234,10 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
   exact ⟨I, C₀, hCond1, hCond2, hCond3, hCond4⟩
 
 /-- **Main Theorem**
-For every d ≥ 9 and every N ≥ 2^{5d²+8d+4}, N can be written as a sum of distinct
+For every d ≥ 9 and every N ≥ 2^{5d²+4d+1}, N can be written as a sum of distinct
 d-th powers of natural numbers. -/
 theorem main_theorem (d : ℕ) (hd : 9 ≤ d) :
-    ∀ N : ℕ, 2 ^ (5 * d ^ 2 + 8 * d + 4) ≤ N →
+    ∀ N : ℕ, 2 ^ (5 * d ^ 2 + 4 * d + 1) ≤ N →
       ∃ J : Finset ℕ, N = ∑ i ∈ J, i ^ d := by
   obtain ⟨I, C₀, hI_ge, hI_rep, hDoubling, hC₀⟩ := improved_seed_interval d hd
   set p := monomialPoly d with hp_def
@@ -2247,10 +2251,11 @@ theorem main_theorem (d : ℕ) (hd : 9 ≤ d) :
     Int.toNat_of_nonneg (le_of_lt (h_pos T₀ le_rfl))
   have hThreshold : IsThreshold p C₀.toNat :=
     isThreshold_of_data p T₀ K hK_eq I C₀ hI_ge hI_rep h_pos hDoubling
-  have hThreshold2 : IsThreshold p (2 ^ (5 * d ^ 2 + 8 * d + 4)) :=
+  have hThreshold2 : IsThreshold p (2 ^ (5 * d ^ 2 + 4 * d + 1)) :=
     isThreshold_mono hThreshold hC₀
   intro N hN
   obtain ⟨J, _, hJ2⟩ := hThreshold2 N hN
   exact ⟨J, by simpa [hp_def, monomialPoly, ← @Nat.cast_inj ℤ] using hJ2⟩
 
+#show_unused main_theorem
 #print axioms main_theorem
