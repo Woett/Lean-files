@@ -1,7 +1,7 @@
 import Mathlib
 
 /-
-In this file we prove that if d ≥ 9, then every N ≥ 2^{5d²+4d+1} can be written
+In this file we prove that if d ≥ 9, then every N ≥ 2^{5d²+2d} can be written
 as a sum of distinct d-th powers of natural numbers. The assumption d ≥ 9 is
 fine, as the exact bound for d < 9 is already known; https://oeis.org/A001661.
 With the bound below we strengthen a result by Kim.
@@ -13,7 +13,8 @@ In principle, sufficiently good bounds on this quantity could answer Erdős
 Problem #345 (https://www.erdosproblems.com/345) in the negative.
 
 Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) did the formalization
-based on Kim's proof strategy, which was written down by ChatGPT.
+based on Kim's proof strategy, which was written down by ChatGPT. Aristotle then
+managed to find some further small optimizations.
 
 Lean version: leanprover/lean4:v4.28.0
 -/
@@ -1244,22 +1245,23 @@ lemma four_dsq_le (d : ℕ) (hd : 9 ≤ d) : 4 * d ^ 2 ≤ 2 ^ d := by
   induction' hd with d hd ih <;> norm_num [ Nat.pow_succ' ] at * ; nlinarith
 
 /-
-If C_neg ≤ 2^{5d²+4d-1}, d!B ≤ 2^{2d²}, M ≤ 2^{3d²+2d},
-then C_neg + d!B + M + 1 ≤ 2^{5d²+4d+1} for d ≥ 9.
+If C_neg ≤ 2^{5d²+2d-1}, d!B ≤ 2^{2d²}, M ≤ 2^{3d²+2d},
+then C_neg + d!B + M + 1 ≤ 2^{5d²+2d} for d ≥ 9.
 -/
 lemma improved_bound_assembly (d : ℕ) (hd : 9 ≤ d)
     (C_neg M aB : ℤ)
-    (h1 : C_neg ≤ 2 ^ (5 * d ^ 2 + 4 * d - 1))
+    (h1 : C_neg ≤ 2 ^ (5 * d ^ 2 + 2 * d - 1))
     (h2 : aB ≤ 2 ^ (2 * d ^ 2))
     (h3 : M ≤ 2 ^ (3 * d ^ 2 + 2 * d)) :
-    C_neg + aB + M + 1 ≤ 2 ^ (5 * d ^ 2 + 4 * d + 1) := by
-  -- Since $2d^2 \leq 5d^2 + 4d - 1$ and $3d^2 + 2d \leq 5d^2 + 4d - 1$ for $d \geq 1$, all three terms are $\leq 2^{5d^2 + 4d - 1}$.
-  have h4 : 2 * d ^ 2 ≤ 5 * d ^ 2 + 4 * d - 1 ∧ 3 * d ^ 2 + 2 * d ≤ 5 * d ^ 2 + 4 * d - 1 := by
-    grind +qlia;
-  -- Therefore, $C_neg + aB + M + 1 \leq 3 \cdot 2^{5d^2 + 4d - 1} + 1$.
-  have h5 : C_neg + aB + M + 1 ≤ 3 * 2 ^ (5 * d ^ 2 + 4 * d - 1) + 1 := by
-    linarith [ pow_le_pow_right₀ ( by decide : 1 ≤ 2 ) h4.1, pow_le_pow_right₀ ( by decide : 1 ≤ 2 ) h4.2 ];
-  grind +suggestions
+    C_neg + aB + M + 1 ≤ 2 ^ (5 * d ^ 2 + 2 * d) := by
+      -- Since $aB + M + 1 \leq 2^{3d^2+2d} + 2^{2d^2} + 1 \leq 2^{5d^2+2d-1}$ for $d \geq 9$,
+      have h_sum_bounded : aB + M + 1 ≤ 2 ^ (5 * d ^ 2 + 2 * d - 1) := by
+        refine le_trans ( add_le_add_three h2 h3 le_rfl ) ?_;
+        rcases d with ( _ | _ | d ) <;> simp_all +decide [ Nat.mul_succ, pow_succ' ];
+        ring_nf;
+        norm_num [ ← pow_add ];
+        nlinarith only [ show 2 ^ ( d * 8 + d ^ 2 * 2 ) > 0 by positivity, show 2 ^ ( d * 14 + d ^ 2 * 3 ) > 0 by positivity, show 2 ^ ( d * 22 + d ^ 2 * 5 ) > 0 by positivity, show 2 ^ ( d * 8 + d ^ 2 * 2 ) ≤ 2 ^ ( d * 14 + d ^ 2 * 3 ) by gcongr <;> nlinarith only [ hd ], show 2 ^ ( d * 14 + d ^ 2 * 3 ) ≤ 2 ^ ( d * 22 + d ^ 2 * 5 ) by gcongr <;> nlinarith only [ hd ] ];
+      rw [ show 5 * d ^ 2 + 2 * d = ( 5 * d ^ 2 + 2 * d - 1 ) + 1 by rw [ Nat.sub_add_cancel ( by nlinarith ) ] ] ; ring_nf at * ; linarith;
 
 /-
 A general signed block from any shift list satisfying the buildPN increasing condition.
@@ -1393,71 +1395,63 @@ lemma pow2_buildPN_inc (d : ℕ) (exps : Fin d → ℕ) (hm : StrictMono exps) :
 For d ≥ 1 and j ≤ 3d², there exists a signed block of value d!·2^{D_d+j}
     with support in {0,...,2^{4d+2}-1}.
 -/
-set_option maxHeartbeats 800000 in
-theorem u_block_exists (d j : ℕ) (hd : 1 ≤ d) (hj : j ≤ 3 * d ^ 2) :
+set_option maxHeartbeats 1600000 in
+theorem u_block_exists (d j : ℕ) (hd : 1 ≤ d) :
     ∃ (P N : Finset ℕ),
       Disjoint P N ∧
-      (∀ u ∈ P ∪ N, u < 2 ^ (4 * d + 2)) ∧
+      (∀ u ∈ P ∪ N, u < 2 ^ (j / d + d + 2)) ∧
       N.card ≤ 2 ^ (d - 1) ∧
       (∀ x : ℤ,
         ∑ u ∈ P, (x + (↑u : ℤ)) ^ d -
         ∑ v ∈ N, (x + (↑v : ℤ)) ^ d =
         (d.factorial : ℤ) * 2 ^ (d * (d - 1) / 2 + j)) := by
-  revert d j hd hj;
-  intro d j hd hj
-  set exps : Fin d → ℕ := fun i => j / d + i.val + (if d - j % d ≤ i.val then 1 else 0) with h_exp_def
-  set shifts : List ℕ := List.ofFn (fun i : Fin d => 2 ^ exps i) with h_shifts_def
-  have h_shifts_length : shifts.length = d := by
-    grind
-  have h_shifts_inc : ∀ i : Fin shifts.length, ∀ u ∈ (buildPN (shifts.take i)).1 ∪ (buildPN (shifts.take i)).2, u < shifts[i] := by
-    convert pow2_buildPN_inc d exps _ using 1;
-    intro i j hij; simp +decide [ exps ] ; split_ifs <;> omega;
-  have h_shifts_nz : ∀ i : Fin shifts.length, 0 < shifts[i] := by
-    simp +zetaDelta at *
-  have h_shifts_prod : ∏ i : Fin d, ((shifts[i.val]'(by omega) : ℤ)) = 2 ^ (d * (d - 1) / 2 + j) := by
-    have h_exp_sum : ∑ i : Fin d, exps i = d * (d - 1) / 2 + j := by
-      have h_sum_exps : ∑ i : Fin d, exps i = d * (j / d) + d * (d - 1) / 2 + (j % d) := by
-        have h_sum_exps : ∑ i : Fin d, (if d - j % d ≤ i.val then 1 else 0) = j % d := by
-          simp +zetaDelta at *;
-          rw [ Finset.card_eq_of_bijective ];
-          use fun i hi => ⟨ d - j % d + i, by linarith [ Nat.sub_add_cancel ( show j % d ≤ d from Nat.le_of_lt ( Nat.mod_lt _ hd ) ), Nat.mod_lt j hd ] ⟩;
-          · simp +zetaDelta at *;
-            exact fun a ha => ⟨ a - ( d - j % d ), by omega, by erw [ Fin.ext_iff ] ; norm_num; omega ⟩;
-          · grind;
-          · grind +locals
-        simp_all +decide [ Finset.sum_add_distrib ];
-        convert Finset.sum_range_id d using 1 ; rw [ Finset.sum_range ];
-      linarith [ Nat.mod_add_div j d ]
-    generalize_proofs at *; (
-    rw [ ← h_exp_sum ] ; norm_cast ; simp +decide [ h_shifts_def ] ; ring_nf;
-    rw [ Finset.prod_pow_eq_pow_sum ])
-  have h_shifts_sum : shifts.sum ≤ 2 ^ (4 * d + 1) := by
-    nontriviality;
-    have h_shifts_sum : shifts.sum ≤ ∑ i ∈ Finset.range d, 2 ^ (j / d + i + 1) := by
-      rw [ List.sum_ofFn ];
-      rw [ Finset.sum_range ] ; exact Finset.sum_le_sum fun i _ => pow_le_pow_right₀ ( by decide ) ( by aesop ) ;
-    refine le_trans h_shifts_sum ?_;
-    norm_num [ pow_add, Finset.mul_sum _ _ _, Finset.sum_mul ];
-    norm_num [ ← Finset.mul_sum _ _ _, ← Finset.sum_mul ];
-    rw [ Nat.geomSum_eq ] <;> norm_num;
-    refine' le_trans ( Nat.mul_le_mul_right _ ( pow_le_pow_right₀ ( by decide ) ( show j / d ≤ 3 * d by nlinarith [ Nat.div_mul_le_self j d ] ) ) ) _;
-    rw [ show 4 * d = 3 * d + d by ring, pow_add ] ; nlinarith [ pow_pos ( zero_lt_two' ℕ ) ( 3 * d ), pow_pos ( zero_lt_two' ℕ ) d, Nat.sub_add_cancel ( Nat.one_le_pow d 2 zero_lt_two ) ]
-  have h_buildPN_card : (buildPN shifts).2.card = 2 ^ (d - 1) := by
-    convert buildPN_N_card_eq shifts ( by linarith ) h_shifts_inc using 1;
-    rw [ h_shifts_length ]
-  have h_buildPN_le : ∀ u ∈ (buildPN shifts).1 ∪ (buildPN shifts).2, u < 2 ^ (4 * d + 2) := by
-    intros u hu
-    have h_u_le_sum : u ≤ shifts.sum := by
-      apply buildPN_elements_le_sum shifts h_shifts_inc u hu
-    have h_sum_lt : shifts.sum < 2 ^ (4 * d + 2) := by
-      exact lt_of_le_of_lt h_shifts_sum ( pow_lt_pow_right₀ ( by decide ) ( Nat.lt_succ_self _ ) )
-    exact lt_of_le_of_lt h_u_le_sum h_sum_lt
-  use (buildPN shifts).1, (buildPN shifts).2
-  simp_all +decide [ Finset.disjoint_left ];
-  convert signed_block_general d hd ( List.ofFn fun i : Fin d => 2 ^ ( j / d + i.val + if d ≤ i.val + j % d then 1 else 0 ) ) _ _ _ using 1 <;> norm_num [ h_shifts_length, h_shifts_inc, h_shifts_prod ];
-  · exact ⟨ fun h => Finset.disjoint_left.mpr fun x hx₁ hx₂ => h hx₁ hx₂, fun h x hx₁ hx₂ => Finset.disjoint_left.mp h hx₁ hx₂ ⟩;
-  · convert h_shifts_inc using 1;
-    grind
+          obtain ⟨exps, h_exps⟩ : ∃ exps : Fin d → ℕ, StrictMono exps ∧ (∑ i : Fin d, (2 ^ exps i : ℕ)) < 2 ^ (j / d + d + 2) ∧ (∏ i : Fin d, (2 ^ exps i : ℤ)) = 2 ^ (d * (d - 1) / 2 + j) := by
+            -- Define the exponents as exps i = j/d + i + ε_i, where ε_i is chosen to ensure strict monotonicity.
+            obtain ⟨ε, hε⟩ : ∃ ε : Fin d → ℕ, (∑ i : Fin d, ε i = j % d) ∧ (∀ i : Fin d, ε i ≤ 1) ∧ (∀ i j : Fin d, i < j → ε i ≤ ε j) := by
+              use fun i => if i.val < d - (j % d) then 0 else 1;
+              refine' ⟨ _, _, _ ⟩ <;> norm_num [ Finset.sum_ite ];
+              · nontriviality;
+                rw [ Finset.card_eq_of_bijective ];
+                use fun i hi => ⟨ d - ( j % d ) + i, by linarith [ Nat.sub_add_cancel ( show j % d ≤ d from Nat.le_of_lt ( Nat.mod_lt _ hd ) ), Nat.mod_lt j hd ] ⟩;
+                · simp +zetaDelta at *;
+                  exact fun a ha => ⟨ a - ( d - j % d ), by omega, by erw [ Fin.ext_iff ] ; norm_num; omega ⟩;
+                · grind;
+                · aesop;
+              · exact fun i => by split_ifs <;> norm_num;
+              · intro i j hij; split_ifs <;> norm_num ; omega;
+            refine' ⟨ fun i => j / d + i.val + ε i, _, _, _ ⟩;
+            · intro i j hij; simp; (
+              grind) ;
+            · have h_sum_bound : ∑ i : Fin d, 2 ^ (j / d + i.val + ε i) ≤ 2 ^ (j / d + 1) * (∑ i ∈ Finset.range d, 2 ^ i) := by
+                rw [ Finset.mul_sum _ _ _, Finset.sum_range ];
+                exact Finset.sum_le_sum fun i _ => by rw [ ← pow_add ] ; exact pow_le_pow_right₀ ( by decide ) ( by linarith [ hε.2.1 i ] ) ;
+              norm_num [ Nat.geomSum_eq ] at *;
+              refine' lt_of_le_of_lt h_sum_bound _;
+              ring_nf;
+              nlinarith [ pow_pos ( zero_lt_two' ℕ ) d, pow_pos ( zero_lt_two' ℕ ) ( j / d ), Nat.sub_add_cancel ( Nat.one_le_pow d 2 zero_lt_two ) ];
+            · simp +decide [Finset.prod_pow_eq_pow_sum, Finset.sum_add_distrib, hε.1];
+              rw [ show ∑ x : Fin d, ( x : ℕ ) = d * ( d - 1 ) / 2 from ?_ ];
+              · linarith [ Nat.mod_add_div j d ];
+              · convert Finset.sum_range_id d using 1 ; rw [ Finset.sum_range ];
+          refine' ⟨ buildPN ( List.ofFn ( fun i => 2 ^ exps i ) ) |> Prod.fst, buildPN ( List.ofFn ( fun i => 2 ^ exps i ) ) |> Prod.snd, _, _, _, _ ⟩;
+          · apply (signed_block_general d hd (List.ofFn (fun i => 2 ^ exps i)) (by
+            grind) (by
+            convert pow2_buildPN_inc d exps h_exps.1 using 1) (by
+            simp +zetaDelta at *)).left;
+          · intro u hu;
+            refine' lt_of_le_of_lt ( buildPN_elements_le_sum _ _ u hu ) _;
+            · convert pow2_buildPN_inc d exps h_exps.1 using 1;
+            · simpa [ List.sum_ofFn ] using h_exps.2.1;
+          · grind +suggestions;
+          · convert signed_block_general d hd ( List.ofFn ( fun i => 2 ^ exps i ) ) _ _ _ using 1;
+            all_goals simp +decide [ List.length_ofFn ];
+            · constructor <;> intro h <;> simp_all +decide [ Finset.disjoint_left ];
+              convert signed_block_general d hd ( List.ofFn ( fun i => 2 ^ exps i ) ) _ _ _ |>.1 using 1;
+              · simp +decide [ Finset.disjoint_left ];
+              · rw [ List.length_ofFn ];
+              · convert pow2_buildPN_inc d exps h_exps.1 using 1;
+              · simp +decide [ List.getElem_ofFn ];
+            · intro i u hu; specialize hu; have := pow2_buildPN_inc d exps h_exps.1; aesop;
 
 /-
 If each shift strictly exceeds the sum of all previous shifts,
@@ -1523,63 +1517,59 @@ lemma vShifts_product (d : ℕ) (q r : ℕ) (hr : r < d) :
 For d ≥ 1 and i < d(d-1)/2, there exists a signed block of value d!·V_d·2^i
     with support in {0,...,2^{4d+2}-1}.
 -/
+set_option maxHeartbeats 1600000 in
 theorem v_block_exists (d i : ℕ) (hd : 1 ≤ d) (hi : i < d * (d - 1) / 2) :
     ∃ (P N : Finset ℕ),
       Disjoint P N ∧
-      (∀ u ∈ P ∪ N, u < 2 ^ (4 * d + 2)) ∧
+      (∀ u ∈ P ∪ N, u < 2 ^ (4 * d)) ∧
       N.card ≤ 2 ^ (d - 1) ∧
       (∀ x : ℤ,
         ∑ u ∈ P, (x + (↑u : ℤ)) ^ d -
         ∑ v ∈ N, (x + (↑v : ℤ)) ^ d =
         (d.factorial : ℤ) * (∏ k : Fin d, (2 ^ ((k : ℕ) + 1) - 1)) * 2 ^ i) := by
-  -- Set q = i / d and r = i % d (so i = d*q + r, r < d).
-  obtain ⟨q, r, hr⟩ : ∃ q r : ℕ, i = d * q + r ∧ r < d := by
-    exact ⟨ i / d, i % d, by rw [ Nat.div_add_mod ], Nat.mod_lt _ hd ⟩;
-  -- Define shifts = List.ofFn (fun k : Fin d => 2^(q + if d-r ≤ k then 1 else 0) * (2^(k+1)-1)).
-  set shifts : List ℕ :=
-    List.ofFn (fun k : Fin d =>
-      2 ^ (q + if d - r ≤ k.val then 1 else 0) * (2 ^ (k.val + 1) - 1));
-  -- By signed_block_general, these shifts satisfy the buildPN increasing condition.
-  have h_inc : ∀ i : Fin shifts.length, ∀ u ∈ (buildPN (shifts.take i)).1 ∪ (buildPN (shifts.take i)).2, u < shifts[i] := by
-    apply superincreasing_buildPN_inc;
-    convert vShifts_superincreasing d q r ;
-  -- By buildPN_elements_le_sum, all elements ≤ sum of shifts < 2^{q+d+2}.
-  have h_sum_le : ∀ u ∈ (buildPN shifts).1 ∪ (buildPN shifts).2, u < 2 ^ (q + d + 2) := by
-    have h_sum_le : shifts.sum < 2 ^ (q + d + 2) := by
-      have h_sum_shifts : shifts.sum ≤ ∑ k ∈ Finset.range d, 2 ^ (q + k + 2) := by
-        have h_sum_shifts : ∀ k : Fin d, shifts[k]! ≤ 2 ^ (q + k.val + 2) := by
-          intro k; simp +decide [ shifts ] ; split_ifs <;> ring_nf ;
-          · nlinarith [ Nat.sub_add_cancel ( show 1 ≤ 2 ^ ( k : ℕ ) * 2 from Nat.one_le_iff_ne_zero.mpr <| by positivity ), pow_pos ( show 0 < 2 by decide ) q, pow_pos ( show 0 < 2 by decide ) ( k : ℕ ) ];
-          · nlinarith [ Nat.sub_le ( 2 ^ ( k : ℕ ) * 2 ) 1, pow_pos ( zero_lt_two' ℕ ) q, pow_pos ( zero_lt_two' ℕ ) ( k : ℕ ) ];
-        convert Finset.sum_le_sum fun k ( hk : k ∈ Finset.univ ) => h_sum_shifts k using 1;
-        · simp +zetaDelta at *;
-          exact List.sum_ofFn;
-        · rw [ Finset.sum_range ];
-      refine lt_of_le_of_lt h_sum_shifts ?_;
-      norm_num [ pow_add, Finset.mul_sum _ _ _, geom_sum_eq ];
-      norm_num [ ← Finset.mul_sum _ _ _, ← Finset.sum_mul ];
-      rw [ Nat.geomSum_eq ] <;> norm_num;
-    exact fun u hu => lt_of_le_of_lt ( buildPN_elements_le_sum shifts h_inc u hu ) h_sum_le;
-  refine' ⟨ buildPN shifts |>.1, buildPN shifts |>.2, _, _, _, _ ⟩;
-  · apply (signed_block_general d hd shifts (by
-    simp [shifts]) h_inc (by
-    simp +zetaDelta at *)).left;
-  · refine' fun u hu => lt_of_lt_of_le ( h_sum_le u hu ) _;
-    gcongr <;> norm_num;
-    nlinarith [ Nat.div_mul_le_self ( d * ( d - 1 ) ) 2, Nat.sub_add_cancel hd, Nat.sub_le d 1 ];
-  · have h_card_N : (buildPN shifts).2.card = 2 ^ (shifts.length - 1) := by
-      apply buildPN_N_card_eq;
-      · simp +zetaDelta at *;
-        linarith;
-      · assumption;
-    grind;
-  · have h_prod : ∏ k : Fin d, ((shifts[k.val]'(by
-    grind) : ℕ) : ℤ) = (∏ k : Fin d, (2 ^ ((k : ℕ) + 1) - 1 : ℤ)) * 2 ^ (d * q + r) := by
-      convert vShifts_product d q r hr.2 using 1;
-      grind
-    generalize_proofs at *;
-    have := signed_block_general d hd shifts ( by simp +decide [ shifts ] ) h_inc ( by
-      simp +zetaDelta at * ) ; simp_all +decide [ mul_assoc ] ;
+          convert signed_block_general d hd ( List.ofFn ( fun k : Fin d => 2 ^ ( ( i / d : ℕ ) + if d - ( i % d ) ≤ k.val then 1 else 0 ) * ( 2 ^ ( k.val + 1 ) - 1 ) ) ) ?_ ( ?_ ) ( ?_ ) using 1;
+          all_goals simp +decide [ List.length_ofFn ];
+          · constructor <;> intro h;
+            · convert signed_block_general d hd ( List.ofFn ( fun k : Fin d => 2 ^ ( ( i / d : ℕ ) + if d - ( i % d ) ≤ k.val then 1 else 0 ) * ( 2 ^ ( k.val + 1 ) - 1 ) ) ) ?_ ( ?_ ) ( ?_ ) using 1;
+              all_goals simp +decide [ List.length_ofFn ];
+              convert superincreasing_buildPN_inc _ ( vShifts_superincreasing d ( i / d ) ( i % d ) ) using 1;
+              simp +decide [ Finset.mem_union, List.getElem_ofFn ];
+            · refine' ⟨ _, _, h.1, _, _, _ ⟩;
+              · intro u hu
+                have h_u_le_sum : u ≤ List.sum (List.ofFn (fun k : Fin d => 2 ^ (i / d + if d ≤ k.val + i % d then 1 else 0) * (2 ^ (k.val + 1) - 1))) := by
+                  apply buildPN_elements_le_sum;
+                  · convert superincreasing_buildPN_inc _ _ using 1;
+                    convert vShifts_superincreasing d ( i / d ) ( i % d ) using 1;
+                    simp +decide ;
+                    grind +locals;
+                  · exact hu.elim ( fun hu => Finset.mem_union_left _ hu ) fun hu => Finset.mem_union_right _ hu;
+                refine' lt_of_le_of_lt h_u_le_sum _;
+                -- We'll use that $i < d(d-1)/2$ to bound the sum.
+                have h_bound : i / d < d / 2 := by
+                  rw [ Nat.div_lt_iff_lt_mul <| by positivity ];
+                  rw [ Nat.lt_iff_add_one_le, Nat.le_div_iff_mul_le ] at * <;> nlinarith [ Nat.div_add_mod d 2, Nat.mod_lt d two_pos, Nat.sub_add_cancel hd ];
+                have h_bound : List.sum (List.ofFn (fun k : Fin d => 2 ^ (i / d + if d ≤ k.val + i % d then 1 else 0) * (2 ^ (k.val + 1) - 1))) ≤ 2 ^ (i / d + 1) * (∑ k ∈ Finset.range d, (2 ^ (k + 1) - 1)) := by
+                  rw [ List.sum_ofFn, Finset.mul_sum _ _ _ ];
+                  rw [ Finset.sum_range ];
+                  exact Finset.sum_le_sum fun _ _ => mul_le_mul_of_nonneg_right ( pow_le_pow_right₀ ( by decide ) ( by split_ifs <;> linarith ) ) ( Nat.zero_le _ );
+                refine' lt_of_le_of_lt h_bound _;
+                refine' lt_of_le_of_lt ( Nat.mul_le_mul_left _ ( show ∑ k ∈ Finset.range d, ( 2 ^ ( k + 1 ) - 1 ) ≤ 2 ^ ( d + 1 ) - 1 from _ ) ) _;
+                · exact Nat.recOn d ( by norm_num ) fun n ih => by norm_num [ Nat.pow_succ', Finset.sum_range_succ ] at * ; omega;
+                · refine' lt_of_lt_of_le ( Nat.mul_lt_mul_of_pos_left ( Nat.sub_lt ( by norm_num ) ( by norm_num ) ) ( by norm_num ) ) _;
+                  rw [ ← pow_add ] ; exact pow_le_pow_right₀ ( by decide ) ( by omega );
+              · convert buildPN_N_card_eq _ _ _ |> le_of_eq using 1;
+                · grind +suggestions;
+                · grind;
+                · convert superincreasing_buildPN_inc _ _ using 1;
+                  convert vShifts_superincreasing d ( i / d ) ( i % d ) using 1;
+                  simp +decide ;
+                  grind;
+              · convert h.2 using 1;
+                convert Iff.rfl using 2;
+                convert congr_arg ( fun x : ℤ => ( d ! : ℤ ) * x ) ( vShifts_product d ( i / d ) ( i % d ) ( Nat.mod_lt _ hd ) ) using 1 ; norm_num [ mul_assoc, mul_comm, mul_left_comm, Finset.prod_mul_distrib ];
+                rw [ Nat.div_add_mod ] ; ring;
+          · convert superincreasing_buildPN_inc _ ( vShifts_superincreasing d ( i / d ) ( i % d ) ) using 1;
+            simp +decide [ Finset.mem_union, List.getElem_ofFn ]
 
 /-
 Binary coverage: for V odd, every n ∈ [U·V, U·V+Q] (with Q < U·2^J)
@@ -1652,27 +1642,29 @@ theorem binary_coverage (D J : ℕ) (V : ℕ) (hV_odd : Odd V) (hV_pos : 0 < V)
 /-
 The total number of block indices (u-blocks + v-blocks) is at most 4d²
 -/
-lemma block_count_le (d : ℕ) (hd : 1 ≤ d) :
-    3 * d ^ 2 + 1 + d * (d - 1) / 2 ≤ 4 * d ^ 2 := by
-  nlinarith [ Nat.div_mul_le_self ( d * ( d - 1 ) ) 2, Nat.sub_add_cancel hd ]
+lemma block_count_le (d : ℕ) (hd : 9 ≤ d) :
+    (5 * d ^ 2 + 5 * d + 4) / 2 + d * (d - 1) / 2 ≤ 4 * d ^ 2 := by
+      nlinarith [ Nat.div_mul_le_self ( 5 * d ^ 2 + 5 * d + 4 ) 2, Nat.div_mul_le_self ( d * ( d - 1 ) ) 2, Nat.sub_add_cancel ( by linarith : 1 ≤ d ) ]
 
 /-
-Maximum position in the bank is bounded by 2^{5d+2}
+Maximum position in the bank is bounded by 2^{5d}
 -/
 lemma bank_max_position_bound (d : ℕ) (hd : 9 ≤ d) (Y W : ℕ)
-    (hW : W = 2 ^ (4 * d + 2))
+    (hW : W = 2 ^ (4 * d))
     (hY : Y ≤ 6 * d * (W + 2) + 1)
     (T : ℕ) (hT : T ≤ 4 * d ^ 2) (e : ℕ) (he : e < W) :
-    Y + T * (W + 1) + e < 2 ^ (5 * d + 2) := by
-  -- Substitute $W = 2^{4d+2}$ into the inequality.
-  have h_subst : (6 * d * (2 ^ (4 * d + 2) + 2) + 1) + (4 * d ^ 2) * (2 ^ (4 * d + 2) + 1) + 2 ^ (4 * d + 2) < 2 ^ (5 * d + 2) := by
-    have h_dom : (4 * d ^ 2 + 6 * d + 2) * 2 ^ (4 * d + 2) < 2 ^ (5 * d + 2) := by
-      have h_dom : 4 * d ^ 2 + 6 * d + 2 < 2 ^ d := by
-        exact Nat.le_induction ( by norm_num ) ( fun k hk ih ↦ by norm_num [ Nat.pow_succ' ] at * ; nlinarith only [ hk, ih ] ) d hd;
-      exact lt_of_lt_of_le ( Nat.mul_lt_mul_of_pos_right h_dom ( by positivity ) ) ( by ring_nf; norm_num );
-    refine lt_of_le_of_lt ?_ h_dom;
-    exact Nat.recOn d ( by norm_num ) fun n ihn => by norm_num [ Nat.pow_succ', Nat.pow_mul ] at * ; nlinarith only [ ihn, Nat.one_le_pow n 16 ( by norm_num ) ] ;
-  subst hW; nlinarith;
+    Y + T * (W + 1) + e < 2 ^ (5 * d) := by
+      -- By combining terms, we can factor out $W$ and simplify the expression.
+      suffices h_simp : (6 * d + 4 * d ^ 2 + 1) * W + 12 * d + 4 * d ^ 2 + 1 < 2 ^ (5 * d) by
+        nlinarith only [ hY, hT, he, h_simp ];
+      -- We'll use that $6d + 4d^2 + 1 < 2^d$ for $d \geq 9$.
+      have h_bound : 6 * d + 4 * d ^ 2 + 1 < 2 ^ d := by
+        exact Nat.le_induction ( by decide ) ( fun k hk ih ↦ by norm_num [ Nat.pow_succ' ] at * ; nlinarith only [ ih, hk ] ) d hd;
+      rw [ show 5 * d = d + 4 * d by ring, pow_add ];
+      have h_final : 12 * d + 4 * d ^ 2 + 1 < 2 ^ (4 * d) := by
+        rw [ pow_mul' ];
+        nlinarith only [ h_bound, Nat.pow_le_pow_left ( show 2 ^ d ≥ 2 by linarith [ Nat.pow_le_pow_right ( by decide : 1 ≤ 2 ) hd ] ) 3, Nat.pow_le_pow_left ( show 2 ^ d ≥ 2 by linarith [ Nat.pow_le_pow_right ( by decide : 1 ≤ 2 ) hd ] ) 2 ];
+      nlinarith only [ h_bound, h_final, hW ];
 
 /-
 (4d²) * 2^{d-1} ≤ 2^{2d-1} for d ≥ 9
@@ -1686,11 +1678,11 @@ lemma neg_count_bound (d : ℕ) (hd : 9 ≤ d) :
 
 /-
 C_neg is bounded when all N-sets have bounded cardinality and all positions
-    are less than 2^{5d+2}.
+    are less than 2^{5d}.
 -/
 lemma C_neg_le_pow (d Jb Dd : ℕ) (hd : 9 ≤ d)
     (hJbDd : Jb + Dd ≤ 4 * d ^ 2)
-    (Y W : ℕ) (hW : W = 2 ^ (4 * d + 2))
+    (Y W : ℕ) (hW : W = 2 ^ (4 * d))
     (hY : Y ≤ 6 * d * (W + 2) + 1)
     (Nu : Fin Jb → Finset ℕ) (Nv : Fin Dd → Finset ℕ)
     (hNu_card : ∀ j, (Nu j).card ≤ 2 ^ (d - 1))
@@ -1699,35 +1691,43 @@ lemma C_neg_le_pow (d Jb Dd : ℕ) (hd : 9 ≤ d)
     (hNv_bound : ∀ i, ∀ v ∈ Nv i, v < W) :
     (∑ j : Fin Jb, ∑ v ∈ Nu j, ((↑Y + ↑j.val * (↑W + 1) : ℤ) + ↑v) ^ d +
      ∑ i : Fin Dd, ∑ v ∈ Nv i, ((↑Y + (↑Jb + ↑i.val) * (↑W + 1) : ℤ) + ↑v) ^ d)
-      ≤ 2 ^ (5 * d ^ 2 + 4 * d - 1) := by
-  have h_sum_bound : ∀ j : Fin Jb, ∑ v ∈ Nu j, (Y + (j : ℕ) * (W + 1) + v : ℤ) ^ d ≤ 2 ^ (d - 1) * (2 ^ (5 * d + 2) - 1) ^ d := by
-    intro j
-    have h_sum_bound : ∀ v ∈ Nu j, (Y + (j : ℕ) * (W + 1) + v : ℤ) ^ d ≤ (2 ^ (5 * d + 2) - 1) ^ d := by
-      intro v hv
-      have h_pos : Y + (j : ℕ) * (W + 1) + v < 2 ^ (5 * d + 2) := by
-        convert bank_max_position_bound d hd Y W hW hY ( j : ℕ ) ( by linarith [ Fin.is_lt j ] ) v ( hNu_bound j v hv ) using 1;
-      exact pow_le_pow_left₀ ( by positivity ) ( by linarith ) _;
-    refine' le_trans ( Finset.sum_le_sum h_sum_bound ) _ ; norm_num [ hNu_card j ];
-    exact mul_le_mul_of_nonneg_right ( mod_cast hNu_card j ) ( pow_nonneg ( sub_nonneg_of_le ( one_le_pow₀ ( by norm_num ) ) ) _ );
-  have h_sum_bound_v : ∀ i : Fin Dd, ∑ v ∈ Nv i, (Y + (Jb + i : ℕ) * (W + 1) + v : ℤ) ^ d ≤ 2 ^ (d - 1) * (2 ^ (5 * d + 2) - 1) ^ d := by
-    intros i
-    have h_sum_bound_v_i : ∀ v ∈ Nv i, (Y + (Jb + i : ℕ) * (W + 1) + v : ℤ) ^ d ≤ (2 ^ (5 * d + 2) - 1) ^ d := by
-      intros v hv
-      have h_pos : Y + (Jb + i : ℕ) * (W + 1) + v < 2 ^ (5 * d + 2) := by
-        apply bank_max_position_bound d hd Y W hW hY (Jb + i) (by
-        linarith [ Fin.is_lt i ]) v (hNv_bound i v hv);
-      exact pow_le_pow_left₀ ( by positivity ) ( by exact le_tsub_of_add_le_right ( mod_cast h_pos ) ) _;
-    refine' le_trans ( Finset.sum_le_sum h_sum_bound_v_i ) _ ; norm_num [ mul_comm ];
-    exact mul_le_mul_of_nonneg_right ( mod_cast hNv_card i ) ( pow_nonneg ( sub_nonneg_of_le ( one_le_pow₀ ( by norm_num ) ) ) _ );
-  have h_sum_bound_total : (Jb + Dd) * 2 ^ (d - 1) * (2 ^ (5 * d + 2) - 1) ^ d ≤ 2 ^ (5 * d ^ 2 + 4 * d - 1) := by
-    have h_sum_bound_total : (Jb + Dd) * 2 ^ (d - 1) ≤ 2 ^ (2 * d - 1) := by
-      exact le_trans ( Nat.mul_le_mul_right _ hJbDd ) ( neg_count_bound d hd );
-    refine le_trans ( Nat.mul_le_mul_right _ h_sum_bound_total ) ?_;
-    refine' le_trans ( Nat.mul_le_mul_left _ ( Nat.pow_le_pow_left ( Nat.sub_le _ _ ) _ ) ) _;
-    rw [ ← pow_mul, ← pow_add ];
-    grind +revert
-  refine le_trans ?_ ( Nat.cast_le.mpr h_sum_bound_total );
-  convert add_le_add ( Finset.sum_le_sum fun j _ => h_sum_bound j ) ( Finset.sum_le_sum fun i _ => h_sum_bound_v i ) using 1 ; norm_num ; ring
+      ≤ 2 ^ (5 * d ^ 2 + 2 * d - 1) := by
+        -- By the properties of the negative terms, we have:
+        have h_neg_bound : ∀ j : Fin Jb, ∑ v ∈ Nu j, (Y + (j : ℕ) * (W + 1) + v : ℤ) ^ d ≤ 2 ^ (d - 1) * (2 ^ (5 * d)) ^ d := by
+          intro j
+          have h_term_bound : ∀ v ∈ Nu j, (Y + (j : ℕ) * (W + 1) + v : ℤ) ^ d ≤ (2 ^ (5 * d)) ^ d := by
+            intros v hv
+            have h_term_bound : (Y + (j : ℕ) * (W + 1) + v : ℤ) ≤ 2 ^ (5 * d) - 1 := by
+              have h_term_bound : Y + (j : ℕ) * (W + 1) + v < 2 ^ (5 * d) := by
+                convert bank_max_position_bound d hd Y W hW hY ( j.val ) ( by nlinarith [ Fin.is_lt j ] ) v ( hNu_bound j v hv ) using 1;
+              exact Int.le_sub_one_of_lt ( mod_cast h_term_bound );
+            exact pow_le_pow_left₀ ( by positivity ) ( le_trans h_term_bound ( by linarith ) ) _;
+          exact le_trans ( Finset.sum_le_sum h_term_bound ) ( by simpa using mul_le_mul_of_nonneg_right ( Nat.cast_le.mpr ( hNu_card j ) ) ( by positivity ) )
+        have h_neg_bound_v : ∀ i : Fin Dd, ∑ v ∈ Nv i, (Y + (Jb + i : ℕ) * (W + 1) + v : ℤ) ^ d ≤ 2 ^ (d - 1) * (2 ^ (5 * d)) ^ d := by
+          intro i
+          have h_term_bound : ∀ v ∈ Nv i, (Y + (Jb + i : ℕ) * (W + 1) + v : ℤ) ^ d ≤ (2 ^ (5 * d)) ^ d := by
+            intro v hv
+            have h_term_bound : (Y + (Jb + i : ℕ) * (W + 1) + v : ℤ) < 2 ^ (5 * d) := by
+              have h_term_bound : Y + (Jb + i : ℕ) * (W + 1) + v < 2 ^ (5 * d) := by
+                have hT : Jb + i ≤ 4 * d ^ 2 := by
+                  grind +splitIndPred
+                have he : v < W := hNv_bound i v hv
+                convert bank_max_position_bound d hd Y W hW hY ( Jb + i ) hT v he using 1;
+              exact_mod_cast h_term_bound;
+            exact pow_le_pow_left₀ ( by positivity ) h_term_bound.le _;
+          refine' le_trans ( Finset.sum_le_sum h_term_bound ) _ ; norm_num [ hNv_card i ];
+          exact_mod_cast hNv_card i;
+        refine' le_trans ( add_le_add ( Finset.sum_le_sum fun _ _ => h_neg_bound _ ) ( Finset.sum_le_sum fun _ _ => by simpa using h_neg_bound_v _ ) ) _ ; norm_num [ pow_mul' ] ; ring_nf ; (
+        -- By simplifying, we can see that the inequality holds.
+        have h_simplified : (Jb + Dd : ℤ) * 2 ^ (d - 1) ≤ 2 ^ (d * 2 - 1) := by
+          have h_simplified : (4 * d ^ 2 : ℤ) * 2 ^ (d - 1) ≤ 2 ^ (d * 2 - 1) := by
+            have := neg_count_bound d hd; norm_cast at *; simp_all +decide [ Nat.mul_succ, pow_succ' ] ; ring_nf at *; (
+            exact_mod_cast this;)
+          generalize_proofs at *; (
+          exact le_trans ( mul_le_mul_of_nonneg_right ( mod_cast hJbDd ) ( by positivity ) ) h_simplified)
+        generalize_proofs at *; (
+        convert mul_le_mul_of_nonneg_right h_simplified ( pow_nonneg ( by norm_num : ( 0 : ℤ ) ≤ 2 ) ( d ^ 2 * 5 ) ) using 1 <;> ring_nf!;
+        rw [ ← pow_add, show d * 2 + d ^ 2 * 5 - 1 = d ^ 2 * 5 + ( d * 2 - 1 ) by rw [ Nat.sub_eq_of_eq_add ] ; linarith [ Nat.sub_add_cancel ( by nlinarith : 1 ≤ d * 2 ) ] ]))
 
 /-
 For d ≥ 9, if a*n < a*Vn*2^Dd + M + K + 1 and M + K ≤ 2^{3d²+2d+1},
@@ -1736,33 +1736,32 @@ For d ≥ 9, if a*n < a*Vn*2^Dd + M + K + 1 and M + K ≤ 2^{3d²+2d+1},
 lemma n_upper_bound_helper (d : ℕ) (hd : 9 ≤ d)
     (a n Vn : ℕ) (ha : 0 < a) (M K : ℤ)
     (Dd : ℕ) (hDd : Dd = d * (d - 1) / 2)
-    (Jb : ℕ) (hJb : Jb = 3 * d ^ 2 + 1)
+    (Jb : ℕ) (hJb : Jb = (5 * d ^ 2 + 5 * d + 4) / 2)
     (h_an : (a : ℤ) * n < (a : ℤ) * Vn * 2 ^ Dd + M + K + 1)
     (hMK : M + K ≤ 2 ^ (3 * d ^ 2 + 2 * d + 1))
     (hVn_lt : Vn < 2 ^ (d * (d + 1) / 2)) :
     n < 2 ^ Dd * 2 ^ Jb := by
-  -- By dividing both sides of the inequality $a * n < a * Vn * 2^Dd + M + K + 1$ by $a$, we get $n < Vn * 2^Dd + (M + K + 1) / a$.
-  have h_div : n < Vn * 2^Dd + (2^(3*d^2 + 2*d + 1) + 1) := by
-    nlinarith [ pow_pos ( zero_lt_two' ℤ ) ( 3 * d ^ 2 + 2 * d + 1 ) ];
-  -- We'll use that $Dd + Jb = d*(d-1)/2 + 3d^2 + 1 \geq 3d^2 + 2d + 2$.
-  have h_exp : Dd + Jb ≥ 3 * d^2 + 2 * d + 2 := by
-    nlinarith only [ hd, hDd, hJb, Nat.div_add_mod ( d * ( d - 1 ) ) 2, Nat.mod_lt ( d * ( d - 1 ) ) two_pos, Nat.sub_add_cancel ( by linarith : 1 ≤ d ) ];
-  -- By combining the inequalities, we get $n < 2^{d^2} + 2^{3d^2 + 2d + 2}$.
-  have h_combined : n < 2^(d^2) + 2^(3*d^2 + 2*d + 1) + 1 := by
-    have h_combined : Vn * 2^Dd < 2^(d^2) := by
-      convert Nat.mul_lt_mul_of_pos_right hVn_lt ( pow_pos ( by decide : 0 < 2 ) Dd ) using 1 ; rw [ hDd ] ; ring_nf;
-      rw [ ← pow_add, show ( d + d ^ 2 ) / 2 + d * ( d - 1 ) / 2 = d ^ 2 by nlinarith only [ Nat.div_mul_cancel ( show 2 ∣ d + d ^ 2 from even_iff_two_dvd.mp ( by simp +arith +decide [ parity_simps ] ) ), Nat.div_mul_cancel ( show 2 ∣ d * ( d - 1 ) from even_iff_two_dvd.mp ( by rcases d with ( _ | _ | d ) <;> simp +arith +decide [ mul_add, parity_simps ] ) ), Nat.sub_add_cancel ( by linarith : 1 ≤ d ) ] ];
-    grind;
-  refine lt_of_lt_of_le h_combined ?_;
-  rw [ ← pow_add ];
-  refine' le_trans _ ( pow_le_pow_right₀ ( by decide ) h_exp );
-  ring_nf;
-  nlinarith only [ show 2 ^ ( d * 2 ) > 0 by positivity, show 2 ^ ( d ^ 2 * 3 ) > 0 by positivity, show 2 ^ d ^ 2 > 0 by positivity, show 2 ^ ( d * 2 ) * 2 ^ ( d ^ 2 * 3 ) > 2 ^ d ^ 2 by exact lt_of_lt_of_le ( pow_lt_pow_right₀ ( by decide ) ( by nlinarith only [ hd ] ) ) ( Nat.le_mul_of_pos_left _ ( by positivity ) ) ]
+      -- Since $2^{Dd + Jb} \geq 2 \cdot 2^{3d^2 + 2d + 1}$, we have $2^{Dd + Jb} \geq 2^{d^2} + 2^{3d^2 + 2d + 1} + 1$.
+      have h_exp : 2 ^ (Dd + Jb) ≥ 2 ^ (d ^ 2) + 2 ^ (3 * d ^ 2 + 2 * d + 1) + 1 := by
+        have h_exp : 2 ^ (Dd + Jb) ≥ 2 * 2 ^ (3 * d ^ 2 + 2 * d + 1) := by
+          rw [ ← pow_succ' ] ; exact pow_le_pow_right₀ ( by decide ) ( by rw [ hDd, hJb ] ; nlinarith [ Nat.div_mul_cancel ( show 2 ∣ d * ( d - 1 ) from even_iff_two_dvd.mp ( Nat.even_mul_pred_self _ ) ), Nat.div_mul_cancel ( show 2 ∣ 5 * d ^ 2 + 5 * d + 4 from even_iff_two_dvd.mp ( by simp +arith +decide [ parity_simps ] ) ), Nat.sub_add_cancel ( by linarith : 1 ≤ d ) ] ) ;
+        refine le_trans ?_ h_exp ; ring_nf;
+        nlinarith only [ show 2 ^ ( d * 2 ) > 0 by positivity, show 2 ^ ( d ^ 2 * 3 ) > 0 by positivity, show 2 ^ d ^ 2 > 0 by positivity, show 2 ^ ( d * 2 ) * 2 ^ ( d ^ 2 * 3 ) > 2 ^ d ^ 2 by exact lt_of_lt_of_le ( pow_lt_pow_right₀ ( by decide ) ( by nlinarith only [ hd ] ) ) ( Nat.le_mul_of_pos_left _ ( by positivity ) ) ];
+      -- Since $Vn * 2^Dd < 2^d^2$, we have $n < 2^d^2 + 2^{3d^2 + 2d + 1} + 1$.
+      have h_n_lt : n < 2 ^ d ^ 2 + 2 ^ (3 * d ^ 2 + 2 * d + 1) + 1 := by
+        have h_n_lt : (a : ℤ) * n < (a : ℤ) * 2 ^ (d ^ 2) + 2 ^ (3 * d ^ 2 + 2 * d + 1) + 1 := by
+          -- Since $Vn < 2^{d(d+1)/2}$, we have $Vn * 2^{Dd} < 2^{d^2}$.
+          have hVn_2Dd_lt : Vn * 2 ^ Dd < 2 ^ (d ^ 2) := by
+            convert Nat.mul_lt_mul_of_pos_right hVn_lt ( pow_pos ( by decide : 0 < 2 ) Dd ) using 1 ; ring_nf;
+            rw [ ← pow_add, hDd ] ; congr 1 ; nlinarith only [ Nat.div_mul_cancel ( show 2 ∣ d * ( d - 1 ) from even_iff_two_dvd.mp ( Nat.even_mul_pred_self _ ) ), Nat.div_mul_cancel ( show 2 ∣ d + d ^ 2 from even_iff_two_dvd.mp ( by simp +arith +decide [ parity_simps ] ) ), Nat.sub_add_cancel ( by linarith : 1 ≤ d ) ] ;
+          nlinarith [ pow_pos ( zero_lt_two' ℤ ) d, pow_pos ( zero_lt_two' ℤ ) ( d ^ 2 ) ];
+        nlinarith [ show 0 < ( 2 : ℤ ) ^ ( 3 * d ^ 2 + 2 * d + 1 ) by positivity ];
+      exact h_n_lt.trans_le ( by rw [ ← pow_add ] ; exact h_exp )
 
 set_option maxHeartbeats 3200000 in
-/-- For d ≥ 9, there exists I and C₀ ≤ 2^{5d²+4d+1}
+/-- For d ≥ 9, there exists I and C₀ ≤ 2^{5d²+2d}
     such that I represents [C₀, C₀+K) and the doubling condition holds. -/
-theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
+theorem seed_interval (d : ℕ) (hd : 9 ≤ d) :
     let p := monomialPoly d
     let T₀ := explicitTailParam p 1
     let K := (p.eval (T₀ : ℤ)).toNat
@@ -1771,7 +1770,7 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
       RepresentsInterval (fun j => p.eval (j : ℤ)) I C₀ K ∧
       (∀ u v : ℕ, T₀ ≤ u → u ∉ I → v ∉ I → u < v →
         (∀ w, u < w → w < v → w ∈ I) → p.eval (v : ℤ) ≤ 2 * p.eval (u : ℤ)) ∧
-      C₀.toNat ≤ 2 ^ (5 * d ^ 2 + 4 * d + 1) := by
+      C₀.toNat ≤ 2 ^ (5 * d ^ 2 + 2 * d) := by
   set p := monomialPoly d with hp_def
   have hd1 : 1 ≤ d := by omega
   have hd2 : 2 ≤ d := by omega
@@ -1812,13 +1811,13 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
   have h_pos : ∀ n : ℕ, T₀ ≤ n → 0 < p.eval (n : ℤ) :=
     fun n hn => tauProp_pos (by omega) hT₀_tau hn
   -- ── Bank-specific parameters ────────────────────────────────────────────
-  set W := 2 ^ (4 * d + 2) with hW_def
+  set W := 2 ^ (4 * d) with hW_def
   set Dd := d * (d - 1) / 2 with hDd_def
   set Vz : ℤ := ∏ kk : Fin d, (2 ^ ((kk : ℕ) + 1) - 1 : ℤ) with hVz_def
   set Vn : ℕ := ∏ kk : Fin d, (2 ^ ((kk : ℕ) + 1) - 1 : ℕ) with hVn_def
   have hVn_pos : 0 < Vn := Finset.prod_pos fun kk _ => Nat.sub_pos_of_lt (one_lt_pow₀ one_lt_two (by omega))
   have hVn_odd : Odd Vn := V_d_odd d
-  set Jb := 3 * d ^ 2 + 1 with hJb_def
+  set Jb := (5 * d ^ 2 + 5 * d + 4) / 2 with hJb_def
   set T_blk := explicitTailParam p (W + 2) with hT_blk_def
   have hT_blk_tau : TauProp p (W + 2) T_blk := explicit_tau_bound p (W + 2) hA hd_nat
   have hT₀_le_blk : T₀ ≤ T_blk := explicitTailParam_mono p 1 (W + 2) (by simp [hW_def])
@@ -1828,12 +1827,28 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
     simp only [ResidueDatum.eMax]; exact le_max_left _ _
   have hY_blk : T_blk + 1 ≤ Y := le_max_right _ _
   -- ── Get blocks ──────────────────────────────────────────────────────────
+  have h_width : ∀ j : Fin Jb, j.val / d + d + 2 ≤ 4 * d := by
+    intro ⟨j, hj⟩; simp
+    have hj_bound : j ≤ (5 * d ^ 2 + 5 * d + 2) / 2 := by omega
+    suffices h : j / d ≤ 3 * d - 2 by omega
+    calc j / d ≤ (5 * d ^ 2 + 5 * d + 2) / 2 / d := Nat.div_le_div_right hj_bound
+      _ ≤ 3 * d - 2 := Nat.le_induction (by decide)
+            (fun k hk ih => by
+              rw [show 3 * (k + 1) - 2 = 3 * k + 1 from by omega]
+              rw [Nat.div_le_iff_le_mul (by omega : 0 < k + 1)]
+              have h1 : k ^ 2 ≥ 7 * k + 10 := by nlinarith
+              have h2 : 5 * (k+1) ^ 2 + 5 * (k+1) + 2 ≤ 2 * ((3*k+1) * (k+1) + k) := by nlinarith
+              omega)
+            d hd
   have h_u_ex : ∀ j : Fin Jb, ∃ P N : Finset ℕ,
       Disjoint P N ∧ (∀ u ∈ P ∪ N, u < W) ∧ N.card ≤ 2 ^ (d - 1) ∧
       (∀ x : ℤ, ∑ u ∈ P, (x + (↑u : ℤ)) ^ d -
         ∑ v ∈ N, (x + (↑v : ℤ)) ^ d =
-        (d.factorial : ℤ) * 2 ^ (Dd + j.val)) :=
-    fun ⟨j, hj⟩ => u_block_exists d j hd1 (by omega)
+        (d.factorial : ℤ) * 2 ^ (Dd + j.val)) := by
+    intro j
+    obtain ⟨P, N, h1, h2, h3, h4⟩ := u_block_exists d j.val hd1
+    exact ⟨P, N, h1, fun u hu => lt_of_lt_of_le (h2 u hu)
+      (by rw [hW_def]; exact Nat.pow_le_pow_right (by norm_num) (h_width j)), h3, h4⟩
   choose Pu Nu hu using h_u_ex
   have h_v_ex : ∀ i : Fin Dd, ∃ P N : Finset ℕ,
       Disjoint P N ∧ (∀ u ∈ P ∪ N, u < W) ∧ N.card ≤ 2 ^ (d - 1) ∧
@@ -1841,6 +1856,7 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
         ∑ v ∈ N, (x + (↑v : ℤ)) ^ d =
         (d.factorial : ℤ) * Vz * 2 ^ i.val) :=
     fun ⟨i, hi⟩ => v_block_exists d i hd1 (by omega)
+  -- v-blocks fit in W since 2^(4d) = W and v_block_exists gives < 2^(4d)
   choose Pv Nv hv using h_v_ex
   -- ── Define I ────────────────────────────────────────────────────────────
   set I_res := R.E.image (R₀ + ·)
@@ -1863,7 +1879,7 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
     · exact lt_add_of_lt_of_nonneg ( lt_add_of_lt_of_nonneg ( lt_max_of_lt_left ( by linarith ) ) ( Nat.zero_le _ ) ) ( Nat.zero_le _ );
     · exact lt_add_of_lt_of_nonneg ( lt_add_of_lt_of_nonneg ( lt_max_of_lt_left ( by linarith ) ) ( Nat.zero_le _ ) ) ( Nat.zero_le _ )
   -- Condition 4: bound
-  have hCond4 : C₀.toNat ≤ 2 ^ (5 * d ^ 2 + 4 * d + 1) := by
+  have hCond4 : C₀.toNat ≤ 2 ^ (5 * d ^ 2 + 2 * d) := by
     rw [Int.toNat_le]
     -- Step 1: Bound M
     have hT_res_eq : T_res = 6 * d * (R.eMax + 1) := by
@@ -1882,18 +1898,17 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
       grind
     -- Step 3: Bound C_neg
     have hY_le : Y ≤ 6 * d * (W + 2) + 1 := by
-      rw [ hY_def ];
-      rw [ monomial_tau_eq' d ( W + 2 ) ( by linarith ) ( by linarith ) ] at *;
-      rw [ hT_blk_def, max_le_iff ];
-      refine' ⟨ _, le_rfl ⟩;
-      rw [ hR₀_def, hT_res_eq, hR_eMax ];
-      rw [ hW_def ];
-      ring_nf;
-      rw [ show 4 ^ d = 2 ^ ( d * 2 ) by rw [ pow_mul' ] ; norm_num ] ; ring_nf;
-      nlinarith only [ hd, pow_pos ( zero_lt_two' ℕ ) ( d * 2 ), pow_le_pow_right₀ ( show 1 ≤ 2 by norm_num ) ( show d * 2 ≤ d * 4 by linarith ), pow_pos ( zero_lt_two' ℕ ) ( d * 4 ) ]
-    have hC_neg_le : C_neg ≤ 2 ^ (5 * d ^ 2 + 4 * d - 1) := by
+      refine' max_le _ _;
+      · rw [ hR_eMax ] at *;
+        rw [ show W = 2 ^ ( 4 * d ) by rfl ];
+        rw [ show ( 4 : ℕ ) ^ d = 2 ^ ( 2 * d ) by norm_num [ pow_mul ] ] at *;
+        rw [ show 4 * d = 2 * d + 2 * d by ring, pow_add ];
+        nlinarith only [ hR₀_le, Nat.pow_le_pow_right ( show 1 ≤ 2 by decide ) ( show 2 * d ≥ 2 by linarith ), Nat.mul_le_mul_left ( 2 ^ ( 2 * d ) ) hd ];
+      · rw [ hT_blk_def, monomial_tau_eq' ] <;> norm_num [ hd1 ];
+        linarith
+    have hC_neg_le : C_neg ≤ 2 ^ (5 * d ^ 2 + 2 * d - 1) := by
       exact C_neg_le_pow d Jb Dd hd
-        (by rw [hJb_def, hDd_def]; exact block_count_le d hd1)
+        (by rw [hJb_def, hDd_def]; exact block_count_le d hd)
         Y W hW_def hY_le
         (fun j => Nu j) (fun i => Nv i)
         (fun j => (hu j).2.2.1)
@@ -1939,20 +1954,28 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
             have := hbetween ( u + 1 ) ( by linarith ) ( by omega ) ; simp +decide [ hI_def ] at this;
             rcases this with ( h | h | h );
             · exact h;
-            · simp +zetaDelta at *;
-              bv_omega;
+            · obtain ⟨ j, hj, hj' ⟩ := Finset.mem_biUnion.mp h;
+              obtain ⟨ x, hx, hx' ⟩ := Finset.mem_image.mp hj';
+              have hxW : x < W := by
+                exact ‹∀ j : Fin Jb, Disjoint ( Pu j ) ( Nu j ) ∧ ( ∀ u ∈ Pu j ∪ Nu j, u < W ) ∧ # ( Nu j ) ≤ 2 ^ ( d - 1 ) ∧ ∀ x : ℤ, ∑ u ∈ Pu j, ( x + ↑u ) ^ d - ∑ v ∈ Nu j, ( x + ↑v ) ^ d = ↑d ! * 2 ^ ( Dd + ↑j ) › j |>.2.1 x hx
+              nlinarith only [huY, hx', hxW];
             · obtain ⟨ i, hi, hi' ⟩ := Finset.mem_biUnion.mp h;
               obtain ⟨ x, hx, hx' ⟩ := Finset.mem_image.mp hi';
-              nlinarith only [ huY, hx', show ( Jb : ℕ ) + i ≥ 1 from Nat.succ_le_of_lt ( by positivity ), show ( W : ℕ ) + 1 > 0 from Nat.succ_pos _, show ( x : ℕ ) ≥ 0 from Nat.zero_le _ ]
+              nlinarith only [ huY, hx', show ( Jb : ℕ ) + i ≥ 1 from by omega, show ( W : ℕ ) + 1 > 0 from Nat.succ_pos _, show ( x : ℕ ) ≥ 0 from Nat.zero_le _ ]
           have hw'_lt : u + 1 < Y := by
             exact huY
           have hw'_not_in_I : R₀ + R.E.sup id + 1 ∉ I := by
             simp [hI_def, I_res, I_u, I_v];
             refine' ⟨ _, _, _ ⟩;
             · exact fun x hx => by linarith [ show x ≤ R.E.sup id from Finset.le_sup ( f := id ) hx ] ;
-            · bv_omega;
+            · intro jj uu huu_mem huu_eq;
+              have hxW : uu < W := by
+                -- Since $uu \in Pu jj \cup Nu jj$, we can apply the hypothesis $hu$ to get $uu < W$.
+                apply (‹∀ j : Fin Jb, Disjoint (Pu j) (Nu j) ∧ (∀ u ∈ Pu j ∪ Nu j, u < W) ∧ #(Nu j) ≤ 2 ^ (d - 1) ∧ ∀ (x : ℤ), ∑ u ∈ Pu j, (x + ↑u) ^ d - ∑ v ∈ Nu j, (x + ↑v) ^ d = ↑d ! * 2 ^ (Dd + ↑j)› jj).right.left uu (by
+                exact Finset.mem_union.mpr huu_mem)
+              nlinarith only [hY_res, huu_eq, hxW];
             · intro i x hx;
-              nlinarith only [ hY_res, hY_blk, show ( i : ℕ ) < Dd from i.2, show ( Jb : ℕ ) ≥ 1 from Nat.succ_pos _, show ( W : ℕ ) ≥ 1 from Nat.one_le_pow _ _ ( by decide ), show ( x : ℕ ) < W from by cases hx <;> [ exact hv i |>.2.1 _ ( Finset.mem_union_left _ ‹_› ) ; exact hv i |>.2.1 _ ( Finset.mem_union_right _ ‹_› ) ] ]
+              nlinarith only [ hY_res, hY_blk, show ( i : ℕ ) < Dd from i.2, show ( Jb : ℕ ) ≥ 1 from by omega, show ( W : ℕ ) ≥ 1 from Nat.one_le_pow _ _ ( by decide ), show ( x : ℕ ) < W from by cases hx <;> [ exact hv i |>.2.1 _ ( Finset.mem_union_left _ ‹_› ) ; exact hv i |>.2.1 _ ( Finset.mem_union_right _ ‹_› ) ] ]
           have hw'_between : u < R₀ + R.E.sup id + 1 ∧ R₀ + R.E.sup id + 1 < v := by
             have hw'_lt : u + 1 ≤ R₀ + R.E.sup id := by
               rw [ Finset.mem_image ] at hw' ; obtain ⟨ x, hx, hx' ⟩ := hw' ; linarith [ show x ≤ R.E.sup id from Finset.le_sup ( f := id ) hx ] ;
@@ -1968,7 +1991,7 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
           have h_not_in_Iu_Iv : u + 1 ∉ I_u ∧ u + 1 ∉ I_v := by
             constructor <;> intro h <;> obtain ⟨ j, hj ⟩ := Finset.mem_biUnion.mp h <;> obtain ⟨ x, hx ⟩ := Finset.mem_image.mp hj.2 <;> simp +decide at hx ⊢;
             · nlinarith only [ huY, hx.2, show ( j : ℕ ) ≥ 0 by positivity, show ( x : ℕ ) ≥ 0 by positivity ];
-            · nlinarith only [ huY, hx.2, show ( Jb : ℕ ) ≥ 1 by exact Nat.succ_pos _, show ( W : ℕ ) ≥ 1 by exact Nat.one_le_pow _ _ ( by decide ), show ( x : ℕ ) ≥ 0 by exact Nat.zero_le _ ];
+            · nlinarith only [ huY, hx.2, show ( Jb : ℕ ) ≥ 1 by omega, show ( W : ℕ ) ≥ 1 by exact Nat.one_le_pow _ _ ( by decide ), show ( x : ℕ ) ≥ 0 by exact Nat.zero_le _ ];
           grind +splitIndPred
         exact (hT_res_tau u v hu_ge_Tres huv hv_gap).2.2
       -- Case 3: Y ≤ u + 1 (block region)
@@ -2132,12 +2155,12 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
           obtain ⟨ y, hy₁, hy₂ ⟩ := hi
           have h_eq : j.val * (W + 1) + x = (Jb + i.val) * (W + 1) + y := by
             grind +extAll;
-          nlinarith only [ h_eq, hu j |>.2.1 x ( Or.inl hx₁ ), hv i |>.2.1 y ( Or.inl hy₁ ), show ( j : ℕ ) < Jb from j.2, show ( i : ℕ ) < Dd from i.2, show ( Jb : ℕ ) = 3 * d ^ 2 + 1 from rfl, show ( Dd : ℕ ) = d * ( d - 1 ) / 2 from rfl ];
+          nlinarith only [ h_eq, hu j |>.2.1 x ( Or.inl hx₁ ), hv i |>.2.1 y ( Or.inl hy₁ ), show ( j : ℕ ) < Jb from j.2, show ( i : ℕ ) < Dd from i.2, show ( Jb : ℕ ) = (5 * d ^ 2 + 5 * d + 4) / 2 from rfl, show ( Dd : ℕ ) = d * ( d - 1 ) / 2 from rfl ];
         · obtain ⟨ x, hx₁, hx₂ ⟩ := hj
           obtain ⟨ y, hy₁, hy₂ ⟩ := hi
           have h_eq : j.val * (W + 1) + x = (Jb + i.val) * (W + 1) + y := by
             grind +qlia;
-          nlinarith only [ h_eq, hu j |>.2.1 x ( Or.inl hx₁ ), hv i |>.2.1 y ( Or.inr hy₁ ), show ( j : ℕ ) < Jb from j.2, show ( i : ℕ ) < Dd from i.2, show ( Jb : ℕ ) = 3 * d ^ 2 + 1 from rfl, show ( Dd : ℕ ) = d * ( d - 1 ) / 2 from rfl ];
+          nlinarith only [ h_eq, hu j |>.2.1 x ( Or.inl hx₁ ), hv i |>.2.1 y ( Or.inr hy₁ ), show ( j : ℕ ) < Jb from j.2, show ( i : ℕ ) < Dd from i.2, show ( Jb : ℕ ) = (5 * d ^ 2 + 5 * d + 4) / 2 from rfl, show ( Dd : ℕ ) = d * ( d - 1 ) / 2 from rfl ];
         · obtain ⟨ x, hx₁, hx₂ ⟩ := hj
           obtain ⟨ y, hy₁, hy₂ ⟩ := hi
           have h_eq : j.val * (W + 1) + x = (Jb + i.val) * (W + 1) + y := by
@@ -2175,13 +2198,13 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
             · intros i hi j hj hij; simp +decide [ Finset.disjoint_left ] at *; (
               intro x hx hy; split_ifs at hx hy <;> simp +decide at hx hy ⊢;
               · obtain ⟨ a, ha, rfl ⟩ := hx; obtain ⟨ b, hb, hab ⟩ := hy; simp +decide [ Fin.ext_iff ] at hij; (
-                exact hij ( by nlinarith only [ hab, hu i |>.2.1 a ( Or.inl ha ), hu j |>.2.1 b ( Or.inl hb ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d + 2 ) ] ));
+                exact hij ( by nlinarith only [ hab, hu i |>.2.1 a ( Or.inl ha ), hu j |>.2.1 b ( Or.inl hb ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d ) ] ));
               · obtain ⟨ a, ha, rfl ⟩ := hx; obtain ⟨ b, hb, hab ⟩ := hy; simp +decide [ Fin.ext_iff ] at *;
-                exact hij ( by nlinarith only [ hab, hu i |>.2.1 a ( Or.inl ha ), hu j |>.2.1 b ( Or.inr hb ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d + 2 ) ] );
+                exact hij ( by nlinarith only [ hab, hu i |>.2.1 a ( Or.inl ha ), hu j |>.2.1 b ( Or.inr hb ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d ) ] );
               · obtain ⟨ a, ha₁, ha₂ ⟩ := hx; obtain ⟨ b, hb₁, hb₂ ⟩ := hy; simp +decide [ Fin.ext_iff ] at *;
-                exact hij ( by nlinarith only [ ha₂, hb₂, hu i |>.2.1 a ( Or.inr ha₁ ), hu j |>.2.1 b ( Or.inl hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d + 2 ) ] );
+                exact hij ( by nlinarith only [ ha₂, hb₂, hu i |>.2.1 a ( Or.inr ha₁ ), hu j |>.2.1 b ( Or.inl hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d ) ] );
               · obtain ⟨ a, ha₁, ha₂ ⟩ := hx; obtain ⟨ b, hb₁, hb₂ ⟩ := hy; simp +decide [ Fin.ext_iff ] at *;
-                exact hij ( by nlinarith only [ ha₂, hb₂, hu i |>.2.1 a ( Or.inr ha₁ ), hu j |>.2.1 b ( Or.inr hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d + 2 ) ] ));
+                exact hij ( by nlinarith only [ ha₂, hb₂, hu i |>.2.1 a ( Or.inr ha₁ ), hu j |>.2.1 b ( Or.inr hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d ) ] ));
       -- Sum over J_v
       have h_sum_J_v : ∑ j ∈ J_v, (j : ℤ) ^ d =
           ∑ i : Fin Dd, ∑ v ∈ Nv i, ((↑Y + (↑Jb + ↑i.val) * (↑W + 1) : ℤ) + ↑v) ^ d +
@@ -2205,11 +2228,11 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
                   grind;
                 exact hij ( Fin.ext <| by nlinarith only [ h_eq, hv i |>.2.1 a <| Or.inl ha₁, hv j |>.2.1 b <| Or.inl hb₁ ] );
               · obtain ⟨ a, ha₁, ha₂ ⟩ := hx₁; obtain ⟨ b, hb₁, hb₂ ⟩ := hx₂; simp +decide [ Fin.ext_iff ] at *;
-                exact hij ( by nlinarith only [ ha₂, hb₂, hv i |>.2.1 a ( Or.inl ha₁ ), hv j |>.2.1 b ( Or.inr hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d + 2 ) ] );
+                exact hij ( by nlinarith only [ ha₂, hb₂, hv i |>.2.1 a ( Or.inl ha₁ ), hv j |>.2.1 b ( Or.inr hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d ) ] );
               · obtain ⟨ a, ha₁, ha₂ ⟩ := hx₁; obtain ⟨ b, hb₁, hb₂ ⟩ := hx₂; simp +decide [ Fin.ext_iff ] at *;
-                exact hij ( by nlinarith only [ ha₂, hb₂, hv i |>.2.1 a ( Or.inr ha₁ ), hv j |>.2.1 b ( Or.inl hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d + 2 ) ] );
+                exact hij ( by nlinarith only [ ha₂, hb₂, hv i |>.2.1 a ( Or.inr ha₁ ), hv j |>.2.1 b ( Or.inl hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d ) ] );
               · obtain ⟨ a, ha₁, ha₂ ⟩ := hx₁; obtain ⟨ b, hb₁, hb₂ ⟩ := hx₂; simp +decide [ Fin.ext_iff ] at *;
-                exact hij ( by nlinarith only [ ha₂, hb₂, hv i |>.2.1 a ( Or.inr ha₁ ), hv j |>.2.1 b ( Or.inr hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d + 2 ) ] )
+                exact hij ( by nlinarith only [ ha₂, hb₂, hv i |>.2.1 a ( Or.inr ha₁ ), hv j |>.2.1 b ( Or.inr hb₁ ), hW_def, pow_pos ( zero_lt_two' ℕ ) ( 4 * d ) ] )
       rw [h_sum_J_res, h_sum_J_u, h_sum_J_v]
       -- Now algebra: kr + (C_neg_u + extra_u) + (C_neg_v + extra_v) = N
       have h_C_neg_eq : C_neg = ∑ j : Fin Jb, ∑ v ∈ Nu j, ((↑Y + ↑j.val * (↑W + 1) : ℤ) + ↑v) ^ d +
@@ -2234,12 +2257,12 @@ theorem improved_seed_interval (d : ℕ) (hd : 9 ≤ d) :
   exact ⟨I, C₀, hCond1, hCond2, hCond3, hCond4⟩
 
 /-- **Main Theorem**
-For every d ≥ 9 and every N ≥ 2^{5d²+4d+1}, N can be written as a sum of distinct
+For every d ≥ 9 and every N ≥ 2^{5d²+2d}, N can be written as a sum of distinct
 d-th powers of natural numbers. -/
 theorem main_theorem (d : ℕ) (hd : 9 ≤ d) :
-    ∀ N : ℕ, 2 ^ (5 * d ^ 2 + 4 * d + 1) ≤ N →
+    ∀ N : ℕ, 2 ^ (5 * d ^ 2 + 2 * d) ≤ N →
       ∃ J : Finset ℕ, N = ∑ i ∈ J, i ^ d := by
-  obtain ⟨I, C₀, hI_ge, hI_rep, hDoubling, hC₀⟩ := improved_seed_interval d hd
+  obtain ⟨I, C₀, hI_ge, hI_rep, hDoubling, hC₀⟩ := seed_interval d hd
   set p := monomialPoly d with hp_def
   set T₀ := explicitTailParam p 1
   set K := (p.eval (T₀ : ℤ)).toNat
@@ -2251,7 +2274,7 @@ theorem main_theorem (d : ℕ) (hd : 9 ≤ d) :
     Int.toNat_of_nonneg (le_of_lt (h_pos T₀ le_rfl))
   have hThreshold : IsThreshold p C₀.toNat :=
     isThreshold_of_data p T₀ K hK_eq I C₀ hI_ge hI_rep h_pos hDoubling
-  have hThreshold2 : IsThreshold p (2 ^ (5 * d ^ 2 + 4 * d + 1)) :=
+  have hThreshold2 : IsThreshold p (2 ^ (5 * d ^ 2 + 2 * d)) :=
     isThreshold_mono hThreshold hC₀
   intro N hN
   obtain ⟨J, _, hJ2⟩ := hThreshold2 N hN
