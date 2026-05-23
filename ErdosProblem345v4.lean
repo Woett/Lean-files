@@ -1,7 +1,7 @@
 import Mathlib
 
 /-
-Strengthening a result by Kim, in this file we prove that if d ≥ 44k², then
+Strengthening a result by Kim, in this file we prove that if d ≥ 22k², then
 every integer N ≥ 2^{3d²+2d²/k} can be written as a sum of distinct d-th powers
 of natural numbers.
 
@@ -21,8 +21,6 @@ Lean version: leanprover/lean4:v4.28.0
 open Polynomial Finset BigOperators
 
 noncomputable section
-
-/-! ## Core definitions -/
 
 /-- Leading coefficient times d!. For monomials X^d, this equals d!. -/
 def polyA (p : Polynomial ℤ) : ℤ := p.leadingCoeff * (p.natDegree.factorial : ℤ)
@@ -129,8 +127,6 @@ theorem elementary_ratio_bound (d : ℕ) (hd : 1 ≤ d) :
     exact mul_le_of_le_one_left ( by positivity ) ( by rw [ inv_mul_le_iff₀ ( by positivity ) ] ; norm_cast; linarith [ Nat.choose_le_pow d ‹_› ] )
   generalize_proofs at *; (
   exact h_binom.trans ( by ring_nf; rw [ geom_sum_eq ] <;> ring_nf <;> norm_num ) ;))
-
-/-! ## Polynomial evaluation bounds -/
 
 /-- H_0(p) = A + ∑_{i=0}^{d-1} |a_i| where A = leading coefficient -/
 noncomputable def Hzero (p : Polynomial ℤ) : ℤ :=
@@ -379,8 +375,6 @@ theorem explicit_tau_bound (p : Polynomial ℤ) (G : ℕ)
     · exact mul_le_mul_of_nonneg_left ( by linarith [ ( by norm_cast : ( p.leadingCoeff : ℚ ) * u ^ p.natDegree ≤ eval ( u : ℤ ) p + Hzero p * u ^ ( p.natDegree - 1 ) ) ] ) zero_le_two
   exact ⟨h_pos, h_mono, h_bound⟩
 
-/-! ## P/N construction and signed blocks -/
-
 /-- One step of the P/N construction: applying diffOp with shift h
     transforms (P, N) to (P.image(·+h) ∪ N, P ∪ N.image(·+h)). -/
 def stepPN (h : ℕ) (pn : Finset ℕ × Finset ℕ) : Finset ℕ × Finset ℕ :=
@@ -437,8 +431,6 @@ theorem foldl_eval_eq_pn (p : Polynomial ℤ) (shifts : List ℕ)
     · specialize h_inc ⟨ shifts'.length, by simp +decide ⟩ ; aesop;
     · convert stepPN_eval p shifts_ih _ _ _ h.2 _ x using 1;
       specialize h_inc ⟨ shifts'.length, by simp +decide ⟩ ; aesop;
-
-/-! ## Threshold and residue machinery -/
 
 /-- A threshold for p: every N ≥ C is representable as a sum of distinct
     positive values p(n) with distinct indices. -/
@@ -526,8 +518,6 @@ theorem isThreshold_mono {p : Polynomial ℤ} {C C' : ℕ}
     (h : IsThreshold p C) (hle : C ≤ C') : IsThreshold p C' :=
   fun N hN => h N (le_trans hle hN)
 
-/-! ## Monomial polynomial p(x) = x^d -/
-
 def monomialPoly (d : ℕ) : Polynomial ℤ := Polynomial.X ^ d
 
 theorem monomialPoly_natDegree (d : ℕ) :
@@ -546,8 +536,7 @@ theorem monomialPoly_natDegree_pos (d : ℕ) (hd : 1 ≤ d) :
     1 ≤ (monomialPoly d).natDegree := by
   simp [monomialPoly]; exact hd
 
-/-! ## Arithmetic completeness via p-adic valuations
-
+/-
 The subset sums of d-th powers from an interval of length 4^d cover all residues modulo d!.
 -/
 
@@ -1193,8 +1182,6 @@ lemma residue_sum_bound (d : ℕ) (hd : 9 ≤ d) (R₀ : ℕ)
 
 open Nat
 
-/-! ## Block construction helpers -/
-
 /-
 V_d = ∏(2^{i+1}-1) is odd.
 -/
@@ -1551,8 +1538,6 @@ theorem binary_coverage (D J : ℕ) (V : ℕ) (hV_odd : Odd V) (hV_pos : 0 < V)
     exact h_binary m ( by nlinarith [ pow_pos ( zero_lt_two' ℕ ) D ] );
   exact ⟨ S_V, S_U, by push_cast [ hm, hS_V, hS_U ] ; ring ⟩
 
-/-! ## Factorial and numerical lemmas -/
-
 /-
 (d+1)^d ≤ 3 · d^d for all d ≥ 1. This is the key bound (1+1/d)^d < e < 3.
 -/
@@ -1770,11 +1755,8 @@ lemma residue_sum_bound_tight (d : ℕ) (hd : 9 ≤ d) (R₀ : ℕ)
   rw [ show ( d * 4 ^ d * 6 + 4 ^ d * 2 ) = ( 2 + d * 6 ) * 4 ^ d by ring ] ; rw [ mul_pow ] ; ring_nf ;
   norm_num
 
-/-! ## Additional helper lemmas for the seed interval -/
-
 /-
-Y bound helper for improved parameters:
-    6d*(4^d+1)+1+4^d+2 ≤ 6d*(2^{3d}+2)+1 for d ≥ 9.
+If d ≥ 9, then 6d*(4^d+1)+1+4^d+2 ≤ 6d*(2^{3d}+2)+1.
 -/
 lemma Y_bound_helper_improved (d : ℕ) (hd : 9 ≤ d) :
     6 * d * (4 ^ d + 1) + 1 + 4 ^ d + 2 ≤ 6 * d * (2 ^ (3 * d) + 2) + 1 := by
@@ -1785,8 +1767,6 @@ lemma Y_bound_helper_improved (d : ℕ) (hd : 9 ≤ d) :
 lemma six_d_pow_le_six_d_plus_two (d : ℕ) : (6 * d) ^ d ≤ (6 * d + 2) ^ d := by
   exact Nat.pow_le_pow_left (by omega) d
 
-/-! ## Polynomial-vs-exponential bound -/
-
 /-
 m⁴ ≤ 2^m for m ≥ 17. Standard polynomial-vs-exponential bound.
 -/
@@ -1795,35 +1775,24 @@ lemma pow_four_le_two_pow (m : ℕ) (hm : 17 ≤ m) : m ^ 4 ≤ 2 ^ m := by
   nlinarith [pow_pos (by linarith : 0 < m) 2, pow_pos (by linarith : 0 < m) 3]
 
 /-
-For k ≥ 1 and d ≥ 44k², we have 2d²+15d+3 ≤ 2^{⌊d/k⌋}.
-This is the key lemma that allows the exponent to approach 3d².
+For k ≥ 1 and d ≥ 22k², we have 2d²+15d+3 ≤ 2^{⌊d/k⌋}.
 -/
-lemma poly_le_exp_div_k (d k : ℕ) (hk : 1 ≤ k) (hd : 44 * k ^ 2 ≤ d) :
+lemma poly_le_exp_div_k (d k : ℕ) (hk : 1 ≤ k) (hd : 22 * k ^ 2 ≤ d) :
     2 * d ^ 2 + 15 * d + 3 ≤ 2 ^ (d / k) := by
-  -- Let $m = d/k \geq 44k \geq 44$ (since $k \geq 1$).
   set m := d / k with hm
-  have hm_ge_17 : 17 ≤ m := by
-    exact Nat.le_div_iff_mul_le hk |>.2 ( by nlinarith );
-  -- Step 1: $d < k * (m + 1)$, so $2d^2 + 15d + 3 < 2k^2(m + 1)^2 + 15k(m + 1) + 3$.
+  have hm_ge_22k : 22 * k ≤ m := Nat.le_div_iff_mul_le hk |>.2 (by nlinarith)
+  have hm_ge_17 : 17 ≤ m := by nlinarith
   have h_step1 : 2 * d ^ 2 + 15 * d + 3 < 2 * k ^ 2 * (m + 1) ^ 2 + 15 * k * (m + 1) + 3 := by
-    -- Since $d < k * (m + 1)$, we can substitute this into the inequality.
-    have h_sub : d < k * (m + 1) := by
-      exact lt_mul_div_succ d hk;
-    nlinarith only [ h_sub ];
-  -- Step 2: $k(m + 1) \geq k(44k + 1) \geq 45 \geq 16$, so $15k(m + 1) + 3 \leq k^2(m + 1)^2$, hence $2d^2 + 15d + 3 \leq 3k^2(m + 1)^2$.
+    have h_sub : d < k * (m + 1) := lt_mul_div_succ d hk
+    nlinarith only [h_sub]
   have h_step2 : 2 * d ^ 2 + 15 * d + 3 ≤ 3 * k ^ 2 * (m + 1) ^ 2 := by
-    nlinarith only [ hk, hm_ge_17, show k * ( m + 1 ) ≥ 16 by nlinarith only [ hk, hm_ge_17, hd, Nat.div_add_mod d k, Nat.mod_lt d hk ], h_step1 ] ;
-  -- Step 3: $(m + 1)^2 \leq 4m^2$ for $m \geq 1$ (since $(m + 1) \leq 2m$), so $3k^2(m + 1)^2 \leq 12k^2m^2$.
+    nlinarith only [hk, hm_ge_17, show k * (m + 1) ≥ 16 by nlinarith only [hk, hm_ge_17], h_step1]
   have h_step3 : 3 * k ^ 2 * (m + 1) ^ 2 ≤ 12 * k ^ 2 * m ^ 2 := by
-    nlinarith only [ show 0 ≤ k ^ 2 * m ^ 2 by positivity, show m ^ 2 ≥ 17 ^ 2 by nlinarith only [ hm_ge_17 ] ];
-  -- Step 4: $44k \leq m$, so $k^2 \leq m^2/1936$ (i.e. $1936k^2 \leq m^2$), hence $12k^2 \leq m^2$ (since $12 \leq 1936$). So $12k^2m^2 \leq m^4$.
+    nlinarith only [show 0 ≤ k ^ 2 * m ^ 2 by positivity, show m ^ 2 ≥ 17 ^ 2 by nlinarith only [hm_ge_17]]
   have h_step4 : 12 * k ^ 2 * m ^ 2 ≤ m ^ 4 := by
-    have h_step4 : k ^ 2 ≤ m ^ 2 / 1936 := by
-      rw [ Nat.le_div_iff_mul_le ] <;> nlinarith only [ hm_ge_17, show m ≥ 44 * k by exact Nat.le_div_iff_mul_le hk |>.2 <| by nlinarith only [ hd ] ];
-    nlinarith only [ Nat.div_mul_le_self ( m ^ 2 ) 1936, h_step4 ];
-  exact h_step2.trans ( h_step3.trans ( h_step4.trans ( pow_four_le_two_pow m hm_ge_17 ) ) )
-
-/-! ## Parameterized position and C_neg bounds -/
+    have : 484 * k ^ 2 ≤ m ^ 2 := by nlinarith only [hm_ge_22k]
+    nlinarith only [this, show 0 ≤ m ^ 2 by positivity]
+  exact h_step2.trans (h_step3.trans (h_step4.trans (pow_four_le_two_pow m hm_ge_17)))
 
 /-
 Generalized position bound: Y + T*(W+1) + e < 2^{3d+f}
@@ -1878,9 +1847,9 @@ lemma C_neg_le_pow_param (d f Jb Dd : ℕ) (hd : 22 ≤ d)
   rw [ ← add_mul ] ; exact le_trans ( Nat.mul_le_mul_right _ hJbDd2 ) ( by rw [ ← pow_add ] ; ring_nf; norm_num ) ;
 
 /-
-Assembly: C_neg + aB + M + 1 ≤ 2^{(3k+2)*d²/k} for d ≥ 44k².
+Assembly: C_neg + aB + M + 1 ≤ 2^{(3k+2)*d²/k} for d ≥ 22k².
 -/
-lemma asymptotic_assembly (d k : ℕ) (hk : 1 ≤ k) (hdk : 44 * k ^ 2 ≤ d)
+lemma asymptotic_assembly (d k : ℕ) (hk : 1 ≤ k) (hdk : 22 * k ^ 2 ≤ d)
     (C_neg M aB : ℤ)
     (h1 : C_neg ≤ 2 ^ (d * (3 * d + d / k) + 2 * (d - 1)))
     (h2 : aB ≤ 2 ^ (2 * d ^ 2))
@@ -1902,12 +1871,10 @@ lemma asymptotic_assembly (d k : ℕ) (hk : 1 ≤ k) (hdk : 44 * k ^ 2 ≤ d)
     rw [ show ( 2 : ℤ ) ^ ( ( 3 * k + 2 ) * d ^ 2 / k ) = 2 ^ ( ( 3 * k + 2 ) * d ^ 2 / k - 2 ) * 2 ^ 2 by rw [ ← pow_add, Nat.sub_add_cancel ( show 2 ≤ ( 3 * k + 2 ) * d ^ 2 / k from Nat.le_div_iff_mul_le hk |>.2 <| by nlinarith [ Nat.pow_le_pow_left ( show d ≥ k by nlinarith ) 2 ] ) ] ] ; nlinarith [ pow_pos ( zero_lt_two' ℤ ) ( ( 3 * k + 2 ) * d ^ 2 / k - 2 ) ] ;
   linarith
 
-/-! ## Seed interval and main theorem -/
-
 set_option maxHeartbeats 3200000 in
-/-- For k ≥ 1 and d ≥ 44k², there exists I and C₀ ≤ 2^{(3k+2)d²/k}
+/-- For k ≥ 1 and d ≥ 22k², there exists I and C₀ ≤ 2^{(3k+2)d²/k}
     such that I represents [C₀, C₀+K) and the doubling condition holds. -/
-theorem seed_interval_asymptotic (d k : ℕ) (hk : 1 ≤ k) (hd : 44 * k ^ 2 ≤ d) :
+theorem seed_interval_asymptotic (d k : ℕ) (hk : 1 ≤ k) (hd : 22 * k ^ 2 ≤ d) :
     let p := monomialPoly d
     let T₀ := explicitTailParam p 1
     let K := (p.eval (T₀ : ℤ)).toNat
@@ -1922,7 +1889,6 @@ theorem seed_interval_asymptotic (d k : ℕ) (hk : 1 ≤ k) (hd : 44 * k ^ 2 ≤
   have hd2 : 2 ≤ d := by nlinarith [hk]
   have hd9 : 9 ≤ d := by nlinarith [hk]
   have hd22 : 22 ≤ d := by nlinarith [hk]
-  have hd25 : 25 ≤ d := by nlinarith [hk]
   have hA : 0 < p.leadingCoeff := monomialPoly_leadingCoeff_pos d
   have hd_nat : 1 ≤ p.natDegree := monomialPoly_natDegree_pos d hd1
   have hnd : p.natDegree = d := monomialPoly_natDegree d
@@ -2350,11 +2316,9 @@ theorem seed_interval_asymptotic (d k : ℕ) (hk : 1 ≤ k) (hd : 44 * k ^ 2 ≤
       linarith [h_C_neg_eq, h_an, hn_eq]
   exact ⟨I, C₀, hCond1, hCond2, hCond3, hCond4⟩
 
-/-- **Main Theorem**
-For every k ≥ 1 and every d ≥ 44k², every N ≥ 2^{3d²+2d²/k}
-can be written as a sum of distinct d-th powers of natural numbers.
- -/
-theorem main_theorem (k : ℕ) (hk : 1 ≤ k) (d : ℕ) (hd : 44 * k ^ 2 ≤ d) :
+/-- **Main Theorem** For every k ≥ 1 and every d ≥ 22k², every N ≥ 2^{3d²+2d²/k}
+  can be written as a sum of distinct d-th powers of natural numbers. -/
+theorem main_theorem (k : ℕ) (hk : 1 ≤ k) (d : ℕ) (hd : 22 * k ^ 2 ≤ d) :
     ∀ N : ℕ, 2 ^ ((3 * k + 2) * d ^ 2 / k) ≤ N →
       ∃ J : Finset ℕ, N = ∑ i ∈ J, i ^ d := by
   obtain ⟨I, C₀, hI_ge, hI_rep, hDoubling, hC₀⟩ := seed_interval_asymptotic d k hk hd
