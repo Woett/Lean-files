@@ -1,7 +1,7 @@
 /-
 Solving Erdős Problem #355 (https://www.erdosproblems.com/355), Vjekoslav Kovač and I proved that there exists a lacunary sequence of positive integers whose reciprocal sums represent all rational numbers in an interval.
 
-W. van Doorn and V. Kovač, Lacunary sequences whose reciprocal sums represent all rationals in an interval. arXiv:2509.24971 (2025).
+W. van Doorn and V. Kovač, Lacunary sequences whose reciprocal sums represent all rationals in an interval, Acta Arithmetica 223 (2026), 275-295.
 
 Below you can find a formalization of the main results of our paper, obtained by Aristotle from Harmonic (aristotle-harmonic@harmonic.fun).
 
