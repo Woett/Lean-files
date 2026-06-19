@@ -24,6 +24,9 @@ to rationals, this result is also proved along the way as `konyagin_thm`.
 ChatGPT came up with the proof of `main_theorem`, and for more
 information one can check out the short paper that Quanyu Tang and I wrote.
 
+W. van Doorn and Q. Tang, Consecutive integers free of certain prime factors. 
+arXiv:2606.19863 (2026).
+
 Lean version: leanprover/lean4:v4.28.0
 -/
 
