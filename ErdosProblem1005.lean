@@ -25,8 +25,7 @@ obtain a formalization of the proof, which is available here:
 https://github.com/mrricky22/erdos-1005-lean
 
 I thought it would be nice to have the formalization in one single file. The
-result can be found below and was obtained by Aristotle from Harmonic
-(aristotle-harmonic@harmonic.fun).
+result can be found below and was also obtained by Aristotle.
 
 Lean version: leanprover/lean4:v4.28.0
 -/
