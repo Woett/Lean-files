@@ -2551,7 +2551,6 @@ theorem erdos_1005 :
     Tendsto (fun n : ℕ => (fVal n : ℝ) / n) atTop (nhds (1 / 4)) :=
   erdos_1005_of_bounds fVal_upper_bound fVal_lower_bound
 
-#show_unused erdos_1005
 #print axioms erdos_1005
 
 end Erdos1005
