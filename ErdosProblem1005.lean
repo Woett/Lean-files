@@ -2,9 +2,9 @@ import Mathlib
 
 /-
 Let `a_1/b_1, … , a_N/b_N` be the Farey sequence of order `n`. Erdős proved that
-there exists a positive constant `c` such that if `k, l` are such that `1 ≤ k ≤
-l ≤ N` and `l ≤ k + c n`, then the Farey terms `a_k/b_k` and `a_l/b_l` satisfy
-`(a_l - a_k)(b_l - b_k) ≥ 0`.
+there exists a positive constant `c` such that if `k, l` are such that 
+`1 ≤ k ≤ l ≤ N` and `l ≤ k + c n`, then the Farey terms `a_k/b_k` and `a_l/b_l` 
+satisfy `(a_l - a_k)(b_l - b_k) ≥ 0`.
 
 Erdős, P., A note on Farey series. Quart. J. Math. Oxford Ser. (1943), 82--85.
 
