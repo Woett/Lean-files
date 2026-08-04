@@ -17,7 +17,8 @@ ordered Farey fractions. arXiv:2509.00121 (2025).
 This is now recorded as Erdos Problem #1005 (https://www.erdosproblems.com/1005)
 and was solved in a preprint posted by Ricky Cipollini.
 
-https://www.overleaf.com/project/6a4434c94d31aff0efad1c79
+R. Cipollini, Optimality of Wouter van Doorn’s Upper Bound for the
+Mayer–Erdős Farey Problem. arXiv:2607.23302 (2026).
 
 Ricky also used Aristotle by Harmonic (aristotle-harmonic@harmonic.fun) to
 obtain a formalization of the proof, which is available here:
