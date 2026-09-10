@@ -9,6 +9,9 @@ is still complete.
 
 https://www.researchgate.net/publication/414128757_Deletion_thresholds_for_complete_sequences
 
+Aristotle from Harmonic (aristotle-harmonic@harmonic.fun) managed to formalize 
+the proof, which can be found below.
+
 Lean version: leanprover/lean4:v4.28.0
 -/
 
