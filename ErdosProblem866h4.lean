@@ -1,12 +1,19 @@
 /-
-Proof that `h₄(n) = 4` for every `n ≥ 6`, where `h_k(n)` is the least `m`
-such that every `A ⊆ {1, …, 2n}` with `|A| ≥ n + m` contains the pairwise
-sums of `k` distinct positive integers.
+This Lean file contains a formalization of the proof that `h₄(n) = 4` for every
+`n ≥ 6`, where `h_k(n)` is the least `m` such that every `A ⊆ {1, …, 2n}` with
+`|A| ≥ n + m` contains the pairwise sums of `k` distinct positive integers.
 
-The upper bound is proved mathematically for `n ≥ 109`. A finite search,
-checked by the Lean kernel, covers `6 ≤ n ≤ 108`.
+The determination of `h_k(n)` was initiated by Choi, Erdős and
+Szemerédi and is nowadays recorded as Erdős problem #866 on Bloom's website, see
+https://www.erdosproblems.com/866.
 
-Compile with `lean -s 512000 109full.lean` to allow enough stack space.
+Choi, S. L. G. and Erdős, P. and Szemerédi, E., Some additive and multiplicative
+problems in number theory. Acta Arith., 37--50 (1975).
+
+The proof of `h₄(n) = 4` was found by Claude from Anthropic and Aristotle from
+Harmonic (aristotle-harmonic@harmonic.fun). For a human-readable proof and more
+information on the provenance of the ideas, one can check the paper of John
+Erlbacher and me on arXiv.
 -/
 
 import Mathlib
