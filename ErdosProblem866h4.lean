@@ -3,8 +3,8 @@ This Lean file contains a formalization of the proof that `h₄(n) = 4` for ever
 `n ≥ 6`, where `h_k(n)` is the least `m` such that every `A ⊆ {1, …, 2n}` with
 `|A| ≥ n + m` contains the pairwise sums of `k` distinct positive integers.
 
-The determination of `h_k(n)` was initiated by Choi, Erdős and
-Szemerédi and is nowadays recorded as Erdős problem #866 on Bloom's website, see
+The determination of `h_k(n)` was initiated by Choi, Erdős and Szemerédi and is
+nowadays recorded as Erdős problem #866 on Bloom's website, see
 https://www.erdosproblems.com/866.
 
 Choi, S. L. G. and Erdős, P. and Szemerédi, E., Some additive and multiplicative
@@ -14,6 +14,15 @@ The proof of `h₄(n) = 4` was found by Claude from Anthropic and Aristotle from
 Harmonic (aristotle-harmonic@harmonic.fun). For a human-readable proof and more
 information on the provenance of the ideas, one can check the paper of John
 Erlbacher and me on arXiv.
+
+One can also check out my earlier paper and corresponding formalization.
+
+Wouter van Doorn, The cardinality of a set containing the pairwise sums of a
+fixed number of integers. arXiv:2605.00040 (2026).
+
+https://github.com/Woett/Lean-files/blob/main/ErdosProblem866.lean
+
+Lean version: leanprover/lean4:v4.28.0
 -/
 
 import Mathlib
